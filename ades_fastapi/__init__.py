@@ -5,6 +5,7 @@ import jwt
 import requests
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
@@ -15,6 +16,8 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def opa_request(input_data: dict):
@@ -42,6 +45,7 @@ def check_policy(request: Request):
             "username": username,
         }
     }
+    print("Logged in as user:", username)
     response = opa_request(input_data)
     if response.status_code != 200 or not response.json().get("result", False):
         return False
@@ -82,8 +86,16 @@ def workspace_root(workspace: str):
 @app.get("/ades/api")
 def swagger_docs():
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/swagger-ui/oapip/#/")
-    if response.headers.get("Content-Type") == "text/html":
-        return HTMLResponse(content=response.text, status_code=response.status_code)
+    if response.headers["content-type"] == "text/html":
+        html_content = response.text.replace('href="./', 'href="/static/swagger-ui/').replace(
+            'src="./', 'src="/static/swagger-ui/'
+        )
+        return HTMLResponse(content=html_content, status_code=response.status_code)
+    elif response.headers["content-type"] in [
+        "application/json",
+        "application/vnd.oai.openapi+json",
+    ]:
+        return JSONResponse(content=response.json(), status_code=response.status_code)
     else:
         raise HTTPException(status_code=406, detail="Unexpected content type")
 
@@ -91,7 +103,7 @@ def swagger_docs():
 # endpoint to delete process
 @app.delete("/ades/{workspace}/ogc-api/processes/{workflow_id}")
 def undeploy_process(workspace: str, workflow_id: str):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.delete(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}"
         # headers=dict(request.headers),
@@ -112,7 +124,7 @@ def undeploy_process(workspace: str, workflow_id: str):
 # endpoint to list processes
 @app.get("/ades/{workspace}/ogc-api/processes")
 def list_processes(workspace: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes"  # , headers=dict(request.headers)
     )
@@ -133,7 +145,7 @@ def list_processes(workspace: str, request: Request):
 # deploy process
 @app.post("/ades/{workspace}/ogc-api/processes")
 async def deploy_process(workspace: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
 
     headers = dict(request.headers)
     new_headers = {"accept": headers["accept"], "content-type": headers["content-type"]}
@@ -168,7 +180,7 @@ async def deploy_process(workspace: str, request: Request):
 # update process
 @app.put("/ades/{workspace}/ogc-api/processes/{workflow_id}")
 async def update_process(workspace: str, workflow_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
 
     headers = dict(request.headers)
     new_headers = {"accept": headers["accept"], "content-type": headers["content-type"]}
@@ -207,7 +219,7 @@ async def update_process(workspace: str, workflow_id: str, request: Request):
 # async def update_process(
 #     workspace: str, workflow_id: str, request: Request, file: UploadFile = File(...)
 # ):
-#     workspace = workspace.replace("-", "_")
+#     #workspace = workspace.replace("-", "_")
 
 #     body = await request.json()
 #     file_content = await file.read()
@@ -236,7 +248,7 @@ async def update_process(workspace: str, workflow_id: str, request: Request):
 # get process details
 @app.get("/ades/{workspace}/ogc-api/processes/{workflow_id}")
 def process_details(workspace: str, workflow_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
         # headers=dict(request.headers),
@@ -253,7 +265,7 @@ def process_details(workspace: str, workflow_id: str, request: Request):
 # execute process
 @app.post("/ades/{workspace}/ogc-api/processes/{workflow_id}/execution")
 async def execute_process(workspace: str, workflow_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
 
     body = await request.json()
 
@@ -277,7 +289,7 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
 # get execute status
 @app.get("/ades/{workspace}/ogc-api/jobs/{job_id}")
 def execute_status(workspace: str, job_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}",  # headers=dict(request.headers)
     )
@@ -293,7 +305,7 @@ def execute_status(workspace: str, job_id: str, request: Request):
 # get processing results
 @app.get("/ades/{workspace}/ogc-api/jobs/{job_id}/results")
 def processing_results(workspace: str, job_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}/results",
         # headers=dict(request.headers),
@@ -310,7 +322,7 @@ def processing_results(workspace: str, job_id: str, request: Request):
 # list jobs
 @app.get("/ades/{workspace}/ogc-api/jobs")
 def list_jobs(workspace: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs",  # headers=dict(request.headers)
     )
@@ -326,7 +338,7 @@ def list_jobs(workspace: str, request: Request):
 # delete job (not working)
 @app.delete("/ades/{workspace}/ogc-api/jobs/{job_id}")
 def delete_job(workspace: str, job_id: str, request: Request):
-    workspace = workspace.replace("-", "_")
+    # workspace = workspace.replace("-", "_")
     return Response(
         content="Endpoint not implemented yet",
         status_code=501,

@@ -2,6 +2,8 @@
 
 This component is the initial implementation of the User Account Service that sits in front of the ADES service and allows more refined interaction with the workflow runner within the EO Data Hub. This repository provides a FastApi application that makes calls to the ADES component, also containing middleware which authenticates the incoming requests using an OPA client. Access to workflows and jobs is only provided if the username of the requesting user matches that found in the URL request.
 
+Note swagger static files are available in the [swagger-ui](https://github.com/swagger-api/swagger-ui/tree/master/dist) repo.
+
 
 # Development of this component
 
