@@ -17,7 +17,7 @@ ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-d
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/ades/static", StaticFiles(directory="/app/static"), name="static")
 
 
 def opa_request(input_data: dict):
@@ -34,7 +34,7 @@ def check_policy(request: Request):
             algorithms=["HS256"],
         )
         username = credentials.get("preferred_username", "")
-        roles = credentials.get("resource_access", {}).get("roles", [])
+        roles = credentials.get("realm_access", {}).get("roles", [])
     else:
         username = ""
         roles = []
@@ -46,6 +46,8 @@ def check_policy(request: Request):
         }
     }
     print("Logged in as user:", username)
+    print("Path is ", request.url.path)
+    print("Roles are ", roles)
     response = opa_request(input_data)
     if response.status_code != 200 or not response.json().get("result", False):
         return False
@@ -83,12 +85,25 @@ def workspace_root(workspace: str):
     #     raise HTTPException(status_code=response.status_code, detail="Failed to fetch swagger docs")
 
 
+@app.get("/ades/ogc-api/api")
+def docs_root():
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
+    result = json.dumps(response.json())
+    return Response(
+        content=result,
+        status_code=response.status_code,
+    )
+
+
 @app.get("/ades/api")
 def swagger_docs():
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/swagger-ui/oapip/#/")
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/swagger-ui/oapip/")
+    print(response.headers)
+    print(response)
+
     if response.headers["content-type"] == "text/html":
-        html_content = response.text.replace('href="./', 'href="/static/swagger-ui/').replace(
-            'src="./', 'src="/static/swagger-ui/'
+        html_content = response.text.replace('href="./', 'href="./static/swagger-ui/').replace(
+            'src="./', 'src="./static/swagger-ui/'
         )
         return HTMLResponse(content=html_content, status_code=response.status_code)
     elif response.headers["content-type"] in [
@@ -162,15 +177,21 @@ async def deploy_process(workspace: str, request: Request):
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=new_headers, **data
     )
 
+    try:
+        content = json.dumps(response.json())
+    except Exception as e:
+        print(e)
+        content = ""
+
     # if response.status_code < 200 or response.status_code >= 300:
     #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
 
-    response_headers = {"Location": response.headers.get("Location")}
+    response_headers = {"Location": response.headers.get("Location", "")}
     # response_headers.pop("content-length", None)
     # use streamingresponse to avoid content-length header being set automatically, causing issues
     # with Transfer-Encoding
     return StreamingResponse(
-        content=json.dumps(response.json()),
+        content=content,
         media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
         headers=response_headers,
