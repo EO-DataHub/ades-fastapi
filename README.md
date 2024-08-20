@@ -63,7 +63,8 @@ You should also configure your IDE to use black so that code is automatically re
 ## Building and testing
 
 This component uses `pytest` tests and the `ruff` and `black` linters. `black` will reformat your code in an
-opinionated way.
+opinionated way.  
+When testing this module, you need to ensure you have unset the environment variable `ENABLE_OPA_POLICY_CHECK`, or set it to `true`, so ensure the policy is checked when testing.
 
 A number of `make` targets are defined:
 * `make test`: run tests continuously
