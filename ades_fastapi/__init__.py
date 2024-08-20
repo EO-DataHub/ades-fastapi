@@ -111,7 +111,7 @@ def docs_root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
     result = json.dumps(response.json())
-    return Response(
+    return StreamingResponse(
         content=result,
         status_code=response.status_code,
         headers=response.headers,
