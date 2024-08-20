@@ -10,7 +10,7 @@ client = TestClient(app)
 
 def mock_jwt_decode(token, options, algorithms):
     if token == "valid_token":
-        return {"preferred_username": "test_user", "roles": ["admin"]}
+        return {"preferred_username": "test_user", "roles": ["hub_user"]}
     return {"preferred_username": "", "roles": []}
 
 
