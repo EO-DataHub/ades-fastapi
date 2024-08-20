@@ -1,5 +1,6 @@
 import json
 import os
+from json import JSONDecodeError
 
 import jwt
 import requests
@@ -15,16 +16,35 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 # ADES service endpoint
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
 
-app = FastAPI()
+# Used for local testing where OPA is not available
+ENABLE_OPA_POLICY_CHECK = os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 
-app.mount("/ades/static", StaticFiles(directory="/app/static"), name="static")
+print("policy is now ", ENABLE_OPA_POLICY_CHECK)
+
+
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
+
+
+app = FastAPI(
+    title="EODHP ADES",
+    description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
+    "The following endpoints are currently implemented.",
+    version="0.1.0",
+    root_path=ADES_FASTAPI_ROOT_PATH,
+)
+
+static_filepath = os.getenv("STATIC_FILE_PATH", "static")
+
+app.mount("/app/static", StaticFiles(directory=static_filepath), name="static")
 
 
 def opa_request(input_data: dict):
+    """Send a request to OPA service"""
     return requests.post(OPA_SERVICE_ENDPOINT, json=input_data)
 
 
 def check_policy(request: Request):
+    """Check OPA policy to determine if the request is allowed"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
     if stripped_token:
@@ -56,99 +76,104 @@ def check_policy(request: Request):
 
 @app.middleware("http")
 async def opa_middleware(request: Request, call_next):
-    if check_policy(request):
+    """Middleware to check OPA policy before allowing access to the endpoint"""
+    print("opa policy check is ", ENABLE_OPA_POLICY_CHECK)
+    if ENABLE_OPA_POLICY_CHECK == "true":
+        if check_policy(request):
+            response = await call_next(request)
+            return response
+        else:
+            return JSONResponse(status_code=403, content={"detail": "Access denied"})
+    else:
         response = await call_next(request)
         return response
-    else:
-        return JSONResponse(status_code=403, content={"detail": "Access denied"})
 
 
-@app.get("/ades")
+@app.get("")
 def root():
+    """Root endpoint for ADES"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/")
     if response.headers.get("Content-Type") == "text/html":
         return HTMLResponse(content=response.text, status_code=response.status_code)
     else:
         raise HTTPException(status_code=406, detail="Unexpected content type")
-    # if response.status_code != 200:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to fetch swagger docs")
 
 
-@app.get("/ades/{workspace}/ogc-api")
+@app.get("/{workspace}/ogc-api")
 def workspace_root(workspace: str):
+    """Root endpoint for user's workspace"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/")
     if response.headers.get("Content-Type") == "text/html":
         return HTMLResponse(content=response.text, status_code=response.status_code)
     else:
         raise HTTPException(status_code=406, detail="Unexpected content type")
-    # if response.status_code != 200:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to fetch swagger docs")
 
 
-@app.get("/ades/ogc-api/api")
+@app.get("/ogc-api/api")
 def docs_root():
+    """Root endpoint for ADES API Docs, used by Swagger UI"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
     result = json.dumps(response.json())
     return Response(
         content=result,
         status_code=response.status_code,
+        headers=response.headers,
     )
 
 
-@app.get("/ades/api")
+@app.get("/api")
 def swagger_docs():
+    """Endpoint for ADES Swagger docs"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/swagger-ui/oapip/")
-    print(response.headers)
-    print(response)
 
-    if response.headers["content-type"] == "text/html":
-        html_content = response.text.replace('href="./', 'href="./static/swagger-ui/').replace(
-            'src="./', 'src="./static/swagger-ui/'
+    if response.headers["Content-Type"] == "text/html":
+        html_content = (
+            response.text.replace('href="./', 'href="/ades/static/swagger-ui/')
+            .replace('src="./', 'src="/ades/static/swagger-ui/')
+            .replace('"index.css', '"/ades/static/swagger-ui/index.css')
         )
         return HTMLResponse(content=html_content, status_code=response.status_code)
-    elif response.headers["content-type"] in [
-        "application/json",
-        "application/vnd.oai.openapi+json",
-    ]:
-        return JSONResponse(content=response.json(), status_code=response.status_code)
     else:
-        raise HTTPException(status_code=406, detail="Unexpected content type")
+        raise HTTPException(status_code=500, detail="Unexpected content type from ADES")
 
 
 # endpoint to delete process
-@app.delete("/ades/{workspace}/ogc-api/processes/{workflow_id}")
-def undeploy_process(workspace: str, workflow_id: str):
+@app.delete("/{workspace}/ogc-api/processes/{workflow_id}")
+def undeploy_process(workspace: str, workflow_id: str, request: Request):
+    """Endpoint to undeploy a workflow"""
     # workspace = workspace.replace("-", "_")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.delete(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}"
-        # headers=dict(request.headers),
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
+        headers=headers,
     )
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
-    # try:
-    #     result = json.dumps(response.json())
-    # except Exception:
-    result = response.text
+
+    try:
+        content = json.dumps(response.json())
+    except JSONDecodeError:
+        content = response.text
 
     return Response(
-        content=result,
+        content=content,
         status_code=response.status_code,
     )
 
 
 # endpoint to list processes
-@app.get("/ades/{workspace}/ogc-api/processes")
+@app.get("/{workspace}/ogc-api/processes")
 def list_processes(workspace: str, request: Request):
+    """Endpoint to list all workflows deployed in a workspace"""
     # workspace = workspace.replace("-", "_")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes"  # , headers=dict(request.headers)
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers
     )
 
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
-    try:
+    if "application/json" in response.headers["Content-Type"]:
         result = json.dumps(response.json())
-    except Exception:
+    else:
         result = response.text
     return Response(
         content=result,
@@ -158,121 +183,109 @@ def list_processes(workspace: str, request: Request):
 
 
 # deploy process
-@app.post("/ades/{workspace}/ogc-api/processes")
+@app.post("/{workspace}/ogc-api/processes")
 async def deploy_process(workspace: str, request: Request):
+    """Endpoint to deploy a workflow to a workspace"""
     # workspace = workspace.replace("-", "_")
 
     headers = dict(request.headers)
-    new_headers = {"accept": headers["accept"], "content-type": headers["content-type"]}
+    headers.pop("Authorization", None)
 
-    try:
+    if "application/json" in request.headers["Content-Type"]:
+        # Handle HTTP file content
         data = {"json": await request.json()}
-    except Exception:
-        # Handle file content
+    elif "application/cwl+yaml" in request.headers["Content-Type"]:
+        # Handle string file content
         file_content = await request.body()
+
         # Prepare the payload for the subsequent API request
-        data = {"content": file_content}  # Decode bytes to string
+        data = {"data": file_content}  # Decode bytes to string
+    else:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
+        )
 
     response = requests.post(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=new_headers, **data
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers, **data
     )
 
-    try:
-        content = json.dumps(response.json())
-    except Exception as e:
-        print(e)
-        content = ""
+    if "application/json" in response.headers["Content-Type"]:
+        content = json.dumps(response.json(), indent=2)
+    else:
+        content = response.text
 
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
+    # Need to include Location header from ADES to support deploy status endpoint
+    response_headers = {
+        "Location": response.headers.get("Location", ""),
+        "Content-Type": response.headers["Content-Type"],
+    }
 
-    response_headers = {"Location": response.headers.get("Location", "")}
-    # response_headers.pop("content-length", None)
-    # use streamingresponse to avoid content-length header being set automatically, causing issues
-    # with Transfer-Encoding
-    return StreamingResponse(
+    return Response(
         content=content,
-        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
         headers=response_headers,
     )
 
 
 # update process
-@app.put("/ades/{workspace}/ogc-api/processes/{workflow_id}")
+@app.put("/{workspace}/ogc-api/processes/{workflow_id}")
 async def update_process(workspace: str, workflow_id: str, request: Request):
+    """Endpoint to update a workflow in a workspace"""
     # workspace = workspace.replace("-", "_")
 
     headers = dict(request.headers)
-    new_headers = {"accept": headers["accept"], "content-type": headers["content-type"]}
+    headers.pop("Authorization", None)
 
-    try:
+    if "application/json" in request.headers["Content-Type"]:
+        # Handle HTTP file content
         data = {"json": await request.json()}
-    except Exception:
-        # Handle file content
+    elif "application/cwl+yaml" in request.headers["Content-Type"]:
+        # Handle string file content
         file_content = await request.body()
+
         # Prepare the payload for the subsequent API request
-        data = {"content": file_content}  # Decode bytes to string
+        data = {"data": file_content}  # Decode bytes to string
+    else:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
+        )
 
     response = requests.put(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=new_headers, **data
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
+        headers=headers,
+        **data,
     )
 
     try:
         content = json.dumps(response.json())
-    except Exception:
-        content = ""
+    except JSONDecodeError:
+        content = response.text
 
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
+    # Need to include Location header from ADES to support deploy status endpoint
+    response_headers = {
+        "Location": response.headers.get("Location", ""),
+        "Content-Type": response.headers["Content-Type"],
+    }
 
-    # use streamingresponse to avoid content-length header being set automatically, causing issues
-    # with Transfer-Encoding
     return Response(
         content=content,
         status_code=response.status_code,
-        headers=response.headers,
+        headers=response_headers,
     )
 
 
-# # update process
-# @app.put("/ades/{workspace}/ogc-api/processes/{workflow_id}")
-# async def update_process(
-#     workspace: str, workflow_id: str, request: Request, file: UploadFile = File(...)
-# ):
-#     #workspace = workspace.replace("-", "_")
-
-#     body = await request.json()
-#     file_content = await file.read()
-
-#     # Prepare the data to be sent in the request
-#     data = {
-#         "headers": dict(request.headers),
-#         "files": {"file": (file.filename, file_content, file.content_type)},
-#         "json": body,
-#     }
-
-#     response = requests.put(
-#         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
-#         # headers=dict(request.headers),
-#         **data,
-#     )
-#     # if response.status_code < 200 or response.status_code >= 300:
-#     #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
-#     return Response(
-#         content=json.dumps(response.json()),
-#         media_type=response.headers["Content-Type"],
-#         status_code=response.status_code,
-#     )
-
-
 # get process details
-@app.get("/ades/{workspace}/ogc-api/processes/{workflow_id}")
+@app.get("/{workspace}/ogc-api/processes/{workflow_id}")
 def process_details(workspace: str, workflow_id: str, request: Request):
+    """Endpoint to get details of a workflow in a workspace"""
     # workspace = workspace.replace("-", "_")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
-        # headers=dict(request.headers),
+        headers=headers,
     )
     # if response.status_code < 200 or response.status_code >= 300:
     #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
@@ -284,35 +297,43 @@ def process_details(workspace: str, workflow_id: str, request: Request):
 
 
 # execute process
-@app.post("/ades/{workspace}/ogc-api/processes/{workflow_id}/execution")
+@app.post("/{workspace}/ogc-api/processes/{workflow_id}/execution")
 async def execute_process(workspace: str, workflow_id: str, request: Request):
-    # workspace = workspace.replace("-", "_")
+    """Endpoint to execute a workflow in a workspace"""
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
 
     body = await request.json()
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}/execution",
-        # headers=dict(request.headers),
+        headers=headers,
         json=body,
     )
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
+
+    if "application/json" in response.headers["Content-Type"]:
+        content = json.dumps(response.json(), indent=2)
+    else:
+        content = response.text
+
     # use streamingresponse to avoid content-length header being set automatically, causing issues
     # with Transfer-Encoding
     return StreamingResponse(
-        content=json.dumps(response.json()),
+        content=content,
         media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
         headers=response.headers,
     )
 
 
-# get execute status
-@app.get("/ades/{workspace}/ogc-api/jobs/{job_id}")
+@app.get("/{workspace}/ogc-api/jobs/{job_id}")
 def execute_status(workspace: str, job_id: str, request: Request):
+    """Endpoint to get the status of an executing workflow or job"""
     # workspace = workspace.replace("-", "_")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}",  # headers=dict(request.headers)
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
     # if response.status_code < 200 or response.status_code >= 300:
     #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
@@ -323,16 +344,16 @@ def execute_status(workspace: str, job_id: str, request: Request):
     )
 
 
-# get processing results
-@app.get("/ades/{workspace}/ogc-api/jobs/{job_id}/results")
+@app.get("/{workspace}/ogc-api/jobs/{job_id}/results")
 def processing_results(workspace: str, job_id: str, request: Request):
+    """Endpoint to get the results of an executed workflow or job"""
     # workspace = workspace.replace("-", "_")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}/results",
-        # headers=dict(request.headers),
+        headers=headers,
     )
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
     return Response(
         content=json.dumps(response.json()),
         media_type=response.headers["Content-Type"],
@@ -340,15 +361,14 @@ def processing_results(workspace: str, job_id: str, request: Request):
     )
 
 
-# list jobs
-@app.get("/ades/{workspace}/ogc-api/jobs")
+@app.get("/{workspace}/ogc-api/jobs")
 def list_jobs(workspace: str, request: Request):
+    """Endpoint to list all jobs in a workspace"""
     # workspace = workspace.replace("-", "_")
-    response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs",  # headers=dict(request.headers)
-    )
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete process")
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
+
     return Response(
         content=json.dumps(response.json()),
         media_type=response.headers["Content-Type"],
@@ -356,19 +376,19 @@ def list_jobs(workspace: str, request: Request):
     )
 
 
-# delete job (not working)
-@app.delete("/ades/{workspace}/ogc-api/jobs/{job_id}")
+@app.delete("/{workspace}/ogc-api/jobs/{job_id}")
 def delete_job(workspace: str, job_id: str, request: Request):
+    """Endpoint to delete a job"""
     # workspace = workspace.replace("-", "_")
     return Response(
         content="Endpoint not implemented yet",
         status_code=501,
     )
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
     response = requests.delete(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}", headers=dict(request.headers)
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
-    # if response.status_code < 200 or response.status_code >= 300:
-    #     raise HTTPException(status_code=response.status_code, detail="Failed to delete job")
     return Response(
         content=response.text,
         media_type=response.headers["Content-Type"],
