@@ -19,9 +19,6 @@ ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-d
 # Used for local testing where OPA is not available
 ENABLE_OPA_POLICY_CHECK = os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 
-print("policy is now ", ENABLE_OPA_POLICY_CHECK)
-
-
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
 
@@ -35,7 +32,7 @@ app = FastAPI(
 
 static_filepath = os.getenv("STATIC_FILE_PATH", "static")
 
-app.mount("/app/static", StaticFiles(directory=static_filepath), name="static")
+app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 
 def opa_request(input_data: dict):
@@ -128,9 +125,9 @@ def swagger_docs():
 
     if response.headers["Content-Type"] == "text/html":
         html_content = (
-            response.text.replace('href="./', 'href="/ades/static/swagger-ui/')
-            .replace('src="./', 'src="/ades/static/swagger-ui/')
-            .replace('"index.css', '"/ades/static/swagger-ui/index.css')
+            response.text.replace('href="./', 'href="static/swagger-ui/')
+            .replace('src="./', 'src="static/swagger-ui/')
+            .replace('"index.css', '"static/swagger-ui/index.css')
         )
         return HTMLResponse(content=html_content, status_code=response.status_code)
     else:
