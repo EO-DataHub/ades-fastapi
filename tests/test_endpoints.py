@@ -19,7 +19,7 @@ client = TestClient(app)
 
 def mock_jwt_decode(token, options, algorithms):
     if token == "valid_token":
-        return {"preferred_username": "test_user", "roles": ["admin"]}
+        return {"preferred_username": "test_user", "roles": ["hub_user"]}
     return {"preferred_username": "", "roles": []}
 
 
@@ -31,7 +31,7 @@ def mock_opa_request(input_data: dict):
 
 class Mock_ades:
     def mock_requests_post(
-        self, url: str, json: dict = None, content: str = None, headers: dict = None
+        self, url: str, json: dict = None, data: str = None, headers: dict = None
     ):
         if url.endswith("/execution"):
             return MagicMock(
@@ -46,21 +46,20 @@ class Mock_ades:
         )
 
     def mock_requests_put(
-        self, url: str, json: dict = None, content: str = None, headers: dict = None
+        self, url: str, json: dict = None, data: str = None, headers: dict = None
     ):
         return MagicMock(
             status_code=204,
             json=lambda: {"results": True},
-            headers={"Location": "https://test-location"},
+            headers={"Location": "https://test-location", "Content-Type": "application/json"},
         )
 
     def mock_requests_get(self, url: str, headers: dict = None):
         if (
             url.endswith("/ogc-api/")
             or url == f"{ADES_SERVICE_ENDPOINT}/"
-            or url.endswith("/oapip/#/")
+            or url.endswith("/oapip/")
         ):
-            print("HERERERER")
             return MagicMock(
                 status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
             )
@@ -82,6 +81,14 @@ class Mock_ades:
                 json=lambda: {"job": [{"id": "job_12345"}, {"id": "job_67890"}]},
                 headers={"Content-Type": "application/json"},
             )
+        elif url.endswith("/ogc-api/api"):
+            return MagicMock(
+                status_code=200,
+                json=lambda: {"Data": "Response Data"},
+                headers={
+                    "Content-Type": "application/vnd.oai.openapi+json;version=3.0;charset=UTF-8"
+                },
+            )
         return MagicMock(
             status_code=200,
             json=lambda: {"results": True},
@@ -90,7 +97,9 @@ class Mock_ades:
 
     def mock_requests_delete(self, url: str, headers: dict = None):
         return MagicMock(
-            status_code=204, text="Response text", headers={"Content-Type": "application/json"}
+            status_code=204,
+            json=lambda: {"Response": "Response text"},
+            headers={"Content-Type": "application/json"},
         )
 
 
@@ -123,6 +132,17 @@ def test_check_workspace_root():
     assert response.content.decode("utf-8") == "Reponse content"
 
 
+def test_check_docs_root():
+    headers = {"authorization": "Bearer valid_token"}
+    response = client.get("/ades/ogc-api/api", headers=headers)
+    assert response.status_code == 200
+    assert (
+        response.headers["Content-Type"]
+        == "application/vnd.oai.openapi+json;version=3.0;charset=UTF-8"
+    )
+    assert response.json() == {"Data": "Response Data"}
+
+
 def test_check_swagger_docs():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/api", headers=headers)
@@ -137,7 +157,7 @@ def test_check_delete_process():
         "/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers
     )
     assert response.status_code == 204
-    assert response.content.decode("utf-8") == "Response text"
+    assert response.json() == {"Response": "Response text"}
 
 
 def test_check_list_processes():
@@ -159,11 +179,9 @@ def test_check_deploy_process_from_url(monkeypatch):
         json={"url": "https://test-workflow-url"},
     )
     assert response.status_code == 200
-    assert response.headers == {
-        "Content-Type": "application/json",
-        "Location": "https://test-location",
-    }
-    assert response.content.decode("utf-8") == '{"workflow_id": "AAA-123456-BBB-456789"}'
+    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Location"] == "https://test-location"
+    assert response.json() == {"workflow_id": "AAA-123456-BBB-456789"}
 
 
 def test_check_deploy_process_from_file():
@@ -174,11 +192,9 @@ def test_check_deploy_process_from_file():
         content="test-workflow-file-contents",
     )
     assert response.status_code == 200
-    assert response.headers == {
-        "Content-Type": "application/json",
-        "Location": "https://test-location",
-    }
-    assert response.content.decode("utf-8") == '{"workflow_id": "AAA-123456-BBB-456789"}'
+    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Location"] == "https://test-location"
+    assert response.json() == {"workflow_id": "AAA-123456-BBB-456789"}
 
 
 def test_check_update_process_from_url():
@@ -193,8 +209,9 @@ def test_check_update_process_from_url():
         json={"url": "https://test-workflow-url"},
     )
     assert response.status_code == 204
-    assert response.headers == {"Location": "https://test-location"}
-    assert response.content.decode("utf-8") == '{"results": true}'
+    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Location"] == "https://test-location"
+    assert response.json() == {"results": True}
 
 
 def test_check_update_process_from_file():
@@ -209,8 +226,9 @@ def test_check_update_process_from_file():
         content="test-workflow-file-contents",
     )
     assert response.status_code == 204
-    assert response.headers == {"Location": "https://test-location"}
-    assert response.content.decode("utf-8") == '{"results": true}'
+    assert response.headers["Content-Type"] == "application/json"
+    assert response.headers["Location"] == "https://test-location"
+    assert response.json() == {"results": True}
 
 
 def test_get_process_details():
@@ -218,7 +236,7 @@ def test_get_process_details():
     response = client.get("/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.content.decode("utf-8") == '{"results": true}'
+    assert response.json() == {"results": True}
 
 
 def test_execute_process():
@@ -235,7 +253,7 @@ def test_execute_process():
     )
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.content.decode("utf-8") == '{"status": "processing"}'
+    assert response.json() == {"status": "processing"}
 
 
 def test_get_execute_status():
