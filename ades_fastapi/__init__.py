@@ -19,12 +19,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
-logger.info(
-    "Use these for useful info to anyone reading the logs in normal usage (i.e. not debugging)"
-)
-logger.debug("Use these for helpful trace statements when trying to debug issues")
-logger.error("logging out errors that are otherwise handled is quite useful")
-
 # Ingress path for ADES
 ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "/ades")
 
