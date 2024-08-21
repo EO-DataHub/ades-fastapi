@@ -1,0 +1,6 @@
+# created by virtualenv automatically
+venv/
+*.pyc
+*.egg-info
+*.make-venv-installed
+*.pre-commit-config.yaml
