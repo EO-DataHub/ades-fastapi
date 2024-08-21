@@ -62,9 +62,9 @@ You should also configure your IDE to use black so that code is automatically re
 
 ## Building and testing
 
-This component uses `pytest` tests and the `ruff` and `black` linters. `black` will reformat your code in an
-opinionated way.  
-When testing this module, you need to ensure you have unset the environment variable `ENABLE_OPA_POLICY_CHECK`, or set it to `true`, so ensure the policy is checked when testing.
+This component uses `pytest` tests and the `ruff` and `black` linters. `black` will reformat your code in an opinionated way.  
+When testing this module, you need to ensure you have unset the environment variable `ENABLE_OPA_POLICY_CHECK`, or set it to `true`: `export ENABLE_OPA_POLICY_CHECK=true`,
+so ensure the policy is checked when testing.
 
 A number of `make` targets are defined:
 * `make test`: run tests continuously
@@ -107,14 +107,3 @@ example, using
 
 * `git tag 1.2.3`
 * `git push --tags`
-
-Normally, Docker images will be built automatically after pushing to the UKEODHP repos. Images can also be created
-manually in the following way:
-
-* For versioned images create a git tag.
-* Log in to the Docker repository service. For the UKEODHP environment this can be achieved with the following command
-  ```AWS_ACCESS_KEY_ID=...  AWS_SECRET_ACCESS_KEY=... aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 312280911266.dkr.ecr.eu-west-2.amazonaws.com```
-  You will need to create an access key for a user with permission to modify ECR first.
-* Run `make dockerbuild` (for images tagged `latest`) or `make dockerbuild VERSION=1.2.3` for a release tagged `1.2.3`.
-  The image will be available locally within Docker after this step.
-* Run `make dockerpush` or `make dockerpush VERSION=1.2.3`. This will send the image to the ECR repository.
