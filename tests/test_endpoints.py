@@ -29,7 +29,7 @@ def mock_opa_request(input_data: dict):
     return MagicMock(status_code=403, json=lambda: {"result": False})
 
 
-class Mock_ades:
+class ADESMock:
     def mock_requests_post(
         self, url: str, json: dict = None, data: str = None, headers: dict = None
     ):
@@ -105,7 +105,7 @@ class Mock_ades:
 
 @pytest.fixture(autouse=True)
 def mock_dependencies(monkeypatch):
-    mock_ades = Mock_ades()
+    mock_ades = ADESMock()
     monkeypatch.setattr("jwt.decode", mock_jwt_decode)
     # Mock requests.post for middleware and ADES
     monkeypatch.setattr("ades_fastapi.__init__.opa_request", mock_opa_request)
