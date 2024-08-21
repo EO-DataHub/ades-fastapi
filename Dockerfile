@@ -13,10 +13,6 @@ ADD LICENSE requirements.txt ./
 ADD pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r requirements.txt .
 
-
-ENV STATIC_FILE_PATH="/app/static"
-ENV API_URL="https://dev.eodatahub.org.uk/ades/ogc-api/api"
-
 ADD static ./static/
 ADD ades_fastapi ./ades_fastapi/
 
