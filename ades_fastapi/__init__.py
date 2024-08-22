@@ -274,15 +274,21 @@ async def update_process(workspace: str, workflow_id: str, request: Request):
     try:
         content = json.dumps(response.json())
     except JSONDecodeError:
-        content = response.text
+        content = response.text if response.text else ""
+
+    logger.info("Status code from ADES: %s", response.status_code)
+
+    logger.info("Response from ADES: %s", content)
 
     # Need to include Location header from ADES to support deploy status endpoint
     response_headers = {
         "Location": response.headers.get("Location", "").replace(
             "http://localhost:8080", ADES_INGRESS_PATH
         ),
-        "Content-Type": response.headers["Content-Type"],
     }
+
+    if response.headers.get("Content-Type"):
+        response_headers["Content-Type"] = response.headers["Content-Type"]
 
     return Response(
         content=content,
