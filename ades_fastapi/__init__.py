@@ -338,7 +338,11 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
     )
 
     try:
-        content = json.dumps(response.json(), indent=2)
+        content_json = response.json()
+        if "links" in content_json:
+            for link in content_json["links"]:
+                link["href"] = link["href"].replace("http://localhost:8080", ADES_INGRESS_PATH)
+        content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
         content = response.text
 
