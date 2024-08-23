@@ -20,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 # Ingress path for ADES
-ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "/ades")
+ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path/ades")
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
@@ -188,7 +188,7 @@ def list_processes(workspace: str, request: Request):
         content_json = response.json()
         for process in content_json["processes"]:
             if "links" in process:
-                for link in content_json["links"]:
+                for link in process["links"]:
                     link["href"] = link["href"].replace("http://localhost:8080", ADES_INGRESS_PATH)
             content = json.dumps(content_json, indent=2)
     else:
