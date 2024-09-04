@@ -186,6 +186,7 @@ def list_processes(workspace: str, request: Request):
 
     if "application/json" in response.headers["Content-Type"]:
         content_json = response.json()
+        content_json = replace_href_links(content_json)
         for i, process_json in enumerate(content_json["processes"]):
             process_json = replace_href_links(process_json)
             content_json["processes"][i] = process_json
