@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1 (2024-09-04)
+
+Bugfix
+- Add link replacement logic for occurences of "localhost"
+- Correct Content-Type headers when JSONDecodeErrors are raised
+
 ## v0.1.0 (2024-08-01)
 
 Initial Commit for ades-fastapi user service
