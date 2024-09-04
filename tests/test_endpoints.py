@@ -6,12 +6,16 @@ from fastapi.testclient import TestClient
 
 from ades_fastapi.__init__ import app
 
+# OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
     "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/ades/allow"
 )
 
 # ADES service endpoint
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
+
+# Ingress path for ADES
+ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path/ades")
 
 
 client = TestClient(app)
@@ -36,12 +40,24 @@ class ADESMock:
         if url.endswith("/execution"):
             return MagicMock(
                 status_code=200,
-                json=lambda: {"status": "processing"},
+                json=lambda: {
+                    "status": "processing",
+                    "links": [
+                        {
+                            "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
+                        }
+                    ],
+                },
                 headers={"Content-Type": "application/json"},
             )
         return MagicMock(
             status_code=200,
-            json=lambda: {"workflow_id": "AAA-123456-BBB-456789"},
+            json=lambda: {
+                "id": "test_workflow",
+                "links": [
+                    {"href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"}
+                ],
+            },
             headers={"Content-Type": "application/json", "Location": "https://test-location"},
         )
 
@@ -72,13 +88,39 @@ class ADESMock:
         elif url.endswith("/jobs/job_12345"):
             return MagicMock(
                 status_code=200,
-                json=lambda: {"status": "processing"},
+                json=lambda: {
+                    "status": "processing",
+                    "links": [
+                        {
+                            "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
+                        }
+                    ],
+                },
                 headers={"Content-Type": "application/json"},
             )
         elif url.endswith("/jobs"):
             return MagicMock(
                 status_code=200,
-                json=lambda: {"job": [{"id": "job_12345"}, {"id": "job_67890"}]},
+                json=lambda: {
+                    "jobs": [
+                        {
+                            "id": "job_12345",
+                            "links": [
+                                {
+                                    "href": "http://localhost:8080/test_workspace/ogc-api/jobs/job_12345"
+                                }
+                            ],
+                        },
+                        {
+                            "id": "job_67890",
+                            "links": [
+                                {
+                                    "href": "http://localhost:8080/test_workspace/ogc-api/jobs/job_67890"
+                                }
+                            ],
+                        },
+                    ]
+                },
                 headers={"Content-Type": "application/json"},
             )
         elif url.endswith("/ogc-api/api"):
@@ -88,6 +130,36 @@ class ADESMock:
                 headers={
                     "Content-Type": "application/vnd.oai.openapi+json;version=3.0;charset=UTF-8"
                 },
+            )
+        elif url.endswith("/processes"):
+            return MagicMock(
+                status_code=200,
+                json=lambda: {
+                    "processes": [
+                        {
+                            "id": "test_workflow",
+                            "links": [
+                                {
+                                    "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
+                                }
+                            ],
+                        }
+                    ]
+                },
+                headers={"Content-Type": "application/json"},
+            )
+        elif url.endswith("/processes/test_workflow"):
+            return MagicMock(
+                status_code=200,
+                json=lambda: {
+                    "id": "test_workflow",
+                    "links": [
+                        {
+                            "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
+                        }
+                    ],
+                },
+                headers={"Content-Type": "application/json"},
             )
         return MagicMock(
             status_code=200,
@@ -164,7 +236,16 @@ def test_check_list_processes():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api/processes", headers=headers)
     assert response.status_code == 200
-    assert response.json() == {"results": True}
+    assert response.json() == {
+        "processes": [
+            {
+                "id": "test_workflow",
+                "links": [
+                    {"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}
+                ],
+            }
+        ]
+    }
 
 
 def test_check_deploy_process_from_url(monkeypatch):
@@ -181,7 +262,10 @@ def test_check_deploy_process_from_url(monkeypatch):
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.headers["Location"] == "https://test-location"
-    assert response.json() == {"workflow_id": "AAA-123456-BBB-456789"}
+    assert response.json() == {
+        "id": "test_workflow",
+        "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
 
 
 def test_check_deploy_process_from_file():
@@ -194,7 +278,10 @@ def test_check_deploy_process_from_file():
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.headers["Location"] == "https://test-location"
-    assert response.json() == {"workflow_id": "AAA-123456-BBB-456789"}
+    assert response.json() == {
+        "id": "test_workflow",
+        "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
 
 
 def test_check_update_process_from_url():
@@ -236,7 +323,10 @@ def test_get_process_details():
     response = client.get("/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.json() == {"results": True}
+    assert response.json() == {
+        "id": "test_workflow",
+        "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
 
 
 def test_execute_process():
@@ -253,7 +343,10 @@ def test_execute_process():
     )
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.json() == {"status": "processing"}
+    assert response.json() == {
+        "status": "processing",
+        "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
 
 
 def test_get_execute_status():
@@ -261,7 +354,10 @@ def test_get_execute_status():
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.content.decode("utf-8") == '{"status": "processing"}'
+    assert response.json() == {
+        "status": "processing",
+        "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
 
 
 def test_get_processing_results():
@@ -269,7 +365,7 @@ def test_get_processing_results():
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345/results", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.content.decode("utf-8") == '{"result_location": "https://results-url"}'
+    assert response.json() == {"result_location": "https://results-url"}
 
 
 def test_list_jobs():
@@ -277,7 +373,18 @@ def test_list_jobs():
     response = client.get("/ades/test_workspace/ogc-api/jobs", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.content.decode("utf-8") == '{"job": [{"id": "job_12345"}, {"id": "job_67890"}]}'
+    assert response.json() == {
+        "jobs": [
+            {
+                "id": "job_12345",
+                "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/jobs/job_12345"}],
+            },
+            {
+                "id": "job_67890",
+                "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/jobs/job_67890"}],
+            },
+        ]
+    }
 
 
 def test_delete_job():
