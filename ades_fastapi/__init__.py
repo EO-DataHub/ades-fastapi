@@ -358,6 +358,8 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
         content_json = replace_href_links(content_json)
         content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
+        if response.headers["Content-Type"] == "text/plain":
+            content = response.text
         content = response.text
 
     if "Location" in response.headers:
