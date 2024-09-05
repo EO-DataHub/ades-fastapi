@@ -55,9 +55,8 @@ def opa_request(input_data: dict):
     logger.debug("Sending request to OPA service with input: %s", input_data)
     return requests.post(OPA_SERVICE_ENDPOINT, json=input_data)
 
-
-def check_policy(request: Request):
-    """Check OPA policy to determine if the request is allowed"""
+def get_user_details(request: Request):
+    """Get user details from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
     if stripped_token:
@@ -71,6 +70,11 @@ def check_policy(request: Request):
     else:
         username = ""
         roles = []
+    return username, roles
+
+def check_policy(request: Request):
+    """Check OPA policy to determine if the request is allowed"""
+    username, roles = get_user_details(request)
     input_data = {
         "input": {
             "roles": roles,
@@ -346,7 +350,10 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
     headers.pop("authorization", None)
     headers.pop("content-type", None)
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}/execution",
@@ -420,17 +427,55 @@ def list_jobs(workspace: str, request: Request):
     headers.pop("Authorization", None)
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
 
+    response_json = json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH)
+
     return Response(
-        content=json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH),
+        content=response_json,
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
 
+def list_jobs_dict(workspace: str, request: Request) -> dict:
+    """Endpoint to list all jobs in a workspace returning dictionary"""
+    logger.debug("Listing jobs in workspace %s", workspace)
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
+
+    return response.json()
+
+def check_job_access(workspace: str, workflow_id: str, job_id: str, request: Request):
+    """Check if the job was run in this user workspace"""
+
+    # Get all jobs in user workspace
+    josb_dict = list_jobs_dict(workspace, request)
+    all_jobs = josb_dict["jobs"]
+
+    # TODO: Add check for group workspace as well
+
+    # Check if the job is in the list
+    for job in all_jobs:
+        if job["jobID"] == job_id and job["processID"] == workflow_id:
+            return True
+    return False
+
 @app.get("/temp/{workflow_job_id}/{file_name}")
 def get_logs(workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
-    workflow_id = workflow_job_id.split[:-37]
-    job_id = workflow_job_id.split("-")[-36:]
+    # Get username and roles
+    username, roles = get_user_details(request)
+
+    # Remove "-" from username
+    username = username.replace("-", "_")
+
+    # Extract workflow and job ids
+    workflow_id = workflow_job_id[:-37]
+    job_id = workflow_job_id[-36:]
+
+    # Check job was run in this user workspace
+    if not check_job_access(username, workflow_id, job_id, request):
+        return JSONResponse(status_code=403, content={"detail": "Access denied"})
+
     logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
