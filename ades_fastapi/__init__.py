@@ -55,6 +55,7 @@ def opa_request(input_data: dict):
     logger.debug("Sending request to OPA service with input: %s", input_data)
     return requests.post(OPA_SERVICE_ENDPOINT, json=input_data)
 
+
 def get_user_details(request: Request):
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
@@ -71,6 +72,7 @@ def get_user_details(request: Request):
         username = ""
         roles = []
     return username, roles
+
 
 def check_policy(request: Request):
     """Check OPA policy to determine if the request is allowed"""
@@ -352,8 +354,8 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
 
     try:
         body = await request.json()
-    except JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except JSONDecodeError as err:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}/execution",
@@ -435,8 +437,9 @@ def list_jobs(workspace: str, request: Request):
         status_code=response.status_code,
     )
 
+
 def list_jobs_dict(workspace: str, request: Request) -> dict:
-    """Endpoint to list all jobs in a workspace returning dictionary"""
+    """Local function to list all jobs in a workspace, returned as a dictionary"""
     logger.debug("Listing jobs in workspace %s", workspace)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -444,12 +447,13 @@ def list_jobs_dict(workspace: str, request: Request) -> dict:
 
     return response.json()
 
+
 def check_job_access(workspace: str, workflow_id: str, job_id: str, request: Request):
     """Check if the job was run in this user workspace"""
 
     # Get all jobs in user workspace
-    josb_dict = list_jobs_dict(workspace, request)
-    all_jobs = josb_dict["jobs"]
+    jobs_dict = list_jobs_dict(workspace, request)
+    all_jobs = jobs_dict["jobs"]
 
     # TODO: Add check for group workspace as well
 
@@ -459,11 +463,12 @@ def check_job_access(workspace: str, workflow_id: str, job_id: str, request: Req
             return True
     return False
 
+
 @app.get("/temp/{workflow_job_id}/{file_name}")
 def get_logs(workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
     # Get username and roles
-    username, roles = get_user_details(request)
+    username, _ = get_user_details(request)
 
     # Remove "-" from username
     username = username.replace("-", "_")
@@ -479,10 +484,12 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
     logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers)
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers
+    )
 
     return Response(
-        content=response.text,
+        content=response.content,
         headers=response.headers,
         status_code=response.status_code,
     )
