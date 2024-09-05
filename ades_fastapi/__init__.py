@@ -426,6 +426,22 @@ def list_jobs(workspace: str, request: Request):
         status_code=response.status_code,
     )
 
+@app.get("/temp/{workflow_job_id}/{file_name}")
+def get_logs(workflow_job_id: str, file_name: str, request: Request):
+    """Endpoint to get the logs of a job"""
+    workflow_id = workflow_job_id.split[:-37]
+    job_id = workflow_job_id.split("-")[-36:]
+    logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers)
+
+    return Response(
+        content=response.text,
+        headers=response.headers,
+        status_code=response.status_code,
+    )
+
 
 @app.delete("/{workspace}/ogc-api/jobs/{job_id}")
 def delete_job(workspace: str, job_id: str, request: Request):
