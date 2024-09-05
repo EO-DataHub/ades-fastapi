@@ -1,5 +1,5 @@
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -160,6 +160,12 @@ class ADESMock:
                     ],
                 },
                 headers={"Content-Type": "application/json"},
+            )
+        elif url.endswith("/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log"):
+            return MagicMock(
+                status_code=200,
+                content="Some log content",
+                headers={"Content-Type": "text/plain"},
             )
         return MagicMock(
             status_code=200,
@@ -385,6 +391,22 @@ def test_list_jobs():
             },
         ]
     }
+
+
+@patch("ades_fastapi.__init__.list_jobs_dict")
+def test_get_logs(mock_list_jobs_dict):
+    # Mock get_user_details
+    mock_list_jobs_dict.return_value = {
+        "jobs": [{"jobID": "12312312-aaaa-bbbb-cccc-dddddddddddd", "processID": "test_workflow"}]
+    }
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.get(
+        "/ades/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "text/plain"
+    assert response.content.decode("utf-8") == "Some log content"
 
 
 def test_delete_job():
