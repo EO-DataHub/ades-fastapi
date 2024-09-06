@@ -234,9 +234,8 @@ def get_workspace(request: Request):
     return request.path_params["workspace"]
 
 
-rate_limiter_dependency = Depends(
-    lambda workspace=Depends(get_workspace): rate_limit(workspace)  # noqa: B008
-)
+def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
+    rate_limit(workspace)
 
 
 def get_processes(workspace: str):
@@ -244,13 +243,11 @@ def get_processes(workspace: str):
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers
     )
-
     try:
         processes_dict = response.json()
     except JSONDecodeError as err:
         logger.error("Error decoding JSON response from ADES list processes")
         raise err
-
     return processes_dict
 
 
