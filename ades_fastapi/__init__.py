@@ -1,12 +1,14 @@
 import json
 import logging
 import os
+import time
 from distutils.util import strtobool
 from json import JSONDecodeError
 
 import jwt
 import requests
-from fastapi import FastAPI, HTTPException, Request, Response
+import yaml
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -214,8 +216,61 @@ def replace_href_links(content_dict):
     return content_dict
 
 
+last_deploy_times = {}
+
+
+# Dependency to check the last call time
+def rate_limit(workspace: str):
+    current_time = time.time()
+    last_call_time = last_deploy_times.get(workspace, 0)
+    if current_time - last_call_time < 5:
+        raise HTTPException(
+            status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying."
+        )
+    last_deploy_times[workspace] = current_time
+
+
+def get_workspace(request: Request):
+    return request.path_params["workspace"]
+
+
+rate_limiter_dependency = Depends(
+    lambda workspace=Depends(get_workspace): rate_limit(workspace)  # noqa: B008
+)
+
+
+def get_processes(workspace: str):
+    headers = {"Accept": "application/cwl+json"}
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers
+    )
+
+    try:
+        processes_dict = response.json()
+    except JSONDecodeError as err:
+        logger.error("Error decoding JSON response from ADES list processes")
+        raise err
+
+    return processes_dict
+
+
+def get_workflow_id_from_file(data: str):
+    cwl_dict = yaml.safe_load(data)
+    return cwl_dict["$graph"][0]["id"]
+
+
+def get_workflow_id_from_url(url: str):
+    response = requests.get(url)
+    cwl_dict = yaml.safe_load(response.text)
+    return cwl_dict["$graph"][0]["id"]
+
+
 @app.post("/{workspace}/ogc-api/processes")
-async def deploy_process(workspace: str, request: Request):
+async def deploy_process(
+    workspace: str,
+    request: Request,
+    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+):
     """Endpoint to deploy a workflow to a workspace"""
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -224,6 +279,7 @@ async def deploy_process(workspace: str, request: Request):
         logger.info("Deploying workflow from URL to workspace %s", workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
+        workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from CWL file content to workspace %s", workspace)
         # Handle string file content
@@ -231,11 +287,18 @@ async def deploy_process(workspace: str, request: Request):
 
         # Prepare the payload for the subsequent API request
         data = {"data": file_content}  # Decode bytes to string
+        workflow_id = get_workflow_id_from_file(data["data"])
     else:
         raise HTTPException(
             status_code=415,
             detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
         )
+
+    # Check if the workflow is already deployed, as this causes a bug in the ADES
+    processes_dict = get_processes(workspace)
+    for process in processes_dict["processes"]:
+        if process["id"] == workflow_id:
+            raise HTTPException(status_code=409, detail="Workflow already deployed")
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers, **data

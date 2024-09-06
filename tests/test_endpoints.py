@@ -277,7 +277,7 @@ def test_check_deploy_process_from_url(monkeypatch):
 def test_check_deploy_process_from_file():
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
     response = client.post(
-        "/ades/test_workspace/ogc-api/processes",
+        "/ades/test_workspace_2/ogc-api/processes",
         headers=headers,
         content="test-workflow-file-contents",
     )
@@ -287,6 +287,24 @@ def test_check_deploy_process_from_file():
     assert response.json() == {
         "id": "test_workflow",
         "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+    }
+
+
+def test_check_deploy_process_from_file_rate_limit():
+    headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
+    response = client.post(
+        "/ades/test_workspace_3/ogc-api/processes",
+        headers=headers,
+        content="test-workflow-file-contents",
+    )
+    response = client.post(
+        "/ades/test_workspace_3/ogc-api/processes",
+        headers=headers,
+        content="another-test-workflow-file-contents",
+    )
+    assert response.status_code == 429
+    assert response.json() == {
+        "detail": "Too Many Requests: Please wait 5 seconds before retrying."
     }
 
 
