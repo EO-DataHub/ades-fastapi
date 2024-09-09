@@ -36,6 +36,9 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
+# Public workspace name for workflows
+PUBLIC_WORKSPACE = os.getenv("PUBLIC_WORKSPACE", "public")
+
 
 app = FastAPI(
     title="EODHP ADES",
@@ -445,3 +448,13 @@ def delete_job(workspace: str, job_id: str, request: Request):
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
+
+
+@app.put("/{workspace}/{workflow_id}/public")
+def set_workflow_public(workspace: str, workflow_id: str):
+    pass
+
+
+@app.put("/{workspace}/{workflow_id}/private")
+def set_workflow_private(workspace: str, workflow_id: str):
+    pass
