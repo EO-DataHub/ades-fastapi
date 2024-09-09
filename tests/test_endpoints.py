@@ -71,13 +71,15 @@ class ADESMock:
         )
 
     def mock_requests_get(self, url: str, headers: dict = None):
-        if (
-            url.endswith("/ogc-api/")
-            or url == f"{ADES_SERVICE_ENDPOINT}/"
-            or url.endswith("/oapip/")
-        ):
+        if url == f"{ADES_SERVICE_ENDPOINT}/" or url.endswith("/oapip/"):
             return MagicMock(
                 status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
+            )
+        elif url.endswith("/test_workspace/ogc-api/"):
+            return MagicMock(
+                status_code=200,
+                json=lambda: {"Data": "Response Data"},
+                headers={"Content-Type": "application/json"},
             )
         elif url.endswith("/results"):
             return MagicMock(
@@ -193,15 +195,15 @@ def test_check_root():
     response = client.get("/ades", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "text/html; charset=utf-8"
-    assert response.content.decode("utf-8") == "Reponse content"
+    assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: running</p>"
 
 
 def test_check_workspace_root():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api", headers=headers)
     assert response.status_code == 200
-    assert response.headers["Content-Type"] == "text/html; charset=utf-8"
-    assert response.content.decode("utf-8") == "Reponse content"
+    assert response.headers["Content-Type"] == "application/json"
+    assert response.json() == {"Data": "Response Data"}
 
 
 def test_check_docs_root():

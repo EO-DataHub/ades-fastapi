@@ -35,7 +35,7 @@ def test_check_policy_valid_token():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades", headers=headers)
     assert response.status_code == 200
-    assert response.content.decode("utf-8") == "Reponse content"
+    assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: running</p>"
 
 
 def test_check_policy_invalid_token():
