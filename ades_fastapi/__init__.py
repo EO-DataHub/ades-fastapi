@@ -109,7 +109,7 @@ def root():
     except requests.exceptions.ConnectionError:
         return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
     if response.status_code == 200:
-        return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: running</p>")
+        return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: available</p>")
     else:
         return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 

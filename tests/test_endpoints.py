@@ -195,7 +195,7 @@ def test_check_root():
     response = client.get("/ades", headers=headers)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "text/html; charset=utf-8"
-    assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: running</p>"
+    assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: available</p>"
 
 
 def test_check_workspace_root():
