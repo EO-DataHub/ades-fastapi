@@ -106,7 +106,6 @@ def root():
     logger.debug("Getting ADES API docs")
     try:
         response = requests.get(f"{ADES_SERVICE_ENDPOINT}")
-        print(response)
     except requests.exceptions.ConnectionError:
         return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
     if response.status_code == 200:
