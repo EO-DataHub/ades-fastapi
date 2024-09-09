@@ -104,13 +104,15 @@ async def opa_middleware(request: Request, call_next):
 def root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     logger.debug("Getting ADES API docs")
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
-    result = json.dumps(response.json())
-    return StreamingResponse(
-        content=result,
-        status_code=response.status_code,
-        headers=response.headers,
-    )
+    try:
+        response = requests.get(f"{ADES_SERVICE_ENDPOINT}")
+        print(response)
+    except requests.exceptions.ConnectionError:
+        return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+    if response.status_code == 200:
+        return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: running</p>")
+    else:
+        return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
 
 @app.get("/{workspace}/ogc-api")
@@ -118,10 +120,12 @@ def workspace_root(workspace: str):
     """Root endpoint for user's workspace"""
     logger.debug("Getting root of workspace %s", workspace)
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/")
-    if response.headers.get("Content-Type") == "text/html":
-        return HTMLResponse(content=response.text, status_code=response.status_code)
-    else:
-        raise HTTPException(status_code=406, detail="Unexpected content type")
+    result = json.dumps(response.json())
+    return StreamingResponse(
+        content=result,
+        status_code=response.status_code,
+        headers=response.headers,
+    )
 
 
 @app.get("/ogc-api/api")
