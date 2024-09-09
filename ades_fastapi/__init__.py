@@ -102,13 +102,15 @@ async def opa_middleware(request: Request, call_next):
 
 @app.get("")
 def root():
-    """Root endpoint for ADES"""
-    logger.debug("Getting root of ADES")
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/")
-    if response.headers.get("Content-Type") == "text/html":
-        return HTMLResponse(content=response.text, status_code=response.status_code)
-    else:
-        raise HTTPException(status_code=406, detail="Unexpected content type")
+    """Root endpoint for ADES API Docs, used by Swagger UI"""
+    logger.debug("Getting ADES API docs")
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
+    result = json.dumps(response.json())
+    return StreamingResponse(
+        content=result,
+        status_code=response.status_code,
+        headers=response.headers,
+    )
 
 
 @app.get("/{workspace}/ogc-api")
