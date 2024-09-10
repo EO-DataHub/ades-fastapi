@@ -67,7 +67,9 @@ python-dotenv==1.0.1
 python-multipart==0.0.9
     # via fastapi
 pyyaml==6.0.1
-    # via uvicorn
+    # via
+    #   ades-fastapi (pyproject.toml)
+    #   uvicorn
 requests==2.32.3
     # via ades-fastapi (pyproject.toml)
 rich==13.7.1

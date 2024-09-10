@@ -137,7 +137,7 @@ class ADESMock:
                 json=lambda: {
                     "processes": [
                         {
-                            "id": "test_workflow",
+                            "id": "test_workflow_1",
                             "links": [
                                 {
                                     "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
@@ -194,7 +194,7 @@ def mock_dependencies(monkeypatch):
     monkeypatch.setattr("requests.delete", mock_ades.mock_requests_delete)
 
 
-def test_check_root():
+def test_root():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades", headers=headers)
     assert response.status_code == 200
@@ -202,7 +202,7 @@ def test_check_root():
     assert response.content.decode("utf-8") == "Reponse content"
 
 
-def test_check_workspace_root():
+def test_workspace_root():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api", headers=headers)
     assert response.status_code == 200
@@ -210,7 +210,7 @@ def test_check_workspace_root():
     assert response.content.decode("utf-8") == "Reponse content"
 
 
-def test_check_docs_root():
+def test_docs_root():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/ogc-api/api", headers=headers)
     assert response.status_code == 200
@@ -221,7 +221,7 @@ def test_check_docs_root():
     assert response.json() == {"Data": "Response Data"}
 
 
-def test_check_swagger_docs():
+def test_swagger_docs():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/api", headers=headers)
     assert response.status_code == 200
@@ -229,7 +229,7 @@ def test_check_swagger_docs():
     assert response.content.decode("utf-8") == "Reponse content"
 
 
-def test_check_delete_process():
+def test_delete_process():
     headers = {"authorization": "Bearer valid_token"}
     response = client.delete(
         "/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers
@@ -238,14 +238,14 @@ def test_check_delete_process():
     assert response.json() == {"Response": "Response text"}
 
 
-def test_check_list_processes():
+def test_list_processes():
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api/processes", headers=headers)
     assert response.status_code == 200
     assert response.json() == {
         "processes": [
             {
-                "id": "test_workflow",
+                "id": "test_workflow_1",
                 "links": [
                     {"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}
                 ],
@@ -254,7 +254,12 @@ def test_check_list_processes():
     }
 
 
-def test_check_deploy_process_from_url(monkeypatch):
+@patch("ades_fastapi.__init__.get_workflow_id_from_url")
+def test_deploy_process_from_url(mock_get_workflow_id_from_url):
+
+    # Configure mocks
+    mock_get_workflow_id_from_url.return_value = "example-workflow"
+
     headers = {
         "authorization": "Bearer valid_token",
         "content-type": "application/json",
@@ -263,7 +268,7 @@ def test_check_deploy_process_from_url(monkeypatch):
     response = client.post(
         "/ades/test_workspace/ogc-api/processes",
         headers=headers,
-        json={"url": "https://test-workflow-url"},
+        json={"executionUnit": {"href": "https://test_workflow-url"}},
     )
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
@@ -274,12 +279,21 @@ def test_check_deploy_process_from_url(monkeypatch):
     }
 
 
-def test_check_deploy_process_from_file():
+@patch("ades_fastapi.__init__.get_workflow_id_from_file")
+def test_deploy_process_from_file(mock_get_workflow_id_from_url):
+
+    # Configure mocks
+    mock_get_workflow_id_from_url.return_value = "test_workflow"
+
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
     response = client.post(
-        "/ades/test_workspace/ogc-api/processes",
+        "/ades/test_workspace_2/ogc-api/processes",
         headers=headers,
-        content="test-workflow-file-contents",
+        content="""
+        cwlVersion: v1.0
+        $graph:
+        - class: Workflow
+          id: test_workflow""",
     )
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
@@ -290,7 +304,38 @@ def test_check_deploy_process_from_file():
     }
 
 
-def test_check_update_process_from_url():
+@patch("ades_fastapi.__init__.get_workflow_id_from_url")
+def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url):
+
+    # Configure mocks
+    mock_get_workflow_id_from_url.return_value = "test_workflow"
+
+    headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
+    response = client.post(
+        "/ades/test_workspace_3/ogc-api/processes",
+        headers=headers,
+        content="""
+        cwlVersion: v1.0
+        $graph:
+        - class: Workflow
+          id: test_workflow""",
+    )
+    response = client.post(
+        "/ades/test_workspace_3/ogc-api/processes",
+        headers=headers,
+        content="""
+        cwlVersion: v1.0
+        $graph:
+        - class: Workflow
+          id: test_workflow-2""",
+    )
+    assert response.status_code == 429
+    assert response.json() == {
+        "detail": "Too Many Requests: Please wait 5 seconds before retrying."
+    }
+
+
+def test_update_process_from_url():
     headers = {
         "authorization": "Bearer valid_token",
         "Content-Type": "application/json",
@@ -299,7 +344,7 @@ def test_check_update_process_from_url():
     response = client.put(
         "/ades/test_workspace/ogc-api/processes/test_workflow",
         headers=headers,
-        json={"url": "https://test-workflow-url"},
+        json={"executionUnit": {"href": "https://test_workflow-url"}},
     )
     assert response.status_code == 204
     assert response.headers["Content-Type"] == "application/json"
@@ -307,7 +352,7 @@ def test_check_update_process_from_url():
     assert response.json() == {"results": True}
 
 
-def test_check_update_process_from_file():
+def test_update_process_from_file():
     headers = {
         "authorization": "Bearer valid_token",
         "Content-Type": "application/cwl+yaml",
@@ -316,7 +361,7 @@ def test_check_update_process_from_file():
     response = client.put(
         "/ades/test_workspace/ogc-api/processes/test_workflow",
         headers=headers,
-        content="test-workflow-file-contents",
+        content="test_workflow-file-contents",
     )
     assert response.status_code == 204
     assert response.headers["Content-Type"] == "application/json"

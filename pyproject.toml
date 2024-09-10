@@ -68,6 +68,7 @@ dependencies = [
   "uvicorn",
   "requests",
   "pyjwt",
+  "pyyaml",
 ]
 
 # List additional groups of dependencies here (e.g. development
