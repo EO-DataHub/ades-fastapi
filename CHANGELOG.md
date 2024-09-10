@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.2 (2024-09-10)
+
+New Functionality and bugfixes
+- Add endpoint to allow access to workflow logs
+- Update deployment endpoint to prevent ADES bugs by introducing rate limit and additional check for previously deployed workflows
+- Update ADES homepage to point to placeholder instead of Apache2 server page
+
 ## v0.1.1 (2024-09-04)
 
 Bugfix
