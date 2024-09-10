@@ -1,12 +1,14 @@
 import json
 import logging
 import os
+import time
 from distutils.util import strtobool
 from json import JSONDecodeError
 
 import jwt
 import requests
-from fastapi import FastAPI, HTTPException, Request, Response
+import yaml
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -56,8 +58,8 @@ def opa_request(input_data: dict):
     return requests.post(OPA_SERVICE_ENDPOINT, json=input_data)
 
 
-def check_policy(request: Request):
-    """Check OPA policy to determine if the request is allowed"""
+def get_user_details(request: Request):
+    """Get user details from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
     if stripped_token:
@@ -71,6 +73,12 @@ def check_policy(request: Request):
     else:
         username = ""
         roles = []
+    return username, roles
+
+
+def check_policy(request: Request):
+    """Check OPA policy to determine if the request is allowed"""
+    username, roles = get_user_details(request)
     input_data = {
         "input": {
             "roles": roles,
@@ -208,8 +216,58 @@ def replace_href_links(content_dict):
     return content_dict
 
 
+last_deploy_times = {}
+
+
+# Dependency to check the last call time
+def rate_limit(workspace: str):
+    current_time = time.time()
+    last_call_time = last_deploy_times.get(workspace, 0)
+    if current_time - last_call_time < 5:
+        raise HTTPException(
+            status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying."
+        )
+    last_deploy_times[workspace] = current_time
+
+
+def get_workspace(request: Request):
+    return request.path_params["workspace"]
+
+
+def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
+    rate_limit(workspace)
+
+
+def get_processes(workspace: str):
+    headers = {"Accept": "application/cwl+json"}
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers
+    )
+    try:
+        processes_dict = response.json()
+    except JSONDecodeError as err:
+        logger.error("Error decoding JSON response from ADES list processes")
+        raise err
+    return processes_dict
+
+
+def get_workflow_id_from_file(data: str):
+    cwl_dict = yaml.safe_load(data)
+    return cwl_dict["$graph"][0]["id"]
+
+
+def get_workflow_id_from_url(url: str):
+    response = requests.get(url)
+    cwl_dict = yaml.safe_load(response.text)
+    return cwl_dict["$graph"][0]["id"]
+
+
 @app.post("/{workspace}/ogc-api/processes")
-async def deploy_process(workspace: str, request: Request):
+async def deploy_process(
+    workspace: str,
+    request: Request,
+    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+):
     """Endpoint to deploy a workflow to a workspace"""
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -218,6 +276,7 @@ async def deploy_process(workspace: str, request: Request):
         logger.info("Deploying workflow from URL to workspace %s", workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
+        workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from CWL file content to workspace %s", workspace)
         # Handle string file content
@@ -225,11 +284,18 @@ async def deploy_process(workspace: str, request: Request):
 
         # Prepare the payload for the subsequent API request
         data = {"data": file_content}  # Decode bytes to string
+        workflow_id = get_workflow_id_from_file(data["data"])
     else:
         raise HTTPException(
             status_code=415,
             detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
         )
+
+    # Check if the workflow is already deployed, as this causes a bug in the ADES
+    processes_dict = get_processes(workspace)
+    for process in processes_dict["processes"]:
+        if process["id"] == workflow_id:
+            raise HTTPException(status_code=409, detail="Workflow already deployed")
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers, **data
@@ -346,7 +412,10 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
     headers.pop("authorization", None)
     headers.pop("content-type", None)
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except JSONDecodeError as err:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}/execution",
@@ -420,9 +489,68 @@ def list_jobs(workspace: str, request: Request):
     headers.pop("Authorization", None)
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
 
+    response_json = json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH)
+
     return Response(
-        content=json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH),
+        content=response_json,
         media_type=response.headers["Content-Type"],
+        status_code=response.status_code,
+    )
+
+
+def list_jobs_dict(workspace: str, request: Request) -> dict:
+    """Local function to list all jobs in a workspace, returned as a dictionary"""
+    logger.debug("Listing jobs in workspace %s", workspace)
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
+
+    return response.json()
+
+
+def check_job_access(workspace: str, workflow_id: str, job_id: str, request: Request):
+    """Check if the job was run in this user workspace"""
+
+    # Get all jobs in user workspace
+    jobs_dict = list_jobs_dict(workspace, request)
+    all_jobs = jobs_dict["jobs"]
+
+    # TODO: Add check for group workspace as well
+
+    # Check if the job is in the list
+    for job in all_jobs:
+        if job["jobID"] == job_id and job["processID"] == workflow_id:
+            return True
+    return False
+
+
+@app.get("/temp/{workflow_job_id}/{file_name}")
+def get_logs(workflow_job_id: str, file_name: str, request: Request):
+    """Endpoint to get the logs of a job"""
+    # Get username and roles
+    username, _ = get_user_details(request)
+
+    # Remove "-" from username
+    username = username.replace("-", "_")
+
+    # Extract workflow and job ids
+    workflow_id = workflow_job_id[:-37]
+    job_id = workflow_job_id[-36:]
+
+    # Check job was run in this user workspace
+    if not check_job_access(username, workflow_id, job_id, request):
+        return JSONResponse(status_code=403, content={"detail": "Access denied"})
+
+    logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers
+    )
+
+    return Response(
+        content=response.content,
+        headers=response.headers,
         status_code=response.status_code,
     )
 
