@@ -221,17 +221,19 @@ def check_workflow_access(
 
     workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
 
+    ## TODO: Could also use OPA check here instead
+
     # Check if workflow is a user service
-    if workflow_policy["user_service"]:
+    if workflow_policy.get("user_service"):
         logger.info("Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace)
         return True
     # Check if workflow is public
-    elif workflow_policy["public"]:
+    elif workflow_policy.get("public"):
         logger.info("Workflow %s in workspace %s is public", workflow_id, deploy_workspace)
         return True
     else:
         # Check if user is in the allowed list
-        if username in workflow_policy["allowed_access"]["users"]:
+        if username in workflow_policy.get("allowed_access", {}).get("users"):
             logger.info(
                 "User %s is in the allowed list for workflow %s in workspace %s",
                 user_workspace,
@@ -240,7 +242,7 @@ def check_workflow_access(
             )
             return True
         else:
-            allowed_groups = set(workflow_policy["allowed_access"]["groups"])
+            allowed_groups = set(workflow_policy.get("allowed_access", {}).get("groups", set()))
             if user_groups & allowed_groups:
                 logger.info(
                     "User %s is in the allowed groups for workflow %s in workspace %s",
