@@ -4,11 +4,25 @@ import os
 from distutils.util import strtobool
 from json import JSONDecodeError
 
-import jwt
 import requests
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
+from .utils import (
+    check_job_access,
+    check_policy,
+    check_workflow_access,
+    convert_username_to_workspace,
+    get_processes,
+    get_user_details,
+    get_workflow_id_from_file,
+    get_workflow_id_from_url,
+    rate_limiter_dependency,
+    replace_href_links,
+    save_data,
+    user_is_workspace_owner,
+)
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -36,8 +50,11 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
-# Public workspace name for workflows
-PUBLIC_WORKSPACE = os.getenv("PUBLIC_WORKSPACE", "public")
+# ADES Policy bucket name
+ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
+
+# Job owner storage directory
+JOB_OWNER_STORAGE_DIR = os.getenv("JOB_OWNER_STORAGE_DIR", "/job-data")
 
 
 app = FastAPI(
@@ -48,56 +65,41 @@ app = FastAPI(
     root_path=ADES_FASTAPI_ROOT_PATH,
 )
 
+# Define static file path
 static_filepath = os.getenv("STATIC_FILE_PATH", "static")
 
+# Mount static files with STAC FastApi
 app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
+# Define global variables to store job and workspace owners
+job_deployed_workspace = {}  # used to link workflow id and job id to deploying workspace
+job_owners = {}  # used to link deploying workspace and job id to executing user
 
-def opa_request(input_data: dict):
-    """Send a request to OPA service"""
-    logger.debug("Sending request to OPA service with input: %s", input_data)
-    return requests.post(OPA_SERVICE_ENDPOINT, json=input_data)
+# Load job owners from file
+if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-owners.json"):
+    with open(f"{JOB_OWNER_STORAGE_DIR}/job-owners.json", "r") as file:
+        job_owners = json.load(file)
+else:
+    job_owners = {}
 
-
-def check_policy(request: Request):
-    """Check OPA policy to determine if the request is allowed"""
-    token = request.headers.get("authorization", "")
-    stripped_token = token.replace("Bearer ", "")
-    if stripped_token:
-        credentials = jwt.decode(
-            stripped_token,
-            options={"verify_signature": False},
-            algorithms=["HS256"],
-        )
-        username = credentials.get("preferred_username", "")
-        roles = credentials.get("realm_access", {}).get("roles", [])
-    else:
-        username = ""
-        roles = []
-    input_data = {
-        "input": {
-            "roles": roles,
-            "path": request.url.path,
-            "username": username,
-        }
-    }
-    logger.info("Logged in as user: %s", username)
-    logger.debug("Checking policy with input: %s", input_data)
-    response = opa_request(input_data)
-    if response.status_code != 200 or not response.json().get("result", False):
-        return False
-    return True
+# Load job workspace owners from file
+if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json"):
+    with open(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json", "r") as file:
+        job_deployed_workspace = json.load(file)
+else:
+    job_deployed_workspace = {}
 
 
 @app.middleware("http")
 async def opa_middleware(request: Request, call_next):
     """Middleware to check OPA policy before allowing access to the endpoint"""
     if ENABLE_OPA_POLICY_CHECK:
-        if check_policy(request):
+        if check_policy(
+            request, job_deployed_workspace, job_owners, OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET
+        ):
             response = await call_next(request)
             return response
-        else:
-            return JSONResponse(status_code=403, content={"detail": "Access denied"})
+        return JSONResponse(status_code=403, content={"detail": "Access denied"})
     else:
         response = await call_next(request)
         return response
@@ -105,24 +107,29 @@ async def opa_middleware(request: Request, call_next):
 
 @app.get("")
 def root():
-    """Root endpoint for ADES"""
-    logger.debug("Getting root of ADES")
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/")
-    if response.headers.get("Content-Type") == "text/html":
-        return HTMLResponse(content=response.text, status_code=response.status_code)
+    """Root endpoint for ADES API Docs, used by Swagger UI"""
+    logger.debug("Getting ADES API docs")
+    try:
+        response = requests.get(f"{ADES_SERVICE_ENDPOINT}")
+    except requests.exceptions.ConnectionError:
+        return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+    if response.status_code == 200:
+        return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: available</p>")
     else:
-        raise HTTPException(status_code=406, detail="Unexpected content type")
+        return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
 
-@app.get("/{workspace}/ogc-api")
-def workspace_root(workspace: str):
+@app.get("/{deploy_workspace}/ogc-api")
+def workspace_root(deploy_workspace: str):
     """Root endpoint for user's workspace"""
-    logger.debug("Getting root of workspace %s", workspace)
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/")
-    if response.headers.get("Content-Type") == "text/html":
-        return HTMLResponse(content=response.text, status_code=response.status_code)
-    else:
-        raise HTTPException(status_code=406, detail="Unexpected content type")
+    logger.debug("Getting root of workspace %s", deploy_workspace)
+    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/")
+    result = json.dumps(response.json())
+    return StreamingResponse(
+        content=result,
+        status_code=response.status_code,
+        headers=response.headers,
+    )
 
 
 @app.get("/ogc-api/api")
@@ -155,16 +162,37 @@ def swagger_docs():
         raise HTTPException(status_code=500, detail="Unexpected content type from ADES")
 
 
-@app.delete("/{workspace}/ogc-api/processes/{workflow_id}")
-def undeploy_process(workspace: str, workflow_id: str, request: Request):
+@app.delete("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to undeploy a workflow"""
-    logger.debug("Undeploying workflow %s in workspace %s", workflow_id, workspace)
+    logger.debug("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Must be the workspace owner to delete a workflow
+    logger.info(
+        "Checking user %s has access to undeploy workflow %s in workspace %s",
+        user_workspace,
+        workflow_id,
+        deploy_workspace,
+    )
+
+    if not user_is_workspace_owner(user_workspace, deploy_workspace):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "User does not have access to this workspace, sorry"},
+        )
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.delete(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
     )
+
+    print(response.text)
 
     try:
         content = json.dumps(response.json())
@@ -177,23 +205,33 @@ def undeploy_process(workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.get("/{workspace}/ogc-api/processes")
-def list_processes(workspace: str, request: Request):
+@app.get("/{deploy_workspace}/ogc-api/processes")
+def list_processes(deploy_workspace: str, request: Request):
     """Endpoint to list all workflows deployed in a workspace"""
-    logger.debug("Listing workflows in workspace %s", workspace)
+    logger.debug("Listing workflows in workspace %s", deploy_workspace)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes", headers=headers
     )
 
     if "application/json" in response.headers["Content-Type"]:
+        final_content = {}
+        final_content["processes"] = []
         content_json = response.json()
-        content_json = replace_href_links(content_json)
-        for i, process_json in enumerate(content_json["processes"]):
-            process_json = replace_href_links(process_json)
-            content_json["processes"][i] = process_json
-        content = json.dumps(content_json, indent=2)
+        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
+        final_content["links"] = content_json.get("links")
+        for process_json in content_json["processes"]:
+            if check_workflow_access(
+                request,
+                deploy_workspace,
+                ADES_POLICY_BUCKET,
+                ADES_SERVICE_ENDPOINT,
+                workflow_id=process_json["id"],
+            ):
+                process_json = replace_href_links(process_json, ADES_INGRESS_PATH)
+                final_content["processes"].append(process_json)
+        content = json.dumps(final_content)
     else:
         content = response.text
     return Response(
@@ -203,44 +241,61 @@ def list_processes(workspace: str, request: Request):
     )
 
 
-def replace_href_links(content_dict):
-    """Replace href links in the JSON response"""
-    if "links" in content_dict:
-        for link in content_dict["links"]:
-            link["href"] = link["href"].replace("http://localhost:8080", ADES_INGRESS_PATH)
-    return content_dict
-
-
-@app.post("/{workspace}/ogc-api/processes")
-async def deploy_process(workspace: str, request: Request):
+@app.post("/{deploy_workspace}/ogc-api/processes")
+async def deploy_process(
+    deploy_workspace: str,
+    request: Request,
+    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+):
     """Endpoint to deploy a workflow to a workspace"""
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
 
+    # Can only deploy to your own workspace
+    logger.info("Checking user %s is the owner of workspace %s", user_workspace, deploy_workspace)
+    if not user_is_workspace_owner(user_workspace, deploy_workspace):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "User does not have access to this workspace, sorry"},
+        )
+
     if "application/json" in request.headers["Content-Type"]:
-        logger.info("Deploying workflow from URL to workspace %s", workspace)
+        logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
+        workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
-        logger.info("Deploying workflow from CWL file content to workspace %s", workspace)
+        logger.info("Deploying workflow from CWL file content to workspace %s", deploy_workspace)
         # Handle string file content
         file_content = await request.body()
 
         # Prepare the payload for the subsequent API request
         data = {"data": file_content}  # Decode bytes to string
+        workflow_id = get_workflow_id_from_file(data["data"])
     else:
         raise HTTPException(
             status_code=415,
             detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
         )
 
+    # Check if the workflow is already deployed, as this causes a bug in the ADES
+    processes_dict = get_processes(deploy_workspace, ADES_SERVICE_ENDPOINT)
+    for process in processes_dict["processes"]:
+        if process["id"] == workflow_id:
+            raise HTTPException(status_code=409, detail="Workflow already deployed")
+
     response = requests.post(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes", headers=headers, **data
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes", headers=headers, **data
     )
 
     if "application/json" in response.headers["Content-Type"]:
         content_json = response.json()
-        content_json = replace_href_links(content_json)
+        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
         content = json.dumps(content_json, indent=2)
     else:
         content = response.text
@@ -260,18 +315,37 @@ async def deploy_process(workspace: str, request: Request):
     )
 
 
-@app.put("/{workspace}/ogc-api/processes/{workflow_id}")
-async def update_process(workspace: str, workflow_id: str, request: Request):
+@app.put("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+async def update_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to update a workflow in a workspace"""
+    logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
 
+    # User can only update a workflow in their own workspace
+    logger.info(
+        "Checking user %s has access to update workflow %s in workspace %s",
+        user_workspace,
+        workflow_id,
+        deploy_workspace,
+    )
+    if not user_is_workspace_owner(user_workspace, deploy_workspace):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "User does not have access to this workspace, sorry"},
+        )
+
     if "application/json" in request.headers["Content-Type"]:
-        logger.info("Updating workflow from URL to workspace %s", workspace)
+        logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
-        logger.info("Updating workflow from CWL file content to workspace %s", workspace)
+        logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
         # Handle string file content
         file_content = await request.body()
 
@@ -284,7 +358,7 @@ async def update_process(workspace: str, workflow_id: str, request: Request):
         )
 
     response = requests.put(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
         **data,
     )
@@ -315,19 +389,35 @@ async def update_process(workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.get("/{workspace}/ogc-api/processes/{workflow_id}")
-def process_details(workspace: str, workflow_id: str, request: Request):
+@app.get("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to get details of a workflow in a workspace"""
-    logger.debug("Getting details of workflow %s in workspace %s", workflow_id, workspace)
+    logger.debug("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
+
+    # Check user has access to this workflow
+    logger.info(
+        "Checking user has access to workflow %s in workspace %s", workflow_id, deploy_workspace
+    )
+    if not check_workflow_access(
+        request,
+        deploy_workspace,
+        ADES_POLICY_BUCKET,
+        ADES_SERVICE_ENDPOINT,
+        workflow_id=workflow_id,
+    ):
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to this workflow, sorry"}
+        )
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
     )
     try:
         content_json = response.json()
-        content_json = replace_href_links(content_json)
+        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
         content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
         # Update Content-Type header to avoid warning generated by ADES response
@@ -341,25 +431,78 @@ def process_details(workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.post("/{workspace}/ogc-api/processes/{workflow_id}/execution")
-async def execute_process(workspace: str, workflow_id: str, request: Request):
+@app.post("/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
+async def execute_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to execute a workflow in a workspace"""
-    logger.debug("Executing workflow %s in workspace %s", workflow_id, workspace)
+    logger.debug("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
     headers = dict(request.headers)
-    headers.pop("authorization", None)
-    headers.pop("content-type", None)
 
-    body = await request.json()
+    headers = {
+        "Prefer": "respond-async",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Check user has access to this workflow
+    logger.info(
+        "Checking user %s has access to workflow %s in workspace %s",
+        user_workspace,
+        workflow_id,
+        deploy_workspace,
+    )
+    if not check_workflow_access(
+        request,
+        deploy_workspace,
+        ADES_POLICY_BUCKET,
+        ADES_SERVICE_ENDPOINT,
+        workflow_id=workflow_id,
+    ):
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to this workflow, sorry"}
+        )
+
+    try:
+        body = await request.json()
+        # Add workspace to body
+        logger.info("Setting execution workspace to %s", username)
+        body["inputs"].update({"workspace": username})
+    except JSONDecodeError as err:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
 
     response = requests.post(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/processes/{workflow_id}/execution",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
         headers=headers,
         json=body,
     )
 
+    if response.status_code == 201:
+        logger.info("Response from ADES: %s", response.text)
+
+        job_id = response.json()["jobID"]
+
+        deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+        workflow_id_and_job_id = f"{workflow_id}-{job_id}"
+
+        # Record job_id and relate to executing (user) workspace and deployed workspace
+        job_owners[deploy_workspace_and_job_id] = user_workspace
+        job_deployed_workspace[workflow_id_and_job_id] = deploy_workspace
+
+        logger.info(
+            "Workspace owner for the job %s is %s", deploy_workspace_and_job_id, user_workspace
+        )
+        logger.info(
+            "Deployed workspace for the job %s is %s", workflow_id_and_job_id, deploy_workspace
+        )
+
+        save_data(JOB_OWNER_STORAGE_DIR, job_owners, job_deployed_workspace)
+
     try:
         content_json = response.json()
-        content_json = replace_href_links(content_json)
+        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
         content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
         if response.headers["Content-Type"] == "text/plain":
@@ -381,14 +524,33 @@ async def execute_process(workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.get("/{workspace}/ogc-api/jobs/{job_id}")
-def execute_status(workspace: str, job_id: str, request: Request):
+@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}")
+def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
-    logger.debug("Getting status of job %s in workspace %s", job_id, workspace)
+    logger.debug("Getting status of job %s in workspace %s", job_id, deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Check user has access to this workflow
+    deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+    logger.info(
+        "Checking user %s has access to job %s in workspace %s",
+        user_workspace,
+        job_id,
+        deploy_workspace,
+    )
+    logger.info("Job owner is %s ", job_owners.get(deploy_workspace_and_job_id))
+    if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to this job, sorry"}
+        )
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}", headers=headers
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
 
     return Response(
@@ -398,14 +560,32 @@ def execute_status(workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{workspace}/ogc-api/jobs/{job_id}/results")
-def processing_results(workspace: str, job_id: str, request: Request):
+@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}/results")
+def processing_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
-    logger.debug("Getting results of job %s in workspace %s", job_id, workspace)
+    logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Check user has access to this job
+    deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+    logger.info(
+        "Checking user %s has access to job %s in workspace %s",
+        user_workspace,
+        job_id,
+        deploy_workspace,
+    )
+    if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to these results, sorry"}
+        )
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}/results",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}/results",
         headers=headers,
     )
     return Response(
@@ -415,25 +595,107 @@ def processing_results(workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{workspace}/ogc-api/jobs")
-def list_jobs(workspace: str, request: Request):
+@app.get("/{deploy_workspace}/ogc-api/jobs")
+def list_jobs(deploy_workspace: str, request: Request):
     """Endpoint to list all jobs in a workspace"""
-    logger.debug("Listing jobs in workspace %s", workspace)
+    logger.debug("Listing jobs in workspace %s", deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    print(user_workspace)
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
-    response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs", headers=headers)
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs", headers=headers
+    )
+
+    response_json = response.json()
+
+    jobs = response_json["jobs"]
+
+    filtered_jobs = []
+
+    logger.info(
+        "Filtering jobs to those that were executed by user %s in workspace %s",
+        user_workspace,
+        deploy_workspace,
+    )
+    for job in jobs:
+        job_id = job["jobID"]
+        deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+        if job_owners.get(deploy_workspace_and_job_id) == user_workspace:
+            filtered_jobs.append(job)
+
+    response_json["jobs"] = filtered_jobs
+
+    response_json = json.dumps(response_json).replace("http://localhost:8080", ADES_INGRESS_PATH)
 
     return Response(
-        content=json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH),
+        content=response_json,
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
 
 
-@app.delete("/{workspace}/ogc-api/jobs/{job_id}")
-def delete_job(workspace: str, job_id: str, request: Request):
+@app.get("/temp/{workflow_job_id}/{file_name}")
+def get_logs(workflow_job_id: str, file_name: str, request: Request):
+    """Endpoint to get the logs of a job"""
+    # Get username and roles
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Extract workflow and job ids
+    workflow_id = workflow_job_id[:-37]
+    job_id = workflow_job_id[-36:]
+
+    # Check job was run in this user workspace
+    if not check_job_access(
+        user_workspace, workflow_id, job_id, job_deployed_workspace, job_owners
+    ):
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to these logs, sorry"}
+        )
+
+    logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.get(
+        f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers
+    )
+
+    return Response(
+        content=response.content,
+        headers=response.headers,
+        status_code=response.status_code,
+    )
+
+
+@app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}")
+def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
-    logger.debug("Deleting job %s in workspace %s", job_id, workspace)
+    logger.debug("Deleting job %s in workspace %s", job_id, deploy_workspace)
+
+    username, _ = get_user_details(request)
+
+    user_workspace = convert_username_to_workspace(username)
+
+    # Check user has access to this workflow
+    deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+    logger.info(
+        "Checking user %s has access to job %s in workspace %s",
+        user_workspace,
+        job_id,
+        deploy_workspace,
+    )
+    if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
+        return JSONResponse(
+            status_code=403, content={"detail": "User does not have access to this job, sorry"}
+        )
+
     return Response(
         content="Endpoint not implemented yet",
         status_code=501,
@@ -441,20 +703,10 @@ def delete_job(workspace: str, job_id: str, request: Request):
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.delete(
-        f"{ADES_SERVICE_ENDPOINT}/{workspace}/ogc-api/jobs/{job_id}", headers=headers
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
     return Response(
         content=response.text,
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
-
-
-@app.put("/{workspace}/{workflow_id}/public")
-def set_workflow_public(workspace: str, workflow_id: str):
-    pass
-
-
-@app.put("/{workspace}/{workflow_id}/private")
-def set_workflow_private(workspace: str, workflow_id: str):
-    pass
