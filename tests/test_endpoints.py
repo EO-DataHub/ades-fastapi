@@ -204,8 +204,6 @@ class ADESMock:
 def mock_dependencies(monkeypatch):
     mock_ades = ADESMock()
     monkeypatch.setattr("jwt.decode", mock_jwt_decode)
-    # Mock requests.post for middleware and ADES
-    monkeypatch.setattr("ades_fastapi.utils.opa_request", mock_opa_request)
     # Mock requests for ADES
     monkeypatch.setattr("requests.post", mock_ades.mock_requests_post)
     monkeypatch.setattr("requests.put", mock_ades.mock_requests_put)
@@ -213,7 +211,11 @@ def mock_dependencies(monkeypatch):
     monkeypatch.setattr("requests.delete", mock_ades.mock_requests_delete)
 
 
-def test_root():
+@patch("ades_fastapi.utils.opa_request")
+def test_root(mock_opa_request):
+    # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades", headers=headers)
     assert response.status_code == 200
@@ -221,7 +223,10 @@ def test_root():
     assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: available</p>"
 
 
-def test_workspace_root():
+@patch("ades_fastapi.utils.opa_request")
+def test_workspace_root(mock_opa_request):
+    # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api", headers=headers)
     assert response.status_code == 200
@@ -229,7 +234,10 @@ def test_workspace_root():
     assert response.json() == {"Data": "Response Data"}
 
 
-def test_docs_root():
+@patch("ades_fastapi.utils.opa_request")
+def test_docs_root(mock_opa_request):
+    # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/ogc-api/api", headers=headers)
     assert response.status_code == 200
@@ -240,7 +248,11 @@ def test_docs_root():
     assert response.json() == {"Data": "Response Data"}
 
 
-def test_swagger_docs():
+@patch("ades_fastapi.utils.opa_request")
+def test_swagger_docs(mock_opa_request):
+    # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/api", headers=headers)
     assert response.status_code == 200
@@ -248,9 +260,11 @@ def test_swagger_docs():
     assert response.content.decode("utf-8") == "Reponse content"
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_delete_process(mock_user_is_workspace_owner):
+def test_undeploy_process(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
     mock_user_is_workspace_owner.return_value = True
     headers = {"authorization": "Bearer valid_token"}
     response = client.delete(
@@ -260,9 +274,11 @@ def test_delete_process(mock_user_is_workspace_owner):
     assert response.json() == {"Response": "Response text"}
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_delete_process_no_access(mock_user_is_workspace_owner):
+def test_undeploy_process_no_access(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
     mock_user_is_workspace_owner.return_value = False
     headers = {"authorization": "Bearer valid_token"}
     response = client.delete(
@@ -271,10 +287,12 @@ def test_delete_process_no_access(mock_user_is_workspace_owner):
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_list_processes(mock_check_workflow_access):
+def test_list_processes(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api/processes", headers=headers)
@@ -302,10 +320,12 @@ def test_list_processes(mock_check_workflow_access):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_list_processes_no_access(mock_check_workflow_access):
+def test_list_processes_no_access(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.side_effect = [False, True]
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api/processes", headers=headers)
@@ -325,16 +345,21 @@ def test_list_processes_no_access(mock_check_workflow_access):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.utils.last_deploy_times")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_url(
-    mock_get_workflow_id_from_url, mock_user_is_workspace_owner, mock_last_deploy_times
+    mock_get_workflow_id_from_url,
+    mock_user_is_workspace_owner,
+    mock_last_deploy_times,
+    mock_opa_request,
 ):
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "example-workflow"
     mock_user_is_workspace_owner.return_value = True
     mock_last_deploy_times.get.return_value = 0
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -355,16 +380,21 @@ def test_deploy_process_from_url(
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.utils.last_deploy_times")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_url_no_access(
-    mock_get_workflow_id_from_url, mock_user_is_workspace_owner, mock_last_deploy_times
+    mock_get_workflow_id_from_url,
+    mock_user_is_workspace_owner,
+    mock_last_deploy_times,
+    mock_opa_request,
 ):
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "example-workflow"
     mock_user_is_workspace_owner.return_value = False
     mock_last_deploy_times.get.return_value = 0
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -379,16 +409,21 @@ def test_deploy_process_from_url_no_access(
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.utils.last_deploy_times")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
 @patch("ades_fastapi.__init__.get_workflow_id_from_file")
 def test_deploy_process_from_file(
-    mock_get_workflow_id_from_url, mock_user_is_workspace_owner, mock_last_deploy_times
+    mock_get_workflow_id_from_url,
+    mock_user_is_workspace_owner,
+    mock_last_deploy_times,
+    mock_opa_request,
 ):
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "test_workflow"
     mock_user_is_workspace_owner.return_value = True
     mock_last_deploy_times.get.return_value = 0
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
     response = client.post(
@@ -409,16 +444,21 @@ def test_deploy_process_from_file(
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.utils.last_deploy_times")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
 @patch("ades_fastapi.__init__.get_workflow_id_from_file")
 def test_deploy_process_from_file_no_access(
-    mock_get_workflow_id_from_url, mock_user_is_workspace_owner, mock_last_deploy_times
+    mock_get_workflow_id_from_url,
+    mock_user_is_workspace_owner,
+    mock_last_deploy_times,
+    mock_opa_request,
 ):
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "test_workflow"
     mock_user_is_workspace_owner.return_value = False
     mock_last_deploy_times.get.return_value = 0
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
     response = client.post(
@@ -433,10 +473,12 @@ def test_deploy_process_from_file_no_access(
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
-def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url):
+def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url, mock_opa_request):
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "test_workflow"
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
     response = client.post(
@@ -463,10 +505,12 @@ def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_update_process_from_url(mock_user_is_workspace_owner):
+def test_update_process_from_url(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
     mock_user_is_workspace_owner.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -484,10 +528,12 @@ def test_update_process_from_url(mock_user_is_workspace_owner):
     assert response.json() == {"results": True}
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_update_process_from_url_no_access(mock_user_is_workspace_owner):
+def test_update_process_from_url_no_access(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
     mock_user_is_workspace_owner.return_value = False
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -502,10 +548,12 @@ def test_update_process_from_url_no_access(mock_user_is_workspace_owner):
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_update_process_from_file(mock_user_is_workspace_owner):
+def test_update_process_from_file(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
     mock_user_is_workspace_owner.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -523,10 +571,12 @@ def test_update_process_from_file(mock_user_is_workspace_owner):
     assert response.json() == {"results": True}
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.user_is_workspace_owner")
-def test_update_process_from_file_no_access(mock_user_is_workspace_owner):
+def test_update_process_from_file_no_access(mock_user_is_workspace_owner, mock_opa_request):
     # Configure mocks
     mock_user_is_workspace_owner.return_value = False
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -541,10 +591,12 @@ def test_update_process_from_file_no_access(mock_user_is_workspace_owner):
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_get_process_details(mock_check_workflow_access):
+def test_get_process_details(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers)
@@ -556,20 +608,24 @@ def test_get_process_details(mock_check_workflow_access):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_get_process_details_no_access(mock_check_workflow_access):
+def test_get_process_details_no_access(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.return_value = False
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers)
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_execute_process(mock_check_workflow_access):
+def test_execute_process(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -590,10 +646,12 @@ def test_execute_process(mock_check_workflow_access):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_workflow_access")
-def test_execute_process_no_access(mock_check_workflow_access):
+def test_execute_process_no_access(mock_check_workflow_access, mock_opa_request):
     # Configure mocks
     mock_check_workflow_access.return_value = False
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -609,10 +667,12 @@ def test_execute_process_no_access(mock_check_workflow_access):
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_get_execute_status(mock_job_owners):
+def test_get_execute_status(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "test_user"
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
@@ -624,20 +684,24 @@ def test_get_execute_status(mock_job_owners):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_get_execute_status_no_access(mock_job_owners):
+def test_get_execute_status_no_access(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "another_user"
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_get_processing_results(mock_job_owners):
+def test_get_processing_results(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "test_user"
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345/results", headers=headers)
@@ -646,20 +710,25 @@ def test_get_processing_results(mock_job_owners):
     assert response.json() == {"result_location": "https://results-url"}
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_get_processing_results_no_access(mock_job_owners):
+def test_get_processing_results_no_access(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "another_user"
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs/job_12345/results", headers=headers)
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_list_jobs(mock_job_owners):
+def test_list_jobs(mock_job_owners, mock_opa_request):
     # Config mocks
     mock_job_owners.get.return_value = "test_user"
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs", headers=headers)
     assert response.status_code == 200
@@ -678,10 +747,13 @@ def test_list_jobs(mock_job_owners):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_list_jobs_no_access(mock_job_owners):
+def test_list_jobs_no_access(mock_job_owners, mock_opa_request):
     # Config mocks
     mock_job_owners.get.side_effect = ["another_user", "test_user"]
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get("/ades/test_workspace/ogc-api/jobs", headers=headers)
     assert response.status_code == 200
@@ -696,14 +768,17 @@ def test_list_jobs_no_access(mock_job_owners):
     }
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_job_access")
 @patch("ades_fastapi.utils.list_jobs_dict")
-def test_get_logs(mock_list_jobs_dict, mock_check_job_access):
+def test_get_logs(mock_list_jobs_dict, mock_check_job_access, mock_opa_request):
     # Mock get_user_details
     mock_list_jobs_dict.return_value = {
         "jobs": [{"jobID": "12312312-aaaa-bbbb-cccc-dddddddddddd", "processID": "test_workflow"}]
     }
     mock_check_job_access.return_value = True
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get(
         "/ades/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
@@ -714,14 +789,16 @@ def test_get_logs(mock_list_jobs_dict, mock_check_job_access):
     assert response.content.decode("utf-8") == "Some log content"
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_job_access")
 @patch("ades_fastapi.utils.list_jobs_dict")
-def test_get_logs_no_access(mock_list_jobs_dict, mock_check_job_access):
+def test_get_logs_no_access(mock_list_jobs_dict, mock_check_job_access, mock_opa_request):
     # Mock get_user_details
     mock_list_jobs_dict.return_value = {
         "jobs": [{"jobID": "12312312-aaaa-bbbb-cccc-dddddddddddd", "processID": "test_workflow"}]
     }
     mock_check_job_access.return_value = False
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get(
         "/ades/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
@@ -730,10 +807,12 @@ def test_get_logs_no_access(mock_list_jobs_dict, mock_check_job_access):
     assert response.status_code == 403
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_delete_job(mock_job_owners):
+def test_delete_job(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "test_user"
+    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
@@ -741,10 +820,12 @@ def test_delete_job(mock_job_owners):
     assert response.content.decode("utf-8") == "Endpoint not implemented yet"
 
 
+@patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_owners")
-def test_delete_job_no_access(mock_job_owners):
+def test_delete_job_no_access(mock_job_owners, mock_opa_request):
     # Configure mocks
     mock_job_owners.get.return_value = "another_user"
+    mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
