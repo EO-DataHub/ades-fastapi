@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.3 (2024-09-13)
+
+Update to support public workflows
+- New OPA policy management to include additional fields required to confirm access
+- Splitting up code for clarity
+- Removing unnecessary functions
+
 ## v0.1.1 (2024-09-04)
 
 Bugfix
