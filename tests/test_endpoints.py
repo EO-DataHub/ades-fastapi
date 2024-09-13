@@ -258,7 +258,6 @@ def test_list_processes():
 
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_url(mock_get_workflow_id_from_url):
-
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "example-workflow"
 
@@ -283,7 +282,6 @@ def test_deploy_process_from_url(mock_get_workflow_id_from_url):
 
 @patch("ades_fastapi.__init__.get_workflow_id_from_file")
 def test_deploy_process_from_file(mock_get_workflow_id_from_url):
-
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "test_workflow"
 
@@ -308,7 +306,6 @@ def test_deploy_process_from_file(mock_get_workflow_id_from_url):
 
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url):
-
     # Configure mocks
     mock_get_workflow_id_from_url.return_value = "test_workflow"
 
@@ -461,3 +458,15 @@ def test_delete_job():
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
     assert response.status_code == 501
     assert response.content.decode("utf-8") == "Endpoint not implemented yet"
+
+
+@patch("ades_fastapi.__init__.get_quote_from_airbus")
+@patch("ades_fastapi.__init__.generate_access_token")
+def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
+    result = {"acquisitionId": "12345", "price": 100}
+    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
+    mock_generate_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    assert response.status_code == 200
+    assert response.json() == result

@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -11,6 +12,8 @@ import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from kubernetes import client, config
+from pydantic import BaseModel
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -38,6 +41,8 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
+# Environment used for calls to airbus API
+AIRBUS_ENV = os.getenv("AIRBUS_ENV", "dev")
 
 app = FastAPI(
     title="EODHP ADES",
@@ -577,4 +582,97 @@ def delete_job(workspace: str, job_id: str, request: Request):
         content=response.text,
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
+    )
+
+
+def get_secret_airbus_api_key(username):
+    """Get API key from secrets for a given user"""
+    config.load_incluster_config()
+    api_instance = client.CustomObjectsApi()
+
+    # Find the namespace for the user from the workspace CRD
+    workspace = api_instance.get_namespaced_custom_object(
+        group="core.telespazio-uk.io",
+        version="v1alpha1",
+        namespace="workspaces",
+        plural="workspaces",
+        name=username,
+    )
+    namespace = workspace["spec"]["namespace"]
+
+    # Get the secret in the user namespace
+    v1 = client.CoreV1Api()
+    secret = v1.read_namespaced_secret("api-keys", namespace)
+    api_key = base64.b64decode(secret.data["airbus-key"]).decode("utf-8")
+    return api_key
+
+
+def generate_access_token(request: Request):
+    """Generate access token for Airbus API"""
+    if AIRBUS_ENV == "prod":
+        url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
+    else:
+        url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
+
+    username, _ = get_user_details(request)
+    api_key = get_secret_airbus_api_key(username)
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    data = [
+        ("apikey", api_key),
+        ("grant_type", "api_key"),
+        ("client_id", "IDP"),
+    ]
+
+    response = requests.post(url, headers=headers, data=data)
+
+    return response.json().get("access_token")
+
+
+def get_quote_from_airbus(url: str, body: dict, headers: dict) -> dict:
+    """Get a quote from Airbus API"""
+    response = requests.post(f"{url}/v1/sar/prices", json=body, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+class QuoteRequest(BaseModel):
+    """Request body for quote endpoint"""
+
+    acquisitionId: str
+
+
+@app.post("/quotes")
+def quote(request: Request, body: QuoteRequest):
+    """Return a quote for a given acquisition ID"""
+    if AIRBUS_ENV == "prod":
+        url = "https://sar.api.oneatlas.airbus.com"
+    else:
+        url = "https://dev.sar.api.oneatlas.airbus.com"
+
+    access_token = generate_access_token(request)
+    if not access_token:
+        return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
+
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    acquisition_id = body.acquisitionId
+    request_body = {"acquisitions": [acquisition_id]}
+
+    try:
+        response_body = get_quote_from_airbus(url, request_body, headers)
+    except requests.RequestException as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+    for item in response_body:
+        if item.get("acquisitionId") == acquisition_id:
+            return JSONResponse(
+                content=item,
+                status_code=200,
+            )
+
+    return JSONResponse(
+        status_code=404, content={"detail": "Quote not found for given acquisition ID"}
     )

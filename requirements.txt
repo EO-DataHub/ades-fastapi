@@ -11,10 +11,13 @@ anyio==4.4.0
     #   httpx
     #   starlette
     #   watchfiles
+cachetools==5.5.0
+    # via google-auth
 certifi==2024.7.4
     # via
     #   httpcore
     #   httpx
+    #   kubernetes
     #   requests
 charset-normalizer==3.3.2
     # via requests
@@ -30,6 +33,8 @@ fastapi==0.111.1
     # via ades-fastapi (pyproject.toml)
 fastapi-cli==0.0.4
     # via fastapi
+google-auth==2.34.0
+    # via kubernetes
 h11==0.14.0
     # via
     #   httpcore
@@ -48,12 +53,24 @@ idna==3.7
     #   requests
 jinja2==3.1.4
     # via fastapi
+kubernetes==30.1.0
+    # via ades-fastapi (pyproject.toml)
 markdown-it-py==3.0.0
     # via rich
 markupsafe==2.1.5
     # via jinja2
 mdurl==0.1.2
     # via markdown-it-py
+oauthlib==3.2.2
+    # via
+    #   kubernetes
+    #   requests-oauthlib
+pyasn1==0.6.1
+    # via
+    #   pyasn1-modules
+    #   rsa
+pyasn1-modules==0.4.1
+    # via google-auth
 pydantic==2.8.2
     # via fastapi
 pydantic-core==2.20.1
@@ -62,6 +79,8 @@ pygments==2.18.0
     # via rich
 pyjwt==2.9.0
     # via ades-fastapi (pyproject.toml)
+python-dateutil==2.9.0.post0
+    # via kubernetes
 python-dotenv==1.0.1
     # via uvicorn
 python-multipart==0.0.9
@@ -69,13 +88,25 @@ python-multipart==0.0.9
 pyyaml==6.0.1
     # via
     #   ades-fastapi (pyproject.toml)
+    #   kubernetes
     #   uvicorn
 requests==2.32.3
-    # via ades-fastapi (pyproject.toml)
+    # via
+    #   ades-fastapi (pyproject.toml)
+    #   kubernetes
+    #   requests-oauthlib
+requests-oauthlib==2.0.0
+    # via kubernetes
 rich==13.7.1
     # via typer
+rsa==4.9
+    # via google-auth
 shellingham==1.5.4
     # via typer
+six==1.16.0
+    # via
+    #   kubernetes
+    #   python-dateutil
 sniffio==1.3.1
     # via
     #   anyio
@@ -91,7 +122,9 @@ typing-extensions==4.12.2
     #   pydantic-core
     #   typer
 urllib3==2.2.2
-    # via requests
+    # via
+    #   kubernetes
+    #   requests
 uvicorn[standard]==0.30.4
     # via
     #   ades-fastapi (pyproject.toml)
@@ -100,5 +133,7 @@ uvloop==0.19.0
     # via uvicorn
 watchfiles==0.22.0
     # via uvicorn
+websocket-client==1.8.0
+    # via kubernetes
 websockets==12.0
     # via uvicorn
