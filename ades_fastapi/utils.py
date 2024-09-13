@@ -88,6 +88,7 @@ def check_policy(
             "roles": roles,
             "path": request.url.path,
             "username": username,
+            "method": request.method,
         }
     }
 
@@ -108,7 +109,6 @@ def check_policy(
         if access_policy:
             input_data["input"]["is_public"] = access_policy["public"]
             input_data["input"]["allowed_users"] = access_policy["allowed_access"]["users"]
-            input_data["input"]["method"] = request.method
     elif request.path_params.get("deploy_workspace") and request.path_params.get("job_id"):
         # User is monitoring a job
         logger.info("Checking policy for job access")
@@ -124,14 +124,12 @@ def check_policy(
         execute_workspace = convert_username_to_workspace(execute_username)
 
         input_data["input"]["executing_user"] = execute_workspace
-        input_data["input"]["method"] = request.method
     elif request.method == "POST" and request.path_params.get("deploy_workspace"):
         # User is deploying a workflow
         logger.info("Checking policy for workflow deployment")
         # Get deploying workspace
         deploy_workspace = request.path_params["deploy_workspace"]
         input_data["input"]["deploying_user"] = deploy_workspace
-        input_data["input"]["method"] = "POST"
     elif request.path_params.get("workflow_job_id"):
         # User is accessing logs
         logger.info("Checking policy for logs access")
@@ -147,7 +145,6 @@ def check_policy(
         execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
 
         input_data["input"]["executing_user"] = execute_workspace
-        input_data["input"]["method"] = request.method
 
     # Add values for logs access
     logger.info("Logged in as user: %s", username)
