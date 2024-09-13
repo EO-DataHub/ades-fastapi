@@ -177,12 +177,6 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
         deploy_workspace,
     )
 
-    # if not user_is_workspace_owner(user_workspace, deploy_workspace):
-    #     return JSONResponse(
-    #         status_code=403,
-    #         content={"detail": "User does not have access to this workspace, sorry"},
-    #     )
-
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.delete(
@@ -252,14 +246,6 @@ async def deploy_process(
     headers = dict(request.headers)
     headers.pop("Authorization", None)
 
-    # Can only deploy to your own workspace
-    # logger.info("Checking user %s is the owner of workspace %s", user_workspace, deploy_workspace)
-    # if not user_is_workspace_owner(user_workspace, deploy_workspace):
-    #     return JSONResponse(
-    #         status_code=403,
-    #         content={"detail": "User does not have access to this workspace, sorry"},
-    #     )
-
     if "application/json" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
         # Handle HTTP file content
@@ -318,23 +304,8 @@ async def update_process(deploy_workspace: str, workflow_id: str, request: Reque
 
     username, _ = get_user_details(request)
 
-    user_workspace = convert_username_to_workspace(username)
-
     headers = dict(request.headers)
     headers.pop("Authorization", None)
-
-    # User can only update a workflow in their own workspace
-    logger.info(
-        "Checking user %s has access to update workflow %s in workspace %s",
-        user_workspace,
-        workflow_id,
-        deploy_workspace,
-    )
-    # if not user_is_workspace_owner(user_workspace, deploy_workspace):
-    #     return JSONResponse(
-    #         status_code=403,
-    #         content={"detail": "User does not have access to this workspace, sorry"},
-    #     )
 
     if "application/json" in request.headers["Content-Type"]:
         logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
@@ -394,16 +365,6 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     logger.info(
         "Checking user has access to workflow %s in workspace %s", workflow_id, deploy_workspace
     )
-    # if not check_workflow_access(
-    #     request,
-    #     deploy_workspace,
-    #     ADES_POLICY_BUCKET,
-    #     ADES_SERVICE_ENDPOINT,
-    #     workflow_id=workflow_id,
-    # ):
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to this workflow, sorry"}
-    #     )
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -450,16 +411,6 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
         workflow_id,
         deploy_workspace,
     )
-    # if not check_workflow_access(
-    #     request,
-    #     deploy_workspace,
-    #     ADES_POLICY_BUCKET,
-    #     ADES_SERVICE_ENDPOINT,
-    #     workflow_id=workflow_id,
-    # ):
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to this workflow, sorry"}
-    #     )
 
     try:
         body = await request.json()
@@ -537,11 +488,6 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
         job_id,
         deploy_workspace,
     )
-    # logger.info("Job owner is %s ", job_owners.get(deploy_workspace_and_job_id))
-    # if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to this job, sorry"}
-    #     )
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -572,10 +518,6 @@ def processing_results(deploy_workspace: str, job_id: str, request: Request):
         job_id,
         deploy_workspace,
     )
-    # if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to these results, sorry"}
-    #     )
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -645,14 +587,6 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
     workflow_id = workflow_job_id[:-37]
     job_id = workflow_job_id[-36:]
 
-    # Check job was run in this user workspace
-    # if not check_job_access(
-    #     user_workspace, workflow_id, job_id, job_deployed_workspace, job_owners
-    # ):
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to these logs, sorry"}
-    #     )
-
     logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -683,10 +617,6 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
         job_id,
         deploy_workspace,
     )
-    # if job_owners.get(deploy_workspace_and_job_id) != user_workspace:
-    #     return JSONResponse(
-    #         status_code=403, content={"detail": "User does not have access to this job, sorry"}
-    #     )
 
     return Response(
         content="Endpoint not implemented yet",
