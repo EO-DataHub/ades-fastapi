@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.3 (2024-09-13)
+
+New functionality
+- Add endpoint to allow users to obtain a quote from Airbus API
+
 ## v0.1.2 (2024-09-10)
 
 New Functionality and bugfixes
