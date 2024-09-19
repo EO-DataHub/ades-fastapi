@@ -2,12 +2,10 @@ import base64
 import json
 import logging
 import os
-import time
 from distutils.util import strtobool
 from json import JSONDecodeError
 
 import requests
-
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -97,43 +95,6 @@ if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json"):
         job_deployed_workspace = json.load(file)
 else:
     job_deployed_workspace = {}
-
-
-def get_user_details(request: Request):
-    """Get user details from the request"""
-    token = request.headers.get("authorization", "")
-    stripped_token = token.replace("Bearer ", "")
-    if stripped_token:
-        credentials = jwt.decode(
-            stripped_token,
-            options={"verify_signature": False},
-            algorithms=["HS256"],
-        )
-        username = credentials.get("preferred_username", "")
-        roles = credentials.get("realm_access", {}).get("roles", [])
-    else:
-        username = ""
-        roles = []
-    return username, roles
-
-
-def check_policy(request: Request):
-    """Check OPA policy to determine if the request is allowed"""
-    username, roles = get_user_details(request)
-    input_data = {
-        "input": {
-            "roles": roles,
-            "path": request.url.path,
-            "username": username,
-        }
-    }
-    logger.info("Logged in as user: %s", username)
-    logger.debug("Checking policy with input: %s", input_data)
-    response = opa_request(input_data)
-    if response.status_code != 200 or not response.json().get("result", False):
-        return False
-    return True
-
 
 
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
@@ -268,7 +229,7 @@ def list_processes(deploy_workspace: str, request: Request):
         status_code=response.status_code,
     )
 
-  
+
 @app.post("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
 async def deploy_process(
     deploy_workspace: str,
@@ -571,8 +532,6 @@ def list_jobs(deploy_workspace: str, request: Request):
 
     response_json = json.dumps(response_json).replace("http://localhost:8080", ADES_INGRESS_PATH)
 
-    response_json = json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH)
-
     return Response(
         content=response_json,
         media_type=response.headers["Content-Type"],
@@ -603,7 +562,6 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
     )
 
 
-
 @app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
@@ -628,6 +586,7 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     #     media_type=response.headers["Content-Type"],
     #     status_code=response.status_code,
     # )
+
 
 def get_secret_airbus_api_key(username):
     """Get API key from secrets for a given user"""

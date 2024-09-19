@@ -90,8 +90,9 @@ pygments==2.18.0
 pyjwt==2.9.0
     # via ades-fastapi (pyproject.toml)
 python-dateutil==2.9.0.post0
-    # via botocore
-    # via kubernetes
+    # via
+    #   botocore
+    #   kubernetes
 python-dotenv==1.0.1
     # via uvicorn
 python-multipart==0.0.9
@@ -110,14 +111,10 @@ requests-oauthlib==2.0.0
     # via kubernetes
 rich==13.7.1
     # via typer
-s3transfer==0.10.2
-    # via boto3
-shellingham==1.5.4
-    # via typer
-six==1.16.0
-    # via python-dateutil
 rsa==4.9
     # via google-auth
+s3transfer==0.10.2
+    # via boto3
 shellingham==1.5.4
     # via typer
 six==1.16.0

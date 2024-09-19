@@ -248,7 +248,7 @@ def test_docs_root(mock_opa_request):
 def test_swagger_docs(mock_opa_request):
     # Configure mocks
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
-    
+
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/api", headers=headers)
     assert response.status_code == 200
@@ -800,7 +800,7 @@ def test_delete_job_no_access(mock_job_owners, mock_opa_request):
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
     assert response.status_code == 403
 
-    
+
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
 @patch("ades_fastapi.__init__.generate_access_token")
 def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):

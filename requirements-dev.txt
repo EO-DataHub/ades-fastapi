@@ -144,8 +144,9 @@ pytest-watcher==0.3.4
 pytest-xdist==3.5.0
     # via ades-fastapi (pyproject.toml)
 python-dateutil==2.9.0.post0
-    # via botocore
-    # via kubernetes
+    # via
+    #   botocore
+    #   kubernetes
 python-dotenv==1.0.1
     # via uvicorn
 python-multipart==0.0.9
@@ -174,7 +175,6 @@ s3transfer==0.10.2
 shellingham==1.5.4
     # via typer
 six==1.16.0
-    # via python-dateutil
     # via
     #   kubernetes
     #   python-dateutil
