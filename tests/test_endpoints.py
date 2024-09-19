@@ -564,10 +564,10 @@ def test_update_process_from_file_no_access(mock_opa_request):
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.__init__.check_workflow_access")
-def test_get_process_details(mock_check_workflow_access, mock_opa_request):
+@patch("ades_fastapi.__init__.check_policy")
+def test_get_process_details(mock_check_policy, mock_opa_request):
     # Configure mocks
-    mock_check_workflow_access.return_value = True
+    mock_check_policy.return_value = True
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -581,10 +581,10 @@ def test_get_process_details(mock_check_workflow_access, mock_opa_request):
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.__init__.check_workflow_access")
-def test_get_process_details_no_access(mock_check_workflow_access, mock_opa_request):
+@patch("ades_fastapi.__init__.check_policy")
+def test_get_process_details_no_access(mock_check_policy, mock_opa_request):
     # Configure mocks
-    mock_check_workflow_access.return_value = False
+    mock_check_policy.return_value = False
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -593,10 +593,10 @@ def test_get_process_details_no_access(mock_check_workflow_access, mock_opa_requ
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.__init__.check_workflow_access")
-def test_execute_process(mock_check_workflow_access, mock_opa_request):
+@patch("ades_fastapi.__init__.check_policy")
+def test_execute_process(mock_check_policy, mock_opa_request):
     # Configure mocks
-    mock_check_workflow_access.return_value = True
+    mock_check_policy.return_value = True
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
@@ -619,10 +619,10 @@ def test_execute_process(mock_check_workflow_access, mock_opa_request):
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.__init__.check_workflow_access")
-def test_execute_process_no_access(mock_check_workflow_access, mock_opa_request):
+@patch("ades_fastapi.__init__.check_policy")
+def test_execute_process_no_access(mock_check_policy, mock_opa_request):
     # Configure mocks
-    mock_check_workflow_access.return_value = False
+    mock_check_policy.return_value = False
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
