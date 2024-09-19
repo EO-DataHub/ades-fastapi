@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.3 (2024-09-13)
+## v0.1.4 (2024-09-19)
 
 Update to support public workflows
 - New OPA policy management to include additional fields required to confirm access
