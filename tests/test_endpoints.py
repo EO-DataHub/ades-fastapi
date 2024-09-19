@@ -248,7 +248,7 @@ def test_docs_root(mock_opa_request):
 def test_swagger_docs(mock_opa_request):
     # Configure mocks
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
-
+    
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/api", headers=headers)
     assert response.status_code == 200
@@ -260,6 +260,7 @@ def test_swagger_docs(mock_opa_request):
 def test_undeploy_process(mock_opa_request):
     # Configure mocks
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+
     headers = {"authorization": "Bearer valid_token"}
     response = client.delete(
         "/ades/test_workspace/ogc-api/processes/test_workflow", headers=headers
@@ -388,7 +389,7 @@ def test_deploy_process_from_url_no_access(
         "accept": "application/json",
     }
     response = client.post(
-        "/ades/test_workspace/ogc-api/processes",
+        "/ades/test_workspace_2/ogc-api/processes",
         headers=headers,
         json={"executionUnit": {"href": "https://test_workflow-url"}},
     )
@@ -798,3 +799,33 @@ def test_delete_job_no_access(mock_job_owners, mock_opa_request):
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
     assert response.status_code == 403
+
+    
+@patch("ades_fastapi.__init__.get_quote_from_airbus")
+@patch("ades_fastapi.__init__.generate_access_token")
+def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
+    result = {"acquisitionId": "12345", "price": 100}
+    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
+    mock_generate_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    assert response.status_code == 200
+    assert response.json() == result
+
+
+@patch("ades_fastapi.__init__.generate_access_token")
+def test_quote_invalid_token(mock_generate_access_token):
+    mock_generate_access_token.return_value = None
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    assert response.status_code == 500
+
+
+@patch("ades_fastapi.__init__.get_quote_from_airbus")
+@patch("ades_fastapi.__init__.generate_access_token")
+def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
+    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
+    mock_generate_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    assert response.status_code == 404

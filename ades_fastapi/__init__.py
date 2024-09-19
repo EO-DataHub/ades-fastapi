@@ -1,13 +1,18 @@
+import base64
 import json
 import logging
 import os
+import time
 from distutils.util import strtobool
 from json import JSONDecodeError
 
 import requests
+
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from kubernetes import client, config
+from pydantic import BaseModel
 
 from .utils import (
     check_policy,
@@ -49,11 +54,15 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
+
 # ADES Policy bucket name
 ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 
 # Job owner storage directory
 JOB_OWNER_STORAGE_DIR = os.getenv("JOB_OWNER_STORAGE_DIR", "/job-data")
+
+# Environment used for calls to airbus API
+AIRBUS_ENV = os.getenv("AIRBUS_ENV", "dev")
 
 
 app = FastAPI(
@@ -81,12 +90,50 @@ if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-owners.json"):
 else:
     job_owners = {}
 
+
 # Load job workspace owners from file
 if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json"):
     with open(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json", "r") as file:
         job_deployed_workspace = json.load(file)
 else:
     job_deployed_workspace = {}
+
+
+def get_user_details(request: Request):
+    """Get user details from the request"""
+    token = request.headers.get("authorization", "")
+    stripped_token = token.replace("Bearer ", "")
+    if stripped_token:
+        credentials = jwt.decode(
+            stripped_token,
+            options={"verify_signature": False},
+            algorithms=["HS256"],
+        )
+        username = credentials.get("preferred_username", "")
+        roles = credentials.get("realm_access", {}).get("roles", [])
+    else:
+        username = ""
+        roles = []
+    return username, roles
+
+
+def check_policy(request: Request):
+    """Check OPA policy to determine if the request is allowed"""
+    username, roles = get_user_details(request)
+    input_data = {
+        "input": {
+            "roles": roles,
+            "path": request.url.path,
+            "username": username,
+        }
+    }
+    logger.info("Logged in as user: %s", username)
+    logger.debug("Checking policy with input: %s", input_data)
+    response = opa_request(input_data)
+    if response.status_code != 200 or not response.json().get("result", False):
+        return False
+    return True
+
 
 
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
@@ -106,6 +153,7 @@ def opa_dependency(request: Request, path_params: dict = Depends(get_path_params
 def root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     logger.info("Getting ADES API docs")
+
     try:
         response = requests.get(f"{ADES_SERVICE_ENDPOINT}")
     except requests.exceptions.ConnectionError:
@@ -121,6 +169,7 @@ def workspace_root(deploy_workspace: str):
     """Root endpoint for user's workspace"""
     logger.info("Getting root of workspace %s", deploy_workspace)
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/")
+
     result = json.dumps(response.json())
     return StreamingResponse(
         content=result,
@@ -219,7 +268,7 @@ def list_processes(deploy_workspace: str, request: Request):
         status_code=response.status_code,
     )
 
-
+  
 @app.post("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
 async def deploy_process(
     deploy_workspace: str,
@@ -392,6 +441,7 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
         # Add workspace to body
         logger.info("Setting executing workspace to %s", username)
         body["inputs"].update({"workspace": username})
+
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
 
@@ -521,6 +571,8 @@ def list_jobs(deploy_workspace: str, request: Request):
 
     response_json = json.dumps(response_json).replace("http://localhost:8080", ADES_INGRESS_PATH)
 
+    response_json = json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH)
+
     return Response(
         content=response_json,
         media_type=response.headers["Content-Type"],
@@ -537,6 +589,7 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
     job_id = workflow_job_id[-36:]
 
     logger.info("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
@@ -548,6 +601,7 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
         headers=response.headers,
         status_code=response.status_code,
     )
+
 
 
 @app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
@@ -574,3 +628,95 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     #     media_type=response.headers["Content-Type"],
     #     status_code=response.status_code,
     # )
+
+def get_secret_airbus_api_key(username):
+    """Get API key from secrets for a given user"""
+    config.load_incluster_config()
+    api_instance = client.CustomObjectsApi()
+
+    # Find the namespace for the user from the workspace CRD
+    workspace = api_instance.get_namespaced_custom_object(
+        group="core.telespazio-uk.io",
+        version="v1alpha1",
+        namespace="workspaces",
+        plural="workspaces",
+        name=username,
+    )
+    namespace = workspace["spec"]["namespace"]
+
+    # Get the secret in the user namespace
+    v1 = client.CoreV1Api()
+    secret = v1.read_namespaced_secret("api-keys", namespace)
+    api_key = base64.b64decode(secret.data["airbus-key"]).decode("utf-8")
+    return api_key
+
+
+def generate_access_token(request: Request):
+    """Generate access token for Airbus API"""
+    if AIRBUS_ENV == "prod":
+        url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
+    else:
+        url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
+
+    username, _ = get_user_details(request)
+    api_key = get_secret_airbus_api_key(username)
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+
+    data = [
+        ("apikey", api_key),
+        ("grant_type", "api_key"),
+        ("client_id", "IDP"),
+    ]
+
+    response = requests.post(url, headers=headers, data=data)
+
+    return response.json().get("access_token")
+
+
+def get_quote_from_airbus(url: str, body: dict, headers: dict) -> dict:
+    """Get a quote from Airbus API"""
+    response = requests.post(f"{url}/v1/sar/prices", json=body, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+class QuoteRequest(BaseModel):
+    """Request body for quote endpoint"""
+
+    acquisitionId: str
+
+
+@app.post("/quotes")
+def quote(request: Request, body: QuoteRequest):
+    """Return a quote for a given acquisition ID"""
+    if AIRBUS_ENV == "prod":
+        url = "https://sar.api.oneatlas.airbus.com"
+    else:
+        url = "https://dev.sar.api.oneatlas.airbus.com"
+
+    access_token = generate_access_token(request)
+    if not access_token:
+        return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
+
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    acquisition_id = body.acquisitionId
+    request_body = {"acquisitions": [acquisition_id]}
+
+    try:
+        response_body = get_quote_from_airbus(url, request_body, headers)
+    except requests.RequestException as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+    for item in response_body:
+        if item.get("acquisitionId") == acquisition_id:
+            return JSONResponse(
+                content=item,
+                status_code=200,
+            )
+
+    return JSONResponse(
+        status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+    )
