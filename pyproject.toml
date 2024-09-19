@@ -14,7 +14,7 @@
 
 [project]
 name = "ades-fastapi"
-version = "0.1.0"
+version = "0.1.4"
 description = "A FastApi deployment to handle requests to the ADES component of the EODH."
 readme = "README.md"
 
@@ -69,6 +69,7 @@ dependencies = [
   "requests",
   "pyjwt",
   "pyyaml",
+  "boto3",
   "kubernetes",
 ]
 

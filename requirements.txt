@@ -11,6 +11,12 @@ anyio==4.4.0
     #   httpx
     #   starlette
     #   watchfiles
+boto3==1.35.16
+    # via ades-fastapi (pyproject.toml)
+botocore==1.35.16
+    # via
+    #   boto3
+    #   s3transfer
 cachetools==5.5.0
     # via google-auth
 certifi==2024.7.4
@@ -53,6 +59,10 @@ idna==3.7
     #   requests
 jinja2==3.1.4
     # via fastapi
+jmespath==1.0.1
+    # via
+    #   boto3
+    #   botocore
 kubernetes==30.1.0
     # via ades-fastapi (pyproject.toml)
 markdown-it-py==3.0.0
@@ -80,7 +90,9 @@ pygments==2.18.0
 pyjwt==2.9.0
     # via ades-fastapi (pyproject.toml)
 python-dateutil==2.9.0.post0
-    # via kubernetes
+    # via
+    #   botocore
+    #   kubernetes
 python-dotenv==1.0.1
     # via uvicorn
 python-multipart==0.0.9
@@ -101,6 +113,8 @@ rich==13.7.1
     # via typer
 rsa==4.9
     # via google-auth
+s3transfer==0.10.2
+    # via boto3
 shellingham==1.5.4
     # via typer
 six==1.16.0
@@ -123,6 +137,7 @@ typing-extensions==4.12.2
     #   typer
 urllib3==2.2.2
     # via
+    #   botocore
     #   kubernetes
     #   requests
 uvicorn[standard]==0.30.4
