@@ -13,6 +13,7 @@ from .utils import (
     check_policy,
     check_workflow_access,
     convert_username_to_workspace,
+    get_path_params,
     get_processes,
     get_user_details,
     get_workflow_id_from_file,
@@ -88,25 +89,23 @@ else:
     job_deployed_workspace = {}
 
 
-@app.middleware("http")
-async def opa_middleware(request: Request, call_next):
-    """Middleware to check OPA policy before allowing access to the endpoint"""
+def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
     if ENABLE_OPA_POLICY_CHECK:
-        if check_policy(
-            request, job_deployed_workspace, job_owners, OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET
+        if not check_policy(
+            request,
+            path_params,
+            job_deployed_workspace,
+            job_owners,
+            OPA_SERVICE_ENDPOINT,
+            ADES_POLICY_BUCKET,
         ):
-            response = await call_next(request)
-            return response
-        return JSONResponse(status_code=403, content={"detail": "Access denied"})
-    else:
-        response = await call_next(request)
-        return response
+            raise HTTPException(status_code=403, detail="Access denied")
 
 
-@app.get("")
+@app.get("", dependencies=[Depends(opa_dependency)])
 def root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
-    logger.debug("Getting ADES API docs")
+    logger.info("Getting ADES API docs")
     try:
         response = requests.get(f"{ADES_SERVICE_ENDPOINT}")
     except requests.exceptions.ConnectionError:
@@ -117,10 +116,10 @@ def root():
         return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
 
-@app.get("/{deploy_workspace}/ogc-api")
+@app.get("/{deploy_workspace}/ogc-api", dependencies=[Depends(opa_dependency)])
 def workspace_root(deploy_workspace: str):
     """Root endpoint for user's workspace"""
-    logger.debug("Getting root of workspace %s", deploy_workspace)
+    logger.info("Getting root of workspace %s", deploy_workspace)
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/")
     result = json.dumps(response.json())
     return StreamingResponse(
@@ -130,10 +129,10 @@ def workspace_root(deploy_workspace: str):
     )
 
 
-@app.get("/ogc-api/api")
+@app.get("/ogc-api/api", dependencies=[Depends(opa_dependency)])
 def docs_root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
-    logger.debug("Getting ADES API docs")
+    logger.info("Getting ADES API docs")
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/ogc-api/api")
     result = json.dumps(response.json())
     return StreamingResponse(
@@ -143,7 +142,7 @@ def docs_root():
     )
 
 
-@app.get("/api")
+@app.get("/api", dependencies=[Depends(opa_dependency)])
 def swagger_docs():
     """Endpoint for ADES Swagger docs"""
     response = requests.get(f"{ADES_SERVICE_ENDPOINT}/swagger-ui/oapip/")
@@ -160,22 +159,12 @@ def swagger_docs():
         raise HTTPException(status_code=500, detail="Unexpected content type from ADES")
 
 
-@app.delete("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+@app.delete(
+    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+)
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to undeploy a workflow"""
-    logger.debug("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
-
-    username, _ = get_user_details(request)
-
-    user_workspace = convert_username_to_workspace(username)
-
-    # Must be the workspace owner to delete a workflow
-    logger.info(
-        "Checking user %s has access to undeploy workflow %s in workspace %s",
-        user_workspace,
-        workflow_id,
-        deploy_workspace,
-    )
+    logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -183,8 +172,6 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
     )
-
-    print(response.text)
 
     try:
         content = json.dumps(response.json())
@@ -197,10 +184,10 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/processes")
+@app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
 def list_processes(deploy_workspace: str, request: Request):
     """Endpoint to list all workflows deployed in a workspace"""
-    logger.debug("Listing workflows in workspace %s", deploy_workspace)
+    logger.info("Listing workflows in workspace %s", deploy_workspace)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
@@ -233,15 +220,13 @@ def list_processes(deploy_workspace: str, request: Request):
     )
 
 
-@app.post("/{deploy_workspace}/ogc-api/processes")
+@app.post("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
 async def deploy_process(
     deploy_workspace: str,
     request: Request,
     rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
 ):
     """Endpoint to deploy a workflow to a workspace"""
-
-    username, _ = get_user_details(request)
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -297,7 +282,9 @@ async def deploy_process(
     )
 
 
-@app.put("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+@app.put(
+    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+)
 async def update_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to update a workflow in a workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
@@ -335,10 +322,6 @@ async def update_process(deploy_workspace: str, workflow_id: str, request: Reque
     except JSONDecodeError:
         content = response.text if response.text else ""
 
-    logger.info("Status code from ADES: %s", response.status_code)
-
-    logger.info("Response from ADES: %s", content)
-
     # Need to include Location header from ADES to support deploy status endpoint
     response_headers = {
         "Location": response.headers.get("Location", "").replace(
@@ -356,15 +339,12 @@ async def update_process(deploy_workspace: str, workflow_id: str, request: Reque
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+@app.get(
+    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+)
 def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to get details of a workflow in a workspace"""
-    logger.debug("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
-
-    # Check user has access to this workflow
-    logger.info(
-        "Checking user has access to workflow %s in workspace %s", workflow_id, deploy_workspace
-    )
+    logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -388,10 +368,13 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.post("/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
+@app.post(
+    "/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
+    dependencies=[Depends(opa_dependency)],
+)
 async def execute_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to execute a workflow in a workspace"""
-    logger.debug("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
+    logger.info("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
     headers = dict(request.headers)
 
     headers = {
@@ -404,18 +387,10 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
 
     user_workspace = convert_username_to_workspace(username)
 
-    # Check user has access to this workflow
-    logger.info(
-        "Checking user %s has access to workflow %s in workspace %s",
-        user_workspace,
-        workflow_id,
-        deploy_workspace,
-    )
-
     try:
         body = await request.json()
         # Add workspace to body
-        logger.info("Setting execution workspace to %s", username)
+        logger.info("Setting executing workspace to %s", username)
         body["inputs"].update({"workspace": username})
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
@@ -439,9 +414,7 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
         job_owners[deploy_workspace_and_job_id] = user_workspace
         job_deployed_workspace[workflow_id_and_job_id] = deploy_workspace
 
-        logger.info(
-            "Workspace owner for the job %s is %s", deploy_workspace_and_job_id, user_workspace
-        )
+        logger.info("Job owner for the job %s is %s", deploy_workspace_and_job_id, user_workspace)
         logger.info(
             "Deployed workspace for the job %s is %s", workflow_id_and_job_id, deploy_workspace
         )
@@ -472,22 +445,10 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}")
+@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
 def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
     logger.debug("Getting status of job %s in workspace %s", job_id, deploy_workspace)
-
-    username, _ = get_user_details(request)
-
-    user_workspace = convert_username_to_workspace(username)
-
-    # Check user has access to this workflow
-    logger.info(
-        "Checking user %s has access to job %s in workspace %s",
-        user_workspace,
-        job_id,
-        deploy_workspace,
-    )
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -502,22 +463,12 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}/results")
+@app.get(
+    "/{deploy_workspace}/ogc-api/jobs/{job_id}/results", dependencies=[Depends(opa_dependency)]
+)
 def processing_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
-
-    username, _ = get_user_details(request)
-
-    user_workspace = convert_username_to_workspace(username)
-
-    # Check user has access to this job
-    logger.info(
-        "Checking user %s has access to job %s in workspace %s",
-        user_workspace,
-        job_id,
-        deploy_workspace,
-    )
 
     headers = dict(request.headers)
     headers.pop("Authorization", None)
@@ -532,7 +483,7 @@ def processing_results(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs")
+@app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
 def list_jobs(deploy_workspace: str, request: Request):
     """Endpoint to list all jobs in a workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
@@ -577,17 +528,15 @@ def list_jobs(deploy_workspace: str, request: Request):
     )
 
 
-@app.get("/temp/{workflow_job_id}/{file_name}")
+@app.get("/temp/{workflow_job_id}/{file_name}", dependencies=[Depends(opa_dependency)])
 def get_logs(workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
-    # Get username and roles
-    username, _ = get_user_details(request)
 
     # Extract workflow and job ids
     workflow_id = workflow_job_id[:-37]
     job_id = workflow_job_id[-36:]
 
-    logger.debug("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+    logger.info("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
     response = requests.get(
@@ -601,34 +550,27 @@ def get_logs(workflow_job_id: str, file_name: str, request: Request):
     )
 
 
-@app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}")
+@app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
-    logger.debug("Deleting job %s in workspace %s", job_id, deploy_workspace)
-
-    username, _ = get_user_details(request)
-
-    user_workspace = convert_username_to_workspace(username)
-
-    # Check user has access to this workflow
-    logger.info(
-        "Checking user %s has access to job %s in workspace %s",
-        user_workspace,
-        job_id,
-        deploy_workspace,
-    )
+    logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
     return Response(
         content="Endpoint not implemented yet",
         status_code=501,
     )
-    headers = dict(request.headers)
-    headers.pop("Authorization", None)
-    response = requests.delete(
-        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
-    )
-    return Response(
-        content=response.text,
-        media_type=response.headers["Content-Type"],
-        status_code=response.status_code,
-    )
+
+    # username, _ = get_user_details(request)
+
+    # user_workspace = convert_username_to_workspace(username)
+
+    # headers = dict(request.headers)
+    # headers.pop("Authorization", None)
+    # response = requests.delete(
+    #     f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
+    # )
+    # return Response(
+    #     content=response.text,
+    #     media_type=response.headers["Content-Type"],
+    #     status_code=response.status_code,
+    # )

@@ -13,11 +13,16 @@ from fastapi import Depends, HTTPException, Request
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 
+def get_path_params(request: Request):
+    logger.debug("CALCULATING PATH PARAMETERS")
+    return request.scope.get("path_params", {})
+
+
 def save_data(job_owner_storage_dir: str, job_owners: dict, job_deployed_workspace: dict):
     """Save job owners to files"""
     with open(f"{job_owner_storage_dir}/job-owners.json", "w") as f:
         json.dump(job_owners, f)
-    with open(f"{job_owner_storage_dir}/job-workspace-owner.json", "w") as f:
+    with open(f"{job_owner_storage_dir}/job-workspace-owners.json", "w") as f:
         json.dump(job_deployed_workspace, f)
 
 
@@ -71,11 +76,12 @@ def get_access_policy(deploy_workspace: str, workflow_id: str, ades_policy_bucke
                 deploy_workspace,
             )
             return None
-    return s3_data.get("Body").read().decode("utf-8")
+    return json.loads(s3_data.get("Body").read().decode("utf-8"))
 
 
 def check_policy(
     request: Request,
+    path_params: dict,
     job_deployed_workspace: dict,
     job_owners: dict,
     opa_service_endpoint: str,
@@ -83,6 +89,11 @@ def check_policy(
 ) -> bool:
     """Check OPA policy to determine if the request is allowed"""
     username, roles = get_user_details(request)
+
+    # Add values for logs
+    logger.info("Logged in as user: %s", username)
+    logger.info("Roles: %s", roles)
+
     input_data = {
         "input": {
             "roles": roles,
@@ -92,29 +103,33 @@ def check_policy(
         }
     }
 
+    # Log path parameters
+    logger.debug("Input parameters from path: %s", path_params)
+
     # Add values for workflow access
     if (
         request.method in ["POST", "GET"]
-        and request.path_params.get("deploy_workspace")
-        and request.path_params.get("workflow_id")
+        and path_params.get("deploy_workspace")
+        and path_params.get("workflow_id")
     ):
         # User is executing or interrogating a workflow
         logger.info("Checking policy for workflow access")
         # Get access policy for workflow
         access_policy = get_access_policy(
-            request.path_params["deploy_workspace"],
-            request.path_params["workflow_id"],
+            path_params["deploy_workspace"],
+            path_params["workflow_id"],
             ades_policy_bucket,
         )
+        logger.info("Access policy is: %s", access_policy)
         if access_policy:
             input_data["input"]["is_public"] = access_policy["public"]
             input_data["input"]["allowed_users"] = access_policy["allowed_access"]["users"]
-    elif request.path_params.get("deploy_workspace") and request.path_params.get("job_id"):
+    elif path_params.get("deploy_workspace") and path_params.get("job_id"):
         # User is monitoring a job
-        logger.info("Checking policy for job access")
+        logger.info("Checking job owner for job access")
         # Get executing workspace for the given job
-        deploy_workspace = request.path_params["deploy_workspace"]
-        job_id = request.path_params["job_id"]
+        deploy_workspace = path_params["deploy_workspace"]
+        job_id = path_params["job_id"]
 
         workspace_job_key = f"{deploy_workspace}-{job_id}"
 
@@ -124,17 +139,17 @@ def check_policy(
         execute_workspace = convert_username_to_workspace(execute_username)
 
         input_data["input"]["executing_user"] = execute_workspace
-    elif request.method == "POST" and request.path_params.get("deploy_workspace"):
+    elif request.method == "POST" and path_params.get("deploy_workspace"):
         # User is deploying a workflow
         logger.info("Checking policy for workflow deployment")
         # Get deploying workspace
-        deploy_workspace = request.path_params["deploy_workspace"]
+        deploy_workspace = path_params["deploy_workspace"]
         input_data["input"]["deploying_user"] = deploy_workspace
-    elif request.path_params.get("workflow_job_id"):
+    elif path_params.get("workflow_job_id"):
         # User is accessing logs
-        logger.info("Checking policy for logs access")
+        logger.info("Checking job owner for logs access")
         # Get executing workspace for the given job
-        workflow_job_id = request.path_params["workflow_job_id"]
+        workflow_job_id = path_params["workflow_job_id"]
 
         job_id = workflow_job_id[-36:]
 
@@ -145,10 +160,6 @@ def check_policy(
         execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
 
         input_data["input"]["executing_user"] = execute_workspace
-
-    # Add values for logs access
-    logger.info("Logged in as user: %s", username)
-    logger.debug("Checking policy with input: %s", input_data)
 
     response = opa_request(input_data, opa_service_endpoint)
     if response.status_code != 200 or not response.json().get("result", False):
@@ -161,6 +172,8 @@ def convert_workspace_to_username(workspace: str) -> str:
 
 
 def convert_username_to_workspace(username: str) -> str:
+    if not username:
+        return ""
     return username.replace("-", "_")
 
 
