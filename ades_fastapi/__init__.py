@@ -4,6 +4,7 @@ import logging
 import os
 from distutils.util import strtobool
 from json import JSONDecodeError
+from typing import Optional
 
 import requests
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -66,7 +67,7 @@ AIRBUS_ENV = os.getenv("AIRBUS_ENV", "dev")
 app = FastAPI(
     title="EODHP ADES",
     description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
-    "The following endpoints are currently implemented.",
+    "The following endpoints are currently provided.",
     version="0.1.0",
     root_path=ADES_FASTAPI_ROOT_PATH,
 )
@@ -99,15 +100,17 @@ else:
 
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
     if ENABLE_OPA_POLICY_CHECK:
-        if not check_policy(
+        access_allowed = check_policy(
             request,
             path_params,
             job_deployed_workspace,
             job_owners,
             OPA_SERVICE_ENDPOINT,
             ADES_POLICY_BUCKET,
-        ):
+        )
+        if not access_allowed[0]:
             raise HTTPException(status_code=403, detail="Access denied")
+        return access_allowed[1]
 
 
 @app.get("", dependencies=[Depends(opa_dependency)])
@@ -378,11 +381,13 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.post(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
-    dependencies=[Depends(opa_dependency)],
-)
-async def execute_process(deploy_workspace: str, workflow_id: str, request: Request):
+@app.post("/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
+async def execute_process(
+    deploy_workspace: str,
+    workflow_id: str,
+    request: Request,
+    executing_workspace: Optional[bool] = Depends(opa_dependency),
+):
     """Endpoint to execute a workflow in a workspace"""
     logger.info("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
     headers = dict(request.headers)
@@ -400,8 +405,12 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
     try:
         body = await request.json()
         # Add workspace to body
-        logger.info("Setting executing workspace to %s", username)
-        body["inputs"].update({"workspace": username})
+        if executing_workspace:
+            body["inputs"].update({"workspace": executing_workspace})
+            logger.info("Setting executing workspace to %s", executing_workspace)
+        else:
+            body["inputs"].update({"workspace": user_workspace})
+            logger.info("Setting executing workspace to %s", user_workspace)
 
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err

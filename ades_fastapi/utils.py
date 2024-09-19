@@ -90,6 +90,9 @@ def check_policy(
     """Check OPA policy to determine if the request is allowed"""
     username, roles = get_user_details(request)
 
+    # Set user service value to false
+    user_service = False
+
     # Add values for logs
     logger.info("Logged in as user: %s", username)
     logger.info("Roles: %s", roles)
@@ -105,6 +108,9 @@ def check_policy(
 
     # Log path parameters
     logger.debug("Input parameters from path: %s", path_params)
+
+    # Set default for executing workspace
+    user_service_executing_workspace = None
 
     # Add values for workflow access
     if (
@@ -123,6 +129,9 @@ def check_policy(
         logger.info("Access policy is: %s", access_policy)
         if access_policy:
             input_data["input"]["is_public"] = access_policy["public"]
+            user_service = access_policy["user_service"]
+            user_service_executing_workspace = access_policy.get("executing_workspace", None)
+            input_data["input"]["is_user_service"] = user_service
             input_data["input"]["allowed_users"] = access_policy["allowed_access"]["users"]
     elif path_params.get("deploy_workspace") and path_params.get("job_id"):
         # User is monitoring a job
@@ -164,7 +173,7 @@ def check_policy(
     response = opa_request(input_data, opa_service_endpoint)
     if response.status_code != 200 or not response.json().get("result", False):
         return False
-    return True
+    return True, user_service_executing_workspace
 
 
 def convert_workspace_to_username(workspace: str) -> str:
