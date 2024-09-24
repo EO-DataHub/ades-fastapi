@@ -418,8 +418,10 @@ async def execute_workflow(
     try:
         body = await request.json()
         # Add workspace to body
-        body["inputs"].update({"workspace": executing_workspace})
+        body["inputs"].update({"executing_workspace": executing_workspace})
+        body["inputs"].update({"calling_workspace": convert_username_to_workspace(username)})
         logger.info("Setting executing workspace to %s", executing_workspace)
+        logger.info("Setting calling workspace to %s", convert_username_to_workspace(username))
 
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
