@@ -128,7 +128,7 @@ def check_policy(
 
     # Add values for workflow access
     if (
-        request.method in ["GET"]
+        request.method in ["GET", "DELETE"]
         and path_params.get("deployed_workspace")
         and path_params.get("workflow_id")
     ):
