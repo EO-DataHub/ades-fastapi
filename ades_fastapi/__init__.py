@@ -16,6 +16,7 @@ from .utils import (
     check_policy,
     check_workflow_access,
     convert_username_to_workspace,
+    convert_workspace_to_username,
     get_path_params,
     get_processes,
     get_user_details,
@@ -421,10 +422,15 @@ async def execute_workflow(
     try:
         body = await request.json()
         # Add workspace to body
-        body["inputs"].update({"executing_workspace": executing_workspace})
-        body["inputs"].update({"calling_workspace": convert_username_to_workspace(username)})
-        logger.info("Setting executing workspace to %s", executing_workspace)
-        logger.info("Setting calling workspace to %s", convert_username_to_workspace(username))
+        # Need to convert workspaces to usernames (replace "_" with "-")
+        body["inputs"].update(
+            {"executing_workspace": convert_workspace_to_username(executing_workspace)}
+        )
+        body["inputs"].update({"calling_workspace": username})
+        logger.info(
+            "Setting executing workspace to %s", convert_workspace_to_username(executing_workspace)
+        )
+        logger.info("Setting calling workspace to %s", username)
 
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
@@ -465,14 +471,15 @@ async def execute_workflow(
 
     try:
         content_json = response.json()
-        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
-        content_json.update(
-            {
-                "executingWorkspace": executing_workspace,
-                "deployedWorkspace": deployed_workspace,
-                "calling_workspace": convert_username_to_workspace(username),
-            }
-        )
+        if response.status_code == 201:
+            content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
+            content_json.update(
+                {
+                    "executingWorkspace": convert_workspace_to_username(executing_workspace),
+                    "deployedWorkspace": convert_workspace_to_username(deployed_workspace),
+                    "callingWorkspace": username,
+                }
+            )
         content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
         if response.headers["Content-Type"] == "text/plain":
@@ -505,8 +512,34 @@ def workflow_status(deployed_workspace: str, job_id: str, request: Request):
         f"{ADES_SERVICE_ENDPOINT}/{deployed_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
 
+    if response.status_code == 200:
+        content_json = response.json()
+        workflow_id = content_json["processID"]
+        workflow_id_and_job_id = f"{workflow_id}-{job_id}"
+
+        executing_workspace = job_executing_workspace.get(f"{workflow_id_and_job_id}")
+        deployed_workspace = job_deploying_workspace.get(f"{workflow_id_and_job_id}")
+        username, _ = get_user_details(request)
+
+        content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
+
+        if executing_workspace and deployed_workspace:
+            content_json.update(
+                {
+                    "executingWorkspace": convert_workspace_to_username(executing_workspace),
+                    "deployedWorkspace": convert_workspace_to_username(deployed_workspace),
+                    "callingWorkspace": username,
+                }
+            )
+        content_json = json.dumps(content_json)
+    else:
+        try:
+            content_json = json.dumps(response.json())
+        except JSONDecodeError:
+            content_json = response.text
+
     return Response(
-        content=json.dumps(response.json()).replace("http://localhost:8080", ADES_INGRESS_PATH),
+        content=content_json,
         media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
