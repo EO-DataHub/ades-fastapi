@@ -213,9 +213,12 @@ def list_processes(deployed_workspace: str, request: Request):
     logger.info("Listing workflows in workspace %s", deployed_workspace)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
-    response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/{deployed_workspace}/ogc-api/processes", headers=headers
-    )
+    try:
+        response = requests.get(
+            f"{ADES_SERVICE_ENDPOINT}/{deployed_workspace}/ogc-api/processes", headers=headers
+        )
+    except requests.exceptions.ConnectionError:
+        return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
     if "application/json" in response.headers["Content-Type"]:
         final_content = {}
@@ -463,6 +466,13 @@ async def execute_workflow(
     try:
         content_json = response.json()
         content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
+        content_json.update(
+            {
+                "executingWorkspace": executing_workspace,
+                "deployedWorkspace": deployed_workspace,
+                "calling_workspace": convert_username_to_workspace(username),
+            }
+        )
         content = json.dumps(content_json, indent=2)
     except JSONDecodeError:
         if response.headers["Content-Type"] == "text/plain":
