@@ -23,7 +23,7 @@ client = TestClient(app)
 
 def mock_jwt_decode(token, options, algorithms):
     if token == "valid_token":
-        return {"preferred_username": "test_user", "roles": ["hub_user"]}
+        return {"preferred_username": "test-user", "roles": ["hub_user"]}
     return {"preferred_username": "", "roles": []}
 
 
@@ -39,9 +39,10 @@ class ADESMock:
     ):
         if url.endswith("/execution"):
             return MagicMock(
-                status_code=200,
+                status_code=201,
                 json=lambda: {
                     "status": "processing",
+                    "jobID": "job_12345",
                     "links": [
                         {
                             "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
@@ -95,8 +96,9 @@ class ADESMock:
                     "links": [
                         {
                             "href": "http://localhost:8080/test_workspace/ogc-api/processes/test_workflow"
-                        }
+                        },
                     ],
+                    "processID": "test_workflow",
                 },
                 headers={"Content-Type": "application/json"},
             )
@@ -595,8 +597,10 @@ def test_get_workflow_details_no_access(mock_check_policy, mock_opa_request):
 
 @patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_policy")
-def test_execute_workflow(mock_check_policy, mock_opa_request):
+@patch("ades_fastapi.__init__.save_data")
+def test_execute_workflow(mock_save_data, mock_check_policy, mock_opa_request):
     # Configure mocks
+    mock_save_data.return_value = None
     mock_check_policy.return_value = (True, None)
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
@@ -611,11 +615,15 @@ def test_execute_workflow(mock_check_policy, mock_opa_request):
         headers=headers,
         json={"inputs": {"input1": "value1"}},
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {
         "status": "processing",
+        "jobID": "job_12345",
         "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+        "executingWorkspace": "test-executing-workspace",
+        "deployedWorkspace": "test-deploy-workspace",
+        "callingWorkspace": "test-user",
     }
 
 
@@ -642,8 +650,14 @@ def test_execute_workflow_no_access(mock_check_policy, mock_opa_request):
 
 @patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.job_calling_user")
-def test_get_execute_status(mock_job_calling_user, mock_opa_request):
+@patch("ades_fastapi.__init__.job_deploying_workspace")
+@patch("ades_fastapi.__init__.job_executing_workspace")
+def test_get_execute_status(
+    mock_executing_workspace, mock_deploying_workspace, mock_job_calling_user, mock_opa_request
+):
     # Configure mocks
+    mock_executing_workspace.get.return_value = "test-executing-workspace"
+    mock_deploying_workspace.get.return_value = "test-deploy-workspace"
     mock_job_calling_user.get.return_value = "test_user"
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
@@ -653,7 +667,11 @@ def test_get_execute_status(mock_job_calling_user, mock_opa_request):
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {
         "status": "processing",
+        "processID": "test_workflow",
         "links": [{"href": f"{ADES_INGRESS_PATH}/test_workspace/ogc-api/processes/test_workflow"}],
+        "executingWorkspace": "test-executing-workspace",
+        "deployedWorkspace": "test-deploy-workspace",
+        "callingWorkspace": "test-user",
     }
 
 
