@@ -209,7 +209,7 @@ def undeploy_workflow(deployed_workspace: str, workflow_id: str, request: Reques
 
 
 @app.get("/{deployed_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
-def list_processes(deployed_workspace: str, request: Request):
+def list_workflows(deployed_workspace: str, request: Request):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deployed_workspace)
     headers = dict(request.headers)
@@ -228,14 +228,17 @@ def list_processes(deployed_workspace: str, request: Request):
         content_json = replace_href_links(content_json, ADES_INGRESS_PATH)
         final_content["links"] = content_json.get("links")
         for process_json in content_json["processes"]:
-            if check_workflow_access(
+            access, user_service_ws = check_workflow_access(
                 request,
                 deployed_workspace,
                 ADES_POLICY_BUCKET,
                 ADES_SERVICE_ENDPOINT,
                 workflow_id=process_json["id"],
-            ):
+            )
+            if access:
                 process_json = replace_href_links(process_json, ADES_INGRESS_PATH)
+                if user_service_ws:
+                    process_json.update({"us_executing_workspace": user_service_ws})
                 final_content["processes"].append(process_json)
         content = json.dumps(final_content)
     else:
