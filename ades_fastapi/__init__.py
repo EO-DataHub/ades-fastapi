@@ -17,12 +17,13 @@ from .utils import (
     check_workflow_access,
     convert_username_to_workspace,
     convert_workspace_to_username,
+    deploy_rate_limiter_dependency,
+    execute_rate_limiter_dependency,
     get_path_params,
     get_processes,
     get_user_details,
     get_workflow_id_from_file,
     get_workflow_id_from_url,
-    rate_limiter_dependency,
     replace_href_links,
     save_data,
 )
@@ -254,7 +255,7 @@ def list_workflows(deployed_workspace: str, request: Request):
 async def deploy_workflow(
     deployed_workspace: str,
     request: Request,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
+    rate_limiter=Depends(deploy_rate_limiter_dependency),  # noqa: B008
 ):
     """Endpoint to deploy a workflow to a workspace"""
     headers = dict(request.headers)
@@ -417,7 +418,7 @@ async def execute_workflow(
     deployed_workspace: str,
     workflow_id: str,
     request: Request,
-    # executing_workspace: Optional[bool] = Depends(opa_dependency),
+    rate_limiter=Depends(execute_rate_limiter_dependency),  # noqa: B008
 ):
     """Endpoint to execute a workflow in a workspace"""
     logger.info("Executing workflow %s in workspace %s", workflow_id, deployed_workspace)

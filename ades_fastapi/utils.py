@@ -332,12 +332,12 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
 
 
 last_deploy_times = {}
+last_execute_times = {}
 
 
 # Dependency to check the last call time
-def rate_limit(deploy_workspace: str):
+def deploy_rate_limit(deploy_workspace: str):
     current_time = time.time()
-    print(last_deploy_times.get(deploy_workspace, 0))
     last_call_time = last_deploy_times.get(deploy_workspace, 0)
     if current_time - last_call_time < 5:
         raise HTTPException(
@@ -346,12 +346,31 @@ def rate_limit(deploy_workspace: str):
     last_deploy_times[deploy_workspace] = current_time
 
 
-def get_workspace(request: Request) -> str:
+# Dependency to check the last call time
+def execute_rate_limit(execute_workspace: str):
+    current_time = time.time()
+    last_call_time = last_execute_times.get(execute_workspace, 0)
+    if current_time - last_call_time < 5:
+        raise HTTPException(
+            status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying."
+        )
+    last_execute_times[execute_workspace] = current_time
+
+
+def get_deployed_workspace(request: Request) -> str:
     return request.path_params["deployed_workspace"]
 
 
-def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
-    rate_limit(workspace)
+def get_executing_workspace(request: Request) -> str:
+    return request.path_params["executing_workspace"]
+
+
+def deploy_rate_limiter_dependency(workspace=Depends(get_deployed_workspace)):  # noqa: B008
+    deploy_rate_limit(workspace)
+
+
+def execute_rate_limiter_dependency(workspace=Depends(get_executing_workspace)):  # noqa: B008
+    execute_rate_limit(workspace)
 
 
 def get_processes(deploy_workspace: str, ades_service_endpoint: str) -> dict:
