@@ -250,14 +250,15 @@ def check_workflow_access(
     ades_service_endpoint: str,
     workflow_id: str = None,
     job_id: str = None,
-) -> bool:
+) -> tuple:
     """Check if the workflow is accessible to the current user"""
     username, _ = get_user_details(request)
 
     user_workspace = convert_username_to_workspace(username)
 
+    # If workflow is defined in the current workspace, return True
     if user_workspace == deploy_workspace:
-        return True
+        return True, None
 
     logger.info(
         "Checking user %s has access to workflow %s in workspace %s",
@@ -285,27 +286,27 @@ def check_workflow_access(
                 workflow_id,
                 deploy_workspace,
             )
-            return False
+            return False, None
         else:
             logger.info(
                 "Error getting access policy for workflow %s in workspace %s",
                 workflow_id,
                 deploy_workspace,
             )
-            return False
+            return False, None
 
     workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
 
     ## TODO: Could also use OPA check here instead
 
-    # Check if workflow is a user service
-    if workflow_policy.get("user_service"):
-        logger.info("Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace)
-        return True
     # Check if workflow is public
-    elif workflow_policy.get("public"):
+    if workflow_policy.get("public"):
         logger.info("Workflow %s in workspace %s is public", workflow_id, deploy_workspace)
-        return True
+        return True, None
+    # Check if workflow is a user service
+    elif workflow_policy.get("user_service") and workflow_policy.get("us_executing_workspace"):
+        logger.info("Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace)
+        return True, workflow_policy.get("us_executing_workspace")
     else:
         # Check if user is in the allowed list
         # TODO: in future user workspace may differ from username
@@ -316,10 +317,10 @@ def check_workflow_access(
                 workflow_id,
                 deploy_workspace,
             )
-            return True
+            return True, None
         # TODO: check group access
 
-    return False
+    return False, None
 
 
 def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
