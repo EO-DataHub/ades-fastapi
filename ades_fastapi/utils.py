@@ -129,8 +129,10 @@ def check_policy(
         )
         logger.info("Access policy is: %s", access_policy)
         if access_policy:
-            input_data["input"]["is_public"] = access_policy["public"]
-            input_data["input"]["allowed_users"] = access_policy["allowed_access"]["users"]
+            input_data["input"]["is_public"] = access_policy.get("public", False)
+            input_data["input"]["allowed_users"] = access_policy.get("allowed_access", {}).get(
+                "users", []
+            )
     elif path_params.get("deploy_workspace") and path_params.get("job_id"):
         # User is monitoring a job
         logger.info("Checking job owner for job access")
