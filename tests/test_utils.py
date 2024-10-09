@@ -262,6 +262,107 @@ def test_check_policy(
     )
     assert result is False
 
+    # Test missing access_policy
+    mock_get_access_policy.return_value = {}
+    result = check_policy(
+        request,
+        path_params,
+        job_deployed_workspace,
+        job_owners,
+        opa_service_endpoint,
+        ades_policy_bucket,
+        ades_policy_prefix,
+    )
+    assert result is False
+
+
+@mock.patch("ades_fastapi.utils.opa_request")
+@mock.patch("ades_fastapi.utils.get_user_details")
+@mock.patch("ades_fastapi.utils.get_access_policy")
+@mock.patch("ades_fastapi.utils.convert_username_to_workspace")
+@mock.patch("ades_fastapi.utils.logger")
+def test_check_policy_partial_policy(
+    mock_logger,
+    mock_convert_username_to_workspace,
+    mock_get_access_policy,
+    mock_get_user_details,
+    mock_opa_request,
+):
+    request = mock.Mock(spec=Request)
+    request.method = "GET"
+    request.url.path = "/test/path"
+    request.headers = {"authorization": "Bearer testtoken"}
+
+    path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
+    job_deployed_workspace = {}
+    job_owners = {}
+    opa_service_endpoint = "http://opa-service"
+    ades_policy_bucket = "test-bucket"
+    ades_policy_prefix = "test-prefix"
+
+    # Missing public and allowed users from policy
+    mock_get_user_details.return_value = ("testuser", ["role1", "role2"])
+    mock_get_access_policy.return_value = {"id": "test_workflow"}
+    mock_opa_request.return_value = mock.Mock(
+        status_code=200, json=mock.Mock(return_value={"result": False})
+    )
+
+    result = check_policy(
+        request,
+        path_params,
+        job_deployed_workspace,
+        job_owners,
+        opa_service_endpoint,
+        ades_policy_bucket,
+        ades_policy_prefix,
+    )
+
+    assert result is False
+    mock_logger.info.assert_any_call("Access policy is: %s", {"id": "test_workflow"})
+    mock_opa_request.assert_called_once_with(
+        {
+            "input": {
+                "roles": ["role1", "role2"],
+                "path": "/test/path",
+                "username": "testuser",
+                "method": "GET",
+                "is_public": False,
+                "allowed_users": [],
+            }
+        },
+        opa_service_endpoint,
+    )
+
+    # Missing policy
+    mock_get_access_policy.return_value = {}
+    mock_opa_request.return_value = mock.Mock(
+        status_code=200, json=mock.Mock(return_value={"result": False})
+    )
+
+    result = check_policy(
+        request,
+        path_params,
+        job_deployed_workspace,
+        job_owners,
+        opa_service_endpoint,
+        ades_policy_bucket,
+        ades_policy_prefix,
+    )
+
+    assert result is False
+    mock_logger.info.assert_any_call("Access policy is: %s", {})
+    mock_opa_request.assert_called_with(
+        {
+            "input": {
+                "roles": ["role1", "role2"],
+                "path": "/test/path",
+                "username": "testuser",
+                "method": "GET",
+            }
+        },
+        opa_service_endpoint,
+    )
+
 
 def test_convert_workspace_to_username():
     assert convert_workspace_to_username("test_workspace") == "test-workspace"
