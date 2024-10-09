@@ -427,9 +427,14 @@ def test_check_workflow_access(
         deploy_workspace,
         ades_policy_bucket,
         ades_service_endpoint,
+        ades_policy_prefix="test-prefix",
         workflow_id=workflow_id,
     )
     assert result is True
+    mock_s3_client.get_object.assert_called_once_with(
+        Bucket=ades_policy_bucket,
+        Key="test-prefix/converted_workspace/test_workflow.access-policy.json",
+    )
     mock_logger.info.assert_any_call(
         "Checking user %s has access to workflow %s in workspace %s",
         "test_workspace",

@@ -201,6 +201,7 @@ def check_workflow_access(
     deploy_workspace: str,
     ades_policy_bucket: str,
     ades_service_endpoint: str,
+    ades_policy_prefix: str = None,
     workflow_id: str = None,
     job_id: str = None,
 ) -> bool:
@@ -229,7 +230,10 @@ def check_workflow_access(
     if not workflow_id:
         workflow_id = get_workflow_id_from_job_id(job_id, ades_service_endpoint)
 
-    key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
+    if ades_policy_prefix:
+        key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
+    else:
+        key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
@@ -250,6 +254,8 @@ def check_workflow_access(
             return False
 
     workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
+
+    logger.info("Workflow policy is: %s", workflow_policy)
 
     ## TODO: Could also use OPA check here instead
 
