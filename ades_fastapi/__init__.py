@@ -219,8 +219,8 @@ def list_processes(deploy_workspace: str, request: Request):
                 request,
                 deploy_workspace,
                 ADES_POLICY_BUCKET,
-                ADES_SERVICE_ENDPOINT,
-                workflow_id=process_json["id"],
+                process_json["id"],
+                ADES_POLICY_PREFIX,
             ):
                 process_json = replace_href_links(process_json, ADES_INGRESS_PATH)
                 final_content["processes"].append(process_json)

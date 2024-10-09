@@ -419,16 +419,14 @@ def test_check_workflow_access(
 
     deploy_workspace = "deployed_workspace"
     ades_policy_bucket = "test-bucket"
-    ades_service_endpoint = "http://ades-service"
     workflow_id = "test_workflow"
 
     result = check_workflow_access(
         request,
         deploy_workspace,
         ades_policy_bucket,
-        ades_service_endpoint,
-        ades_policy_prefix="test-prefix",
         workflow_id=workflow_id,
+        ades_policy_prefix="test-prefix",
     )
     assert result is True
     mock_s3_client.get_object.assert_called_once_with(

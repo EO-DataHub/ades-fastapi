@@ -200,10 +200,8 @@ def check_workflow_access(
     request: Request,
     deploy_workspace: str,
     ades_policy_bucket: str,
-    ades_service_endpoint: str,
+    workflow_id: str,
     ades_policy_prefix: str = None,
-    workflow_id: str = None,
-    job_id: str = None,
 ) -> bool:
     """Check if the workflow is accessible to the current user"""
     username, _ = get_user_details(request)
@@ -227,13 +225,13 @@ def check_workflow_access(
 
     deploy_workspace = convert_workspace_to_username(deploy_workspace)
 
-    if not workflow_id:
-        workflow_id = get_workflow_id_from_job_id(job_id, ades_service_endpoint)
-
     if ades_policy_prefix:
         key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
     else:
         key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
+
+    logger.debug("Policy key is %s", key)
+    logger.debug("Policy bucket is %s", ades_policy_bucket)
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
@@ -269,7 +267,7 @@ def check_workflow_access(
         return True
     else:
         # Check if user is in the allowed list
-        if username in workflow_policy.get("allowed_access", {}).get("users"):
+        if username in workflow_policy.get("allowed_access", {}).get("users", {}):
             logger.info(
                 "User %s is in the allowed list for workflow %s in workspace %s",
                 user_workspace,
