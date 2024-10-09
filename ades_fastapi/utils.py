@@ -51,13 +51,18 @@ def get_user_details(request: Request) -> tuple:
     return username, roles
 
 
-def get_access_policy(deploy_workspace: str, workflow_id: str, ades_policy_bucket: str) -> dict:
+def get_access_policy(
+    deploy_workspace: str, workflow_id: str, ades_policy_bucket: str, ades_policy_prefix: str = None
+) -> dict:
     """Get the access policy for a workflow"""
     s3_client = boto3.client("s3")
 
     deploy_workspace = convert_workspace_to_username(deploy_workspace)
 
-    key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
+    if ades_policy_prefix:
+        key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
+    else:
+        key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
@@ -86,6 +91,7 @@ def check_policy(
     job_owners: dict,
     opa_service_endpoint: str,
     ades_policy_bucket: str,
+    ades_policy_prefix: str = None,
 ) -> bool:
     """Check OPA policy to determine if the request is allowed"""
     username, roles = get_user_details(request)
@@ -119,6 +125,7 @@ def check_policy(
             path_params["deploy_workspace"],
             path_params["workflow_id"],
             ades_policy_bucket,
+            ades_policy_prefix,
         )
         logger.info("Access policy is: %s", access_policy)
         if access_policy:
