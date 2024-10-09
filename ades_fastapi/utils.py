@@ -62,7 +62,7 @@ def get_access_policy(
     if ades_policy_prefix:
         key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
     else:
-        key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
+        key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
