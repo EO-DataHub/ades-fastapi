@@ -347,7 +347,7 @@ def test_deploy_process_from_url(
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "example-workflow"
+    mock_get_workflow_id_from_url.return_value = True, "example-workflow"
     mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
@@ -379,7 +379,7 @@ def test_deploy_process_from_url_no_access(
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "example-workflow"
+    mock_get_workflow_id_from_url.return_value = True, "example-workflow"
     mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
@@ -405,7 +405,7 @@ def test_deploy_process_from_file(
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
+    mock_get_workflow_id_from_url.return_value = True, "test_workflow"
     mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
@@ -437,7 +437,7 @@ def test_deploy_process_from_file_no_access(
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
+    mock_get_workflow_id_from_url.return_value = True, "test_workflow"
     mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
@@ -458,7 +458,7 @@ def test_deploy_process_from_file_no_access(
 @patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url, mock_opa_request):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
+    mock_get_workflow_id_from_url.return_value = True, "test_workflow"
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
@@ -538,7 +538,11 @@ def test_update_process_from_file(mock_opa_request):
     response = client.put(
         "/ades/test_workspace/ogc-api/processes/test_workflow",
         headers=headers,
-        content="test_workflow-file-contents",
+        content="""
+        $graph:
+      - class: CommandLineTool
+        id: test_workflow_id
+    """,
     )
     assert response.status_code == 204
     assert response.headers["Content-Type"] == "application/json"

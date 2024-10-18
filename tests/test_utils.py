@@ -494,10 +494,29 @@ def test_get_processes(mock_logger, mock_get):
 def test_get_workflow_id_from_file():
     data = """
     $graph:
-        - id: test_workflow_id
+      - class: Workflow
+        id: test_workflow_id
     """
-    result = get_workflow_id_from_file(data)
+    success, result = get_workflow_id_from_file(data)
+    assert success
     assert result == "test_workflow_id"
+
+
+def test_get_workflow_id_from_file_missing_graph():
+    data = """
+    class: Workflow
+    id: test_workflow_id
+    """
+    success, result = get_workflow_id_from_file(data)
+    assert result == "No '$graph' found in CWL"
+    assert not success
+
+
+def test_get_workflow_id_from_file_not_file_contents():
+    data = "filename"
+    success, result = get_workflow_id_from_file(data)
+    assert result == "CWL file is not valid YAML, was it passed in correctly?"
+    assert not success
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
@@ -505,13 +524,49 @@ def test_get_workflow_id_from_url(mock_get):
     mock_response = mock.Mock()
     mock_response.text = """
     $graph:
-        - id: test_workflow_id
+      - class: Workflow
+        id: test_workflow_id
     """
     mock_get.return_value = mock_response
 
     url = "http://test-url"
-    result = get_workflow_id_from_url(url)
+    success, result = get_workflow_id_from_url(url)
+    assert success
     assert result == "test_workflow_id"
+    mock_get.assert_called_once_with(url)
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url_missing_workflow(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph:
+      - class: CommandLineTool
+        id: test_workflow_id
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    success, result = get_workflow_id_from_url(url)
+    assert result == "No Workflow found in CWL file"
+    assert not success
+    mock_get.assert_called_once_with(url)
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url_not_yaml(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph
+      - class: CommandLineTool
+        id test_workflow_id
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    success, result = get_workflow_id_from_url(url)
+    assert result == "Error decoding CWL file as YAML"
+    assert not success
     mock_get.assert_called_once_with(url)
 
 
