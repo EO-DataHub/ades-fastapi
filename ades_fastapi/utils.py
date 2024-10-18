@@ -302,7 +302,6 @@ last_deploy_times = {}
 # Dependency to check the last call time
 def rate_limit(deploy_workspace: str):
     current_time = time.time()
-    print(last_deploy_times.get(deploy_workspace, 0))
     last_call_time = last_deploy_times.get(deploy_workspace, 0)
     if current_time - last_call_time < 5:
         raise HTTPException(
@@ -334,14 +333,36 @@ def get_processes(deploy_workspace: str, ades_service_endpoint: str) -> dict:
 
 
 def get_workflow_id_from_file(data: str) -> str:
-    cwl_dict = yaml.safe_load(data)
-    return cwl_dict["$graph"][0]["id"]
+    try:
+        cwl_dict = yaml.safe_load(data)
+    except yaml.YAMLError:
+        logger.error("Error decoding CWL file")
+        return False, "Error decoding CWL file as YAML"
+    if not isinstance(cwl_dict, dict):
+        return False, "CWL file is not valid YAML, was it passed in correctly?"
+    if "$graph" not in cwl_dict:
+        return False, "No '$graph' found in CWL"
+    for item in cwl_dict["$graph"]:
+        if item.get("class") == "Workflow":
+            return True, item["id"]
+    return False, "No Workflow found in CWL file"
 
 
 def get_workflow_id_from_url(url: str) -> str:
     response = requests.get(url)
-    cwl_dict = yaml.safe_load(response.text)
-    return cwl_dict["$graph"][0]["id"]
+    try:
+        cwl_dict = yaml.safe_load(response.text)
+    except yaml.YAMLError:
+        logger.error("Error decoding CWL file")
+        return False, "Error decoding CWL file as YAML"
+    if not isinstance(cwl_dict, dict):
+        return False, "CWL file is not valid YAML"
+    if "$graph" not in cwl_dict:
+        return False, "No '$graph' found in CWL"
+    for item in cwl_dict["$graph"]:
+        if item.get("class") == "Workflow":
+            return True, item["id"]
+    return False, "No Workflow found in CWL file"
 
 
 def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoint: str) -> dict:

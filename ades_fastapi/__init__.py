@@ -249,7 +249,9 @@ async def deploy_process(
         logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
-        workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+        success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+        if not success:
+            raise HTTPException(status_code=400, detail=workflow_id)
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from CWL file content to workspace %s", deploy_workspace)
         # Handle string file content
@@ -257,7 +259,9 @@ async def deploy_process(
 
         # Prepare the payload for the subsequent API request
         data = {"data": file_content}  # Decode bytes to string
-        workflow_id = get_workflow_id_from_file(data["data"])
+        success, workflow_id = get_workflow_id_from_file(data["data"])
+        if not success:
+            raise HTTPException(status_code=400, detail=workflow_id)
     else:
         raise HTTPException(
             status_code=415,
