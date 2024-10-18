@@ -51,13 +51,18 @@ def get_user_details(request: Request) -> tuple:
     return username, roles
 
 
-def get_access_policy(deploy_workspace: str, workflow_id: str, ades_policy_bucket: str) -> dict:
+def get_access_policy(
+    deploy_workspace: str, workflow_id: str, ades_policy_bucket: str, ades_policy_prefix: str = None
+) -> dict:
     """Get the access policy for a workflow"""
     s3_client = boto3.client("s3")
 
     deploy_workspace = convert_workspace_to_username(deploy_workspace)
 
-    key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
+    if ades_policy_prefix:
+        key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
+    else:
+        key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
@@ -86,6 +91,7 @@ def check_policy(
     job_owners: dict,
     opa_service_endpoint: str,
     ades_policy_bucket: str,
+    ades_policy_prefix: str = None,
 ) -> bool:
     """Check OPA policy to determine if the request is allowed"""
     username, roles = get_user_details(request)
@@ -119,11 +125,14 @@ def check_policy(
             path_params["deploy_workspace"],
             path_params["workflow_id"],
             ades_policy_bucket,
+            ades_policy_prefix,
         )
         logger.info("Access policy is: %s", access_policy)
         if access_policy:
-            input_data["input"]["is_public"] = access_policy["public"]
-            input_data["input"]["allowed_users"] = access_policy["allowed_access"]["users"]
+            input_data["input"]["is_public"] = access_policy.get("public", False)
+            input_data["input"]["allowed_users"] = access_policy.get("allowed_access", {}).get(
+                "users", []
+            )
     elif path_params.get("deploy_workspace") and path_params.get("job_id"):
         # User is monitoring a job
         logger.info("Checking job owner for job access")
@@ -191,9 +200,8 @@ def check_workflow_access(
     request: Request,
     deploy_workspace: str,
     ades_policy_bucket: str,
-    ades_service_endpoint: str,
-    workflow_id: str = None,
-    job_id: str = None,
+    workflow_id: str,
+    ades_policy_prefix: str = None,
 ) -> bool:
     """Check if the workflow is accessible to the current user"""
     username, _ = get_user_details(request)
@@ -217,10 +225,13 @@ def check_workflow_access(
 
     deploy_workspace = convert_workspace_to_username(deploy_workspace)
 
-    if not workflow_id:
-        workflow_id = get_workflow_id_from_job_id(job_id, ades_service_endpoint)
+    if ades_policy_prefix:
+        key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
+    else:
+        key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
 
-    key = f"workflows/{deploy_workspace}/{workflow_id}.access-policy.json"
+    logger.debug("Policy key is %s", key)
+    logger.debug("Policy bucket is %s", ades_policy_bucket)
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
@@ -242,6 +253,8 @@ def check_workflow_access(
 
     workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
 
+    logger.info("Workflow policy is: %s", workflow_policy)
+
     ## TODO: Could also use OPA check here instead
 
     # Check if workflow is a user service
@@ -254,7 +267,7 @@ def check_workflow_access(
         return True
     else:
         # Check if user is in the allowed list
-        if username in workflow_policy.get("allowed_access", {}).get("users"):
+        if username in workflow_policy.get("allowed_access", {}).get("users", {}):
             logger.info(
                 "User %s is in the allowed list for workflow %s in workspace %s",
                 user_workspace,

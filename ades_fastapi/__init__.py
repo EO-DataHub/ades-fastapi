@@ -56,6 +56,9 @@ ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 # ADES Policy bucket name
 ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 
+# ADES policy prefix
+ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
+
 # Job owner storage directory
 JOB_OWNER_STORAGE_DIR = os.getenv("JOB_OWNER_STORAGE_DIR", "/job-data")
 
@@ -106,6 +109,7 @@ def opa_dependency(request: Request, path_params: dict = Depends(get_path_params
             job_owners,
             OPA_SERVICE_ENDPOINT,
             ADES_POLICY_BUCKET,
+            ADES_POLICY_PREFIX,
         ):
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -215,8 +219,8 @@ def list_processes(deploy_workspace: str, request: Request):
                 request,
                 deploy_workspace,
                 ADES_POLICY_BUCKET,
-                ADES_SERVICE_ENDPOINT,
-                workflow_id=process_json["id"],
+                process_json["id"],
+                ADES_POLICY_PREFIX,
             ):
                 process_json = replace_href_links(process_json, ADES_INGRESS_PATH)
                 final_content["processes"].append(process_json)
