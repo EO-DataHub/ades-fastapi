@@ -571,25 +571,23 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
-    return Response(
-        content="Endpoint not implemented yet",
-        status_code=501,
+    headers = dict(request.headers)
+    headers.pop("Authorization", None)
+    response = requests.delete(
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
 
-    # username, _ = get_user_details(request)
+    try:
+        response_content = json.dumps(response.json()).replace(
+            "http://localhost:8080", ADES_INGRESS_PATH
+        )
+    except JSONDecodeError:
+        response_content = response.text
 
-    # user_workspace = convert_username_to_workspace(username)
-
-    # headers = dict(request.headers)
-    # headers.pop("Authorization", None)
-    # response = requests.delete(
-    #     f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
-    # )
-    # return Response(
-    #     content=response.text,
-    #     media_type=response.headers["Content-Type"],
-    #     status_code=response.status_code,
-    # )
+    return Response(
+        content=response_content,
+        status_code=response.status_code,
+    )
 
 
 def get_secret_airbus_api_key(username):
