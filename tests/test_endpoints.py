@@ -189,11 +189,17 @@ class ADESMock:
         )
 
     def mock_requests_delete(self, url: str, headers: dict = None):
-        return MagicMock(
-            status_code=204,
-            json=lambda: {"Response": "Response text"},
-            headers={"Content-Type": "application/json"},
-        )
+        if url.endswith("/ogc-api/processes/test_workflow"):
+            return MagicMock(
+                status_code=204,
+                json=lambda: {"Response": "Response text"},
+                headers={"Content-Type": "application/json"},
+            )
+        elif url.endswith("/jobs/job_12345"):
+            return MagicMock(
+                status_code=200,
+                json=lambda: {"jobID": "job_12345", "status": "dismissed"},
+            )
 
 
 @pytest.fixture(autouse=True)
@@ -785,8 +791,8 @@ def test_delete_job(mock_job_owners, mock_opa_request):
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.delete("/ades/test_workspace/ogc-api/jobs/job_12345", headers=headers)
-    assert response.status_code == 501
-    assert response.content.decode("utf-8") == "Endpoint not implemented yet"
+    assert response.status_code == 200
+    assert response.json() == {"jobID": "job_12345", "status": "dismissed"}
 
 
 @patch("ades_fastapi.utils.opa_request")
