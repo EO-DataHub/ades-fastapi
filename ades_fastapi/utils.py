@@ -154,7 +154,7 @@ def check_policy(
         # Get deploying workspace
         deploy_workspace = path_params["deploy_workspace"]
         input_data["input"]["deploying_user"] = deploy_workspace
-    elif path_params.get("workflow_job_id"):
+    elif path_params.get("deploy_workspace") and path_params.get("workflow_job_id"):
         # User is accessing logs
         logger.info("Checking job owner for logs access")
         # Get executing workspace for the given job
@@ -163,7 +163,8 @@ def check_policy(
         job_id = workflow_job_id[-36:]
 
         # Get deployed workspace for the given job
-        deploy_workspace = job_deployed_workspace.get(workflow_job_id)
+        # deploy_workspace = job_deployed_workspace.get(workflow_job_id)
+        deploy_workspace = path_params["deploy_workspace"]
 
         # Get executing workspace for the given job
         execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
