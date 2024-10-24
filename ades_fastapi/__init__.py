@@ -81,7 +81,6 @@ static_filepath = os.getenv("STATIC_FILE_PATH", "static")
 app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 # Define global variables to store job and workspace owners
-job_deployed_workspace = {}  # used to link workflow id and job id to deploying workspace
 job_owners = {}  # used to link deploying workspace and job id to executing user
 
 # Load job owners from file
@@ -92,20 +91,11 @@ else:
     job_owners = {}
 
 
-# Load job workspace owners from file
-if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json"):
-    with open(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json", "r") as file:
-        job_deployed_workspace = json.load(file)
-else:
-    job_deployed_workspace = {}
-
-
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
     if ENABLE_OPA_POLICY_CHECK:
         if not check_policy(
             request,
             path_params,
-            job_deployed_workspace,
             job_owners,
             OPA_SERVICE_ENDPOINT,
             ADES_POLICY_BUCKET,
@@ -427,14 +417,13 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
 
         # Record job_id and relate to executing (user) workspace and deployed workspace
         job_owners[deploy_workspace_and_job_id] = user_workspace
-        job_deployed_workspace[workflow_id_and_job_id] = deploy_workspace
 
         logger.info("Job owner for the job %s is %s", deploy_workspace_and_job_id, user_workspace)
         logger.info(
             "Deployed workspace for the job %s is %s", workflow_id_and_job_id, deploy_workspace
         )
 
-        save_data(JOB_OWNER_STORAGE_DIR, job_owners, job_deployed_workspace)
+        save_data(JOB_OWNER_STORAGE_DIR, job_owners)
 
     try:
         content_json = response.json()

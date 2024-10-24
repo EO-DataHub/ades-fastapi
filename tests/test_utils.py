@@ -6,7 +6,6 @@ import pytest
 from fastapi import HTTPException, Request
 
 from ades_fastapi.utils import (
-    check_job_access,
     check_policy,
     check_workflow_access,
     convert_username_to_workspace,
@@ -41,15 +40,11 @@ def test_get_path_params(mock_logger):
 def test_save_data(tmp_path):
     job_owner_storage_dir = tmp_path
     job_owners = {"owner1": "data1"}
-    job_deployed_workspace = {"workspace1": "data2"}
 
-    save_data(job_owner_storage_dir, job_owners, job_deployed_workspace)
+    save_data(job_owner_storage_dir, job_owners)
 
     with open(f"{job_owner_storage_dir}/job-owners.json", "r") as f:
         assert json.load(f) == job_owners
-
-    with open(f"{job_owner_storage_dir}/job-workspace-owners.json", "r") as f:
-        assert json.load(f) == job_deployed_workspace
 
 
 @mock.patch("ades_fastapi.utils.requests.post")
@@ -172,7 +167,6 @@ def test_check_policy(
     request.headers = {"authorization": "Bearer testtoken"}
 
     path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
-    job_deployed_workspace = {}
     job_owners = {}
     opa_service_endpoint = "http://opa-service"
     ades_policy_bucket = "test-bucket"
@@ -190,7 +184,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -225,7 +218,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -254,7 +246,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -267,7 +258,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -279,11 +269,9 @@ def test_check_policy(
 @mock.patch("ades_fastapi.utils.opa_request")
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.get_access_policy")
-@mock.patch("ades_fastapi.utils.convert_username_to_workspace")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_policy_partial_policy(
     mock_logger,
-    mock_convert_username_to_workspace,
     mock_get_access_policy,
     mock_get_user_details,
     mock_opa_request,
@@ -294,7 +282,6 @@ def test_check_policy_partial_policy(
     request.headers = {"authorization": "Bearer testtoken"}
 
     path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
-    job_deployed_workspace = {}
     job_owners = {}
     opa_service_endpoint = "http://opa-service"
     ades_policy_bucket = "test-bucket"
@@ -310,7 +297,6 @@ def test_check_policy_partial_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -342,7 +328,6 @@ def test_check_policy_partial_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -532,25 +517,4 @@ def test_list_jobs_dict(mock_logger, mock_get):
     mock_get.assert_called_once_with(
         f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs",
         headers={"authorization": "Bearer testtoken"},
-    )
-
-
-@mock.patch("ades_fastapi.utils.logger")
-def test_check_job_access(mock_logger):
-    user_workspace = "test_workspace"
-    workflow_id = "test_workflow"
-    job_id = "test_job"
-    job_deployed_workspace = {"test_workflow-test_job": "test_workspace"}
-    job_owners = {"test_workspace-test_job": "test_workspace"}
-
-    result = check_job_access(
-        user_workspace, workflow_id, job_id, job_deployed_workspace, job_owners
-    )
-    assert result is True
-    mock_logger.info.assert_any_call(
-        "Checking user %s has access to logs for job %s of workflow %s in workspace %s",
-        user_workspace,
-        job_id,
-        workflow_id,
-        "test_workspace",
     )

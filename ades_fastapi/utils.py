@@ -18,12 +18,10 @@ def get_path_params(request: Request):
     return request.scope.get("path_params", {})
 
 
-def save_data(job_owner_storage_dir: str, job_owners: dict, job_deployed_workspace: dict):
+def save_data(job_owner_storage_dir: str, job_owners: dict):
     """Save job owners to files"""
     with open(f"{job_owner_storage_dir}/job-owners.json", "w") as f:
         json.dump(job_owners, f)
-    with open(f"{job_owner_storage_dir}/job-workspace-owners.json", "w") as f:
-        json.dump(job_deployed_workspace, f)
 
 
 def opa_request(input_data: dict, opa_service_endpoint: str) -> requests.Response:
@@ -87,7 +85,6 @@ def get_access_policy(
 def check_policy(
     request: Request,
     path_params: dict,
-    job_deployed_workspace: dict,
     job_owners: dict,
     opa_service_endpoint: str,
     ades_policy_bucket: str,
@@ -163,7 +160,6 @@ def check_policy(
         job_id = workflow_job_id[-36:]
 
         # Get deployed workspace for the given job
-        # deploy_workspace = job_deployed_workspace.get(workflow_job_id)
         deploy_workspace = path_params["deploy_workspace"]
 
         # Get executing workspace for the given job
@@ -355,32 +351,3 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     )
 
     return response.json()
-
-
-def check_job_access(
-    user_workspace: str,
-    workflow_id: str,
-    job_id: str,
-    job_deployed_workspace: dict,
-    job_owners: dict,
-) -> bool:
-    """Check if user has access to this job"""
-
-    # Get deployment workspace
-    workflow_id_and_job_id = f"{workflow_id}-{job_id}"
-    deploy_workspace = job_deployed_workspace.get(workflow_id_and_job_id)
-
-    logger.info(
-        "Checking user %s has access to logs for job %s of workflow %s in workspace %s",
-        user_workspace,
-        job_id,
-        workflow_id,
-        deploy_workspace,
-    )
-
-    deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
-
-    if job_owners.get(deploy_workspace_and_job_id) == user_workspace:
-        return True
-
-    return False
