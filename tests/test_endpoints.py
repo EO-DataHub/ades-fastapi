@@ -130,7 +130,7 @@ class ADESMock:
                 status_code=200,
                 json=lambda: {"Data": "Response Data"},
                 headers={
-                    "Content-Type": "application/vnd.oai.openapi+json;version=3.0;charset=UTF-8"
+                    "Content-Type": "application/vnd.oai.openapi+json;version=3.0;charset=utf-8"
                 },
             )
         elif url.endswith("/processes"):
@@ -245,7 +245,7 @@ def test_docs_root(mock_opa_request):
     assert response.status_code == 200
     assert (
         response.headers["Content-Type"]
-        == "application/vnd.oai.openapi+json;version=3.0;charset=UTF-8"
+        == "application/vnd.oai.openapi+json;version=3.0;charset=utf-8"
     )
     assert response.json() == {"Data": "Response Data"}
 
@@ -758,11 +758,11 @@ def test_get_logs(mock_list_jobs_dict, mock_opa_request):
 
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get(
-        "/ades/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
+        "/ades/test_workspace/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
         headers=headers,
     )
     assert response.status_code == 200
-    assert response.headers["Content-Type"] == "text/plain"
+    assert response.headers["Content-Type"] == "text/plain; charset=utf-8"
     assert response.content.decode("utf-8") == "Some log content"
 
 
@@ -776,7 +776,7 @@ def test_get_logs_no_access(mock_list_jobs_dict, mock_opa_request):
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.get(
-        "/ades/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
+        "/ades/test_workspace/temp/test_workflow-12312312-aaaa-bbbb-cccc-dddddddddddd/file.log",
         headers=headers,
     )
     assert response.status_code == 403
