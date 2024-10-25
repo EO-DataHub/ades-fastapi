@@ -366,12 +366,12 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
 async def execute_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to execute a workflow in a workspace"""
     logger.info("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
-    headers = dict(request.headers)
 
     headers = {
         "Prefer": "respond-async",
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "Authorization": "Bearer <token>",  # only needed by the ADES, so leave as an example
     }
 
     username, _ = get_user_details(request)
