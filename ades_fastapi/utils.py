@@ -280,10 +280,6 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
     return content_dict
 
 
-def get_workspace(request: Request) -> str:
-    return request.path_params["deploy_workspace"]
-
-
 def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoint: str) -> dict:
     """Local function to list all jobs in a workspace, returned as a dictionary"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)

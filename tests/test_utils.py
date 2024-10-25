@@ -12,7 +12,6 @@ from ades_fastapi.utils import (
     get_access_policy,
     get_path_params,
     get_user_details,
-    get_workspace,
     list_jobs_dict,
     opa_request,
     replace_href_links,
@@ -406,13 +405,6 @@ def test_replace_href_links():
     result = replace_href_links(content_dict, ades_ingress_path)
     assert result["links"][0]["href"] == "http://ades-ingress/test1"
     assert result["links"][1]["href"] == "http://ades-ingress/test2"
-
-
-def test_get_workspace():
-    request = mock.Mock(spec=Request)
-    request.path_params = {"deploy_workspace": "test_workspace"}
-    result = get_workspace(request)
-    assert result == "test_workspace"
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
