@@ -2,8 +2,7 @@ import json
 from unittest import mock
 
 import botocore
-import pytest
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from ades_fastapi.utils import (
     check_policy,
@@ -12,16 +11,10 @@ from ades_fastapi.utils import (
     convert_workspace_to_username,
     get_access_policy,
     get_path_params,
-    get_processes,
     get_user_details,
-    get_workflow_id_from_file,
-    get_workflow_id_from_job_id,
-    get_workflow_id_from_url,
     get_workspace,
     list_jobs_dict,
     opa_request,
-    rate_limit,
-    rate_limiter_dependency,
     replace_href_links,
     save_data,
 )
@@ -358,32 +351,12 @@ def test_convert_username_to_workspace():
     assert convert_username_to_workspace("") == ""
 
 
-@mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_job_id(mock_get):
-    mock_response = mock.Mock()
-    mock_response.json.return_value = {"processID": "test_workflow_id"}
-    mock_get.return_value = mock_response
-
-    deploy_workspace = "test_workspace"
-    job_id = "test_job"
-    ades_service_endpoint = "http://ades-service"
-
-    result = get_workflow_id_from_job_id(deploy_workspace, job_id, ades_service_endpoint)
-    assert result == "test_workflow_id"
-    mock_get.assert_called_once_with(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs/{job_id}",
-        headers={"Accept": "application/json"},
-    )
-
-
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.boto3.client")
 @mock.patch("ades_fastapi.utils.convert_workspace_to_username")
-@mock.patch("ades_fastapi.utils.get_workflow_id_from_job_id")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_workflow_access(
     mock_logger,
-    mock_get_workflow_id_from_job_id,
     mock_convert_workspace_to_username,
     mock_boto3_client,
     mock_get_user_details,
@@ -393,7 +366,6 @@ def test_check_workflow_access(
 
     mock_get_user_details.return_value = "test-workspace", []
     mock_convert_workspace_to_username.return_value = "converted_workspace"
-    mock_get_workflow_id_from_job_id.return_value = "test_workflow_id"
 
     mock_s3_client.get_object.return_value = {
         "Body": mock.Mock(read=mock.Mock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -436,68 +408,11 @@ def test_replace_href_links():
     assert result["links"][1]["href"] == "http://ades-ingress/test2"
 
 
-def test_rate_limit():
-    deploy_workspace = "test_workspace"
-    rate_limit(deploy_workspace)
-    with pytest.raises(HTTPException) as exc_info:
-        rate_limit(deploy_workspace)
-    assert exc_info.value.status_code == 429
-
-
 def test_get_workspace():
     request = mock.Mock(spec=Request)
     request.path_params = {"deploy_workspace": "test_workspace"}
     result = get_workspace(request)
     assert result == "test_workspace"
-
-
-@mock.patch("ades_fastapi.utils.rate_limit")
-def test_rate_limiter_dependency(mock_rate_limit):
-    workspace = "test_workspace"
-    rate_limiter_dependency(workspace)
-    mock_rate_limit.assert_called_once_with(workspace)
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
-@mock.patch("ades_fastapi.utils.logger")
-def test_get_processes(mock_logger, mock_get):
-    mock_response = mock.Mock()
-    mock_response.json.return_value = {"processes": [{"id": "workflow_id"}]}
-    mock_get.return_value = mock_response
-
-    deploy_workspace = "test_workspace"
-    ades_service_endpoint = "http://ades-service"
-
-    result = get_processes(deploy_workspace, ades_service_endpoint)
-    assert result == {"processes": [{"id": "workflow_id"}]}
-    mock_get.assert_called_once_with(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/processes",
-        headers={"Accept": "application/cwl+json"},
-    )
-
-
-def test_get_workflow_id_from_file():
-    data = """
-    $graph:
-        - id: test_workflow_id
-    """
-    result = get_workflow_id_from_file(data)
-    assert result == "test_workflow_id"
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url(mock_get):
-    mock_response = mock.Mock()
-    mock_response.text = """
-    $graph:
-        - id: test_workflow_id
-    """
-    mock_get.return_value = mock_response
-
-    url = "http://test-url"
-    result = get_workflow_id_from_url(url)
-    assert result == "test_workflow_id"
-    mock_get.assert_called_once_with(url)
 
 
 @mock.patch("ades_fastapi.utils.requests.get")

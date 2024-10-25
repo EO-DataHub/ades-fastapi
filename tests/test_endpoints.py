@@ -345,16 +345,10 @@ def test_list_processes_no_access(mock_check_workflow_access, mock_opa_request):
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.utils.last_deploy_times")
-@patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_url(
-    mock_get_workflow_id_from_url,
-    mock_last_deploy_times,
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "example-workflow"
-    mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {
@@ -377,16 +371,10 @@ def test_deploy_process_from_url(
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.utils.last_deploy_times")
-@patch("ades_fastapi.__init__.get_workflow_id_from_url")
 def test_deploy_process_from_url_no_access(
-    mock_get_workflow_id_from_url,
-    mock_last_deploy_times,
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "example-workflow"
-    mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {
@@ -403,16 +391,10 @@ def test_deploy_process_from_url_no_access(
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.utils.last_deploy_times")
-@patch("ades_fastapi.__init__.get_workflow_id_from_file")
 def test_deploy_process_from_file(
-    mock_get_workflow_id_from_url,
-    mock_last_deploy_times,
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
-    mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
@@ -435,16 +417,10 @@ def test_deploy_process_from_file(
 
 
 @patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.utils.last_deploy_times")
-@patch("ades_fastapi.__init__.get_workflow_id_from_file")
 def test_deploy_process_from_file_no_access(
-    mock_get_workflow_id_from_url,
-    mock_last_deploy_times,
     mock_opa_request,
 ):
     # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
-    mock_last_deploy_times.get.return_value = 0
     mock_opa_request.return_value = MagicMock(status_code=403, json=lambda: {"result": False})
 
     headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
@@ -458,38 +434,6 @@ def test_deploy_process_from_file_no_access(
           id: test_workflow""",
     )
     assert response.status_code == 403
-
-
-@patch("ades_fastapi.utils.opa_request")
-@patch("ades_fastapi.__init__.get_workflow_id_from_url")
-def test_deploy_process_from_file_rate_limit(mock_get_workflow_id_from_url, mock_opa_request):
-    # Configure mocks
-    mock_get_workflow_id_from_url.return_value = "test_workflow"
-    mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
-
-    headers = {"authorization": "Bearer valid_token", "Content-Type": "application/cwl+yaml"}
-    response = client.post(
-        "/ades/test_workspace_3/ogc-api/processes",
-        headers=headers,
-        content="""
-        cwlVersion: v1.0
-        $graph:
-        - class: Workflow
-          id: test_workflow""",
-    )
-    response = client.post(
-        "/ades/test_workspace_3/ogc-api/processes",
-        headers=headers,
-        content="""
-        cwlVersion: v1.0
-        $graph:
-        - class: Workflow
-          id: test_workflow-2""",
-    )
-    assert response.status_code == 429
-    assert response.json() == {
-        "detail": "Too Many Requests: Please wait 5 seconds before retrying."
-    }
 
 
 @patch("ades_fastapi.utils.opa_request")
