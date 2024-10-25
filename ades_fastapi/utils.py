@@ -1,14 +1,11 @@
 import json
 import logging
-import time
-from json import JSONDecodeError
 
 import boto3
 import botocore
 import jwt
 import requests
-import yaml
-from fastapi import Depends, HTTPException, Request
+from fastapi import Request
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
@@ -183,16 +180,6 @@ def convert_username_to_workspace(username: str) -> str:
     return username.replace("-", "_")
 
 
-def get_workflow_id_from_job_id(
-    deploy_workspace: str, job_id: str, ades_service_endpoint: str
-) -> str:
-    headers = {"Accept": "application/json"}
-    response = requests.get(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
-    )
-    return response.json()["processID"]
-
-
 def check_workflow_access(
     request: Request,
     deploy_workspace: str,
@@ -293,52 +280,8 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
     return content_dict
 
 
-last_deploy_times = {}
-
-
-# Dependency to check the last call time
-def rate_limit(deploy_workspace: str):
-    current_time = time.time()
-    print(last_deploy_times.get(deploy_workspace, 0))
-    last_call_time = last_deploy_times.get(deploy_workspace, 0)
-    if current_time - last_call_time < 5:
-        raise HTTPException(
-            status_code=429, detail="Too Many Requests: Please wait 5 seconds before retrying."
-        )
-    last_deploy_times[deploy_workspace] = current_time
-
-
 def get_workspace(request: Request) -> str:
     return request.path_params["deploy_workspace"]
-
-
-def rate_limiter_dependency(workspace=Depends(get_workspace)):  # noqa: B008
-    rate_limit(workspace)
-
-
-def get_processes(deploy_workspace: str, ades_service_endpoint: str) -> dict:
-    headers = {"Accept": "application/cwl+json"}
-    response = requests.get(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/processes", headers=headers
-    )
-    try:
-        processes_dict = response.json()
-    except JSONDecodeError as err:
-        logger.error("Error decoding JSON response from ADES list processes")
-        logger.error(response.text)
-        raise err
-    return processes_dict
-
-
-def get_workflow_id_from_file(data: str) -> str:
-    cwl_dict = yaml.safe_load(data)
-    return cwl_dict["$graph"][0]["id"]
-
-
-def get_workflow_id_from_url(url: str) -> str:
-    response = requests.get(url)
-    cwl_dict = yaml.safe_load(response.text)
-    return cwl_dict["$graph"][0]["id"]
 
 
 def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoint: str) -> dict:
