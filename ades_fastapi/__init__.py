@@ -17,11 +17,7 @@ from .utils import (
     check_workflow_access,
     convert_username_to_workspace,
     get_path_params,
-    get_processes,
     get_user_details,
-    get_workflow_id_from_file,
-    get_workflow_id_from_url,
-    rate_limiter_dependency,
     replace_href_links,
     save_data,
 )
@@ -228,7 +224,6 @@ def list_processes(deploy_workspace: str, request: Request):
 async def deploy_process(
     deploy_workspace: str,
     request: Request,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
 ):
     """Endpoint to deploy a workflow to a workspace"""
 
@@ -239,7 +234,6 @@ async def deploy_process(
         logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
         # Handle HTTP file content
         data = {"json": await request.json()}
-        workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
     elif "application/cwl+yaml" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from CWL file content to workspace %s", deploy_workspace)
         # Handle string file content
@@ -247,18 +241,11 @@ async def deploy_process(
 
         # Prepare the payload for the subsequent API request
         data = {"data": file_content}  # Decode bytes to string
-        workflow_id = get_workflow_id_from_file(data["data"])
     else:
         raise HTTPException(
             status_code=415,
             detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
         )
-
-    # Check if the workflow is already deployed, as this causes a bug in the ADES
-    processes_dict = get_processes(deploy_workspace, ADES_SERVICE_ENDPOINT)
-    for process in processes_dict["processes"]:
-        if process["id"] == workflow_id:
-            raise HTTPException(status_code=409, detail="Workflow already deployed")
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes", headers=headers, **data
