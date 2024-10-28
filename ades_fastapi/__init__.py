@@ -371,7 +371,6 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
         "Prefer": "respond-async",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Authorization": "Bearer <token>",  # only needed by the ADES, so leave as an example
     }
 
     username, _ = get_user_details(request)
