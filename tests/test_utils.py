@@ -2,27 +2,18 @@ import json
 from unittest import mock
 
 import botocore
-import pytest
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from ades_fastapi.utils import (
-    check_job_access,
     check_policy,
     check_workflow_access,
     convert_username_to_workspace,
     convert_workspace_to_username,
     get_access_policy,
     get_path_params,
-    get_processes,
     get_user_details,
-    get_workflow_id_from_file,
-    get_workflow_id_from_job_id,
-    get_workflow_id_from_url,
-    get_workspace,
     list_jobs_dict,
     opa_request,
-    rate_limit,
-    rate_limiter_dependency,
     replace_href_links,
     save_data,
 )
@@ -41,15 +32,11 @@ def test_get_path_params(mock_logger):
 def test_save_data(tmp_path):
     job_owner_storage_dir = tmp_path
     job_owners = {"owner1": "data1"}
-    job_deployed_workspace = {"workspace1": "data2"}
 
-    save_data(job_owner_storage_dir, job_owners, job_deployed_workspace)
+    save_data(job_owner_storage_dir, job_owners)
 
     with open(f"{job_owner_storage_dir}/job-owners.json", "r") as f:
         assert json.load(f) == job_owners
-
-    with open(f"{job_owner_storage_dir}/job-workspace-owners.json", "r") as f:
-        assert json.load(f) == job_deployed_workspace
 
 
 @mock.patch("ades_fastapi.utils.requests.post")
@@ -172,7 +159,6 @@ def test_check_policy(
     request.headers = {"authorization": "Bearer testtoken"}
 
     path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
-    job_deployed_workspace = {}
     job_owners = {}
     opa_service_endpoint = "http://opa-service"
     ades_policy_bucket = "test-bucket"
@@ -190,7 +176,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -225,7 +210,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -254,7 +238,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -267,7 +250,6 @@ def test_check_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -279,11 +261,9 @@ def test_check_policy(
 @mock.patch("ades_fastapi.utils.opa_request")
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.get_access_policy")
-@mock.patch("ades_fastapi.utils.convert_username_to_workspace")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_policy_partial_policy(
     mock_logger,
-    mock_convert_username_to_workspace,
     mock_get_access_policy,
     mock_get_user_details,
     mock_opa_request,
@@ -294,7 +274,6 @@ def test_check_policy_partial_policy(
     request.headers = {"authorization": "Bearer testtoken"}
 
     path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
-    job_deployed_workspace = {}
     job_owners = {}
     opa_service_endpoint = "http://opa-service"
     ades_policy_bucket = "test-bucket"
@@ -310,7 +289,6 @@ def test_check_policy_partial_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -342,7 +320,6 @@ def test_check_policy_partial_policy(
     result = check_policy(
         request,
         path_params,
-        job_deployed_workspace,
         job_owners,
         opa_service_endpoint,
         ades_policy_bucket,
@@ -373,32 +350,12 @@ def test_convert_username_to_workspace():
     assert convert_username_to_workspace("") == ""
 
 
-@mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_job_id(mock_get):
-    mock_response = mock.Mock()
-    mock_response.json.return_value = {"processID": "test_workflow_id"}
-    mock_get.return_value = mock_response
-
-    deploy_workspace = "test_workspace"
-    job_id = "test_job"
-    ades_service_endpoint = "http://ades-service"
-
-    result = get_workflow_id_from_job_id(deploy_workspace, job_id, ades_service_endpoint)
-    assert result == "test_workflow_id"
-    mock_get.assert_called_once_with(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs/{job_id}",
-        headers={"Accept": "application/json"},
-    )
-
-
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.boto3.client")
 @mock.patch("ades_fastapi.utils.convert_workspace_to_username")
-@mock.patch("ades_fastapi.utils.get_workflow_id_from_job_id")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_workflow_access(
     mock_logger,
-    mock_get_workflow_id_from_job_id,
     mock_convert_workspace_to_username,
     mock_boto3_client,
     mock_get_user_details,
@@ -408,7 +365,6 @@ def test_check_workflow_access(
 
     mock_get_user_details.return_value = "test-workspace", []
     mock_convert_workspace_to_username.return_value = "converted_workspace"
-    mock_get_workflow_id_from_job_id.return_value = "test_workflow_id"
 
     mock_s3_client.get_object.return_value = {
         "Body": mock.Mock(read=mock.Mock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -449,91 +405,6 @@ def test_replace_href_links():
     result = replace_href_links(content_dict, ades_ingress_path)
     assert result["links"][0]["href"] == "http://ades-ingress/test1"
     assert result["links"][1]["href"] == "http://ades-ingress/test2"
-
-
-def test_rate_limit():
-    deploy_workspace = "test_workspace"
-    rate_limit(deploy_workspace)
-    with pytest.raises(HTTPException) as exc_info:
-        rate_limit(deploy_workspace)
-    assert exc_info.value.status_code == 429
-
-
-def test_get_workspace():
-    request = mock.Mock(spec=Request)
-    request.path_params = {"deploy_workspace": "test_workspace"}
-    result = get_workspace(request)
-    assert result == "test_workspace"
-
-
-@mock.patch("ades_fastapi.utils.rate_limit")
-def test_rate_limiter_dependency(mock_rate_limit):
-    workspace = "test_workspace"
-    rate_limiter_dependency(workspace)
-    mock_rate_limit.assert_called_once_with(workspace)
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
-@mock.patch("ades_fastapi.utils.logger")
-def test_get_processes(mock_logger, mock_get):
-    mock_response = mock.Mock()
-    mock_response.json.return_value = {"processes": [{"id": "workflow_id"}]}
-    mock_get.return_value = mock_response
-
-    deploy_workspace = "test_workspace"
-    ades_service_endpoint = "http://ades-service"
-
-    result = get_processes(deploy_workspace, ades_service_endpoint)
-    assert result == {"processes": [{"id": "workflow_id"}]}
-    mock_get.assert_called_once_with(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/processes",
-        headers={"Accept": "application/cwl+json"},
-    )
-
-
-def test_get_workflow_id_from_file():
-    data = """
-    $graph:
-      - class: Workflow
-        id: test_workflow_id
-    """
-    success, result = get_workflow_id_from_file(data)
-    assert success
-    assert result == "test_workflow_id"
-
-
-def test_get_workflow_id_from_file_missing_graph():
-    data = """
-    class: Workflow
-    id: test_workflow_id
-    """
-    success, result = get_workflow_id_from_file(data)
-    assert result == "No '$graph' found in CWL"
-    assert not success
-
-
-def test_get_workflow_id_from_file_not_file_contents():
-    data = "filename"
-    success, result = get_workflow_id_from_file(data)
-    assert result == "CWL file is not valid YAML, was it passed in correctly?"
-    assert not success
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url(mock_get):
-    mock_response = mock.Mock()
-    mock_response.text = """
-    $graph:
-      - class: Workflow
-        id: test_workflow_id
-    """
-    mock_get.return_value = mock_response
-
-    url = "http://test-url"
-    success, result = get_workflow_id_from_url(url)
-    assert success
-    assert result == "test_workflow_id"
-    mock_get.assert_called_once_with(url)
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
@@ -587,25 +458,4 @@ def test_list_jobs_dict(mock_logger, mock_get):
     mock_get.assert_called_once_with(
         f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs",
         headers={"authorization": "Bearer testtoken"},
-    )
-
-
-@mock.patch("ades_fastapi.utils.logger")
-def test_check_job_access(mock_logger):
-    user_workspace = "test_workspace"
-    workflow_id = "test_workflow"
-    job_id = "test_job"
-    job_deployed_workspace = {"test_workflow-test_job": "test_workspace"}
-    job_owners = {"test_workspace-test_job": "test_workspace"}
-
-    result = check_job_access(
-        user_workspace, workflow_id, job_id, job_deployed_workspace, job_owners
-    )
-    assert result is True
-    mock_logger.info.assert_any_call(
-        "Checking user %s has access to logs for job %s of workflow %s in workspace %s",
-        user_workspace,
-        job_id,
-        workflow_id,
-        "test_workspace",
     )

@@ -17,11 +17,7 @@ from .utils import (
     check_workflow_access,
     convert_username_to_workspace,
     get_path_params,
-    get_processes,
     get_user_details,
-    get_workflow_id_from_file,
-    get_workflow_id_from_url,
-    rate_limiter_dependency,
     replace_href_links,
     save_data,
 )
@@ -81,7 +77,6 @@ static_filepath = os.getenv("STATIC_FILE_PATH", "static")
 app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 # Define global variables to store job and workspace owners
-job_deployed_workspace = {}  # used to link workflow id and job id to deploying workspace
 job_owners = {}  # used to link deploying workspace and job id to executing user
 
 # Load job owners from file
@@ -92,20 +87,11 @@ else:
     job_owners = {}
 
 
-# Load job workspace owners from file
-if os.path.exists(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json"):
-    with open(f"{JOB_OWNER_STORAGE_DIR}/job-workspace-owners.json", "r") as file:
-        job_deployed_workspace = json.load(file)
-else:
-    job_deployed_workspace = {}
-
-
 def opa_dependency(request: Request, path_params: dict = Depends(get_path_params)):  # noqa: B008
     if ENABLE_OPA_POLICY_CHECK:
         if not check_policy(
             request,
             path_params,
-            job_deployed_workspace,
             job_owners,
             OPA_SERVICE_ENDPOINT,
             ADES_POLICY_BUCKET,
@@ -181,7 +167,7 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
     response = requests.delete(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
@@ -203,7 +189,7 @@ def list_processes(deploy_workspace: str, request: Request):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes", headers=headers
     )
@@ -238,12 +224,11 @@ def list_processes(deploy_workspace: str, request: Request):
 async def deploy_process(
     deploy_workspace: str,
     request: Request,
-    rate_limiter=Depends(rate_limiter_dependency),  # noqa: B008
 ):
     """Endpoint to deploy a workflow to a workspace"""
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
 
     if "application/json" in request.headers["Content-Type"]:
         logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
@@ -267,12 +252,6 @@ async def deploy_process(
             status_code=415,
             detail="Unsupported content type. Only application/json and application/cwl+yaml are supported",
         )
-
-    # Check if the workflow is already deployed, as this causes a bug in the ADES
-    processes_dict = get_processes(deploy_workspace, ADES_SERVICE_ENDPOINT)
-    for process in processes_dict["processes"]:
-        if process["id"] == workflow_id:
-            raise HTTPException(status_code=409, detail="Workflow already deployed")
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes", headers=headers, **data
@@ -310,7 +289,7 @@ async def update_process(deploy_workspace: str, workflow_id: str, request: Reque
     username, _ = get_user_details(request)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
 
     if "application/json" in request.headers["Content-Type"]:
         logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
@@ -365,7 +344,7 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
     logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}",
         headers=headers,
@@ -393,7 +372,6 @@ def process_details(deploy_workspace: str, workflow_id: str, request: Request):
 async def execute_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to execute a workflow in a workspace"""
     logger.info("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
-    headers = dict(request.headers)
 
     headers = {
         "Prefer": "respond-async",
@@ -431,14 +409,13 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
 
         # Record job_id and relate to executing (user) workspace and deployed workspace
         job_owners[deploy_workspace_and_job_id] = user_workspace
-        job_deployed_workspace[workflow_id_and_job_id] = deploy_workspace
 
         logger.info("Job owner for the job %s is %s", deploy_workspace_and_job_id, user_workspace)
         logger.info(
             "Deployed workspace for the job %s is %s", workflow_id_and_job_id, deploy_workspace
         )
 
-        save_data(JOB_OWNER_STORAGE_DIR, job_owners, job_deployed_workspace)
+        save_data(JOB_OWNER_STORAGE_DIR, job_owners)
 
     try:
         content_json = response.json()
@@ -467,10 +444,10 @@ async def execute_process(deploy_workspace: str, workflow_id: str, request: Requ
 @app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
 def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
-    logger.debug("Getting status of job %s in workspace %s", job_id, deploy_workspace)
+    logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
@@ -490,7 +467,7 @@ def processing_results(deploy_workspace: str, job_id: str, request: Request):
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
     response = requests.get(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}/results",
         headers=headers,
@@ -512,7 +489,7 @@ def list_jobs(deploy_workspace: str, request: Request):
     user_workspace = convert_username_to_workspace(username)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
 
     # Get all jobs in the deployed workspace
     response = requests.get(
@@ -547,25 +524,30 @@ def list_jobs(deploy_workspace: str, request: Request):
     )
 
 
-@app.get("/temp/{workflow_job_id}/{file_name}", dependencies=[Depends(opa_dependency)])
-def get_logs(workflow_job_id: str, file_name: str, request: Request):
+@app.get(
+    "/{deploy_workspace}/temp/{workflow_job_id}/{file_name}", dependencies=[Depends(opa_dependency)]
+)
+def get_logs(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
 
     # Extract workflow and job ids
     workflow_id = workflow_job_id[:-37]
     job_id = workflow_job_id[-36:]
 
-    logger.info("Accessing: %s logs for workflow: %s and job: ", file_name, workflow_id, job_id)
+    logger.info("Accessing logs: %s for workflow: %s and job: %s", file_name, workflow_id, job_id)
 
     headers = dict(request.headers)
-    headers.pop("Authorization", None)
+    headers.pop("authorization", None)
+
     response = requests.get(
-        f"{ADES_SERVICE_ENDPOINT}/temp/{workflow_job_id}/{file_name}", headers=headers
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/temp/{workflow_job_id}/{file_name}",
+        headers=headers,
     )
 
+    # Here, headers are generated by FastApi automatically
     return Response(
         content=response.content,
-        headers=response.headers,
+        media_type=response.headers["Content-Type"],
         status_code=response.status_code,
     )
 
@@ -575,25 +557,23 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
-    return Response(
-        content="Endpoint not implemented yet",
-        status_code=501,
+    headers = dict(request.headers)
+    headers.pop("authorization", None)
+    response = requests.delete(
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
     )
 
-    # username, _ = get_user_details(request)
+    try:
+        response_content = json.dumps(response.json()).replace(
+            "http://localhost:8080", ADES_INGRESS_PATH
+        )
+    except JSONDecodeError:
+        response_content = response.text
 
-    # user_workspace = convert_username_to_workspace(username)
-
-    # headers = dict(request.headers)
-    # headers.pop("Authorization", None)
-    # response = requests.delete(
-    #     f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/jobs/{job_id}", headers=headers
-    # )
-    # return Response(
-    #     content=response.text,
-    #     media_type=response.headers["Content-Type"],
-    #     status_code=response.status_code,
-    # )
+    return Response(
+        content=response_content,
+        status_code=response.status_code,
+    )
 
 
 def get_secret_airbus_api_key(username):
