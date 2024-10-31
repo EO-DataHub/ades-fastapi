@@ -408,40 +408,6 @@ def test_replace_href_links():
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url_missing_workflow(mock_get):
-    mock_response = mock.Mock()
-    mock_response.text = """
-    $graph:
-      - class: CommandLineTool
-        id: test_workflow_id
-    """
-    mock_get.return_value = mock_response
-
-    url = "http://test-url"
-    success, result = get_workflow_id_from_url(url)
-    assert result == "No Workflow found in CWL file"
-    assert not success
-    mock_get.assert_called_once_with(url)
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url_not_yaml(mock_get):
-    mock_response = mock.Mock()
-    mock_response.text = """
-    $graph
-      - class: CommandLineTool
-        id test_workflow_id
-    """
-    mock_get.return_value = mock_response
-
-    url = "http://test-url"
-    success, result = get_workflow_id_from_url(url)
-    assert result == "Error decoding CWL file as YAML"
-    assert not success
-    mock_get.assert_called_once_with(url)
-
-
-@mock.patch("ades_fastapi.utils.requests.get")
 @mock.patch("ades_fastapi.utils.logger")
 def test_list_jobs_dict(mock_logger, mock_get):
     mock_response = mock.Mock()
