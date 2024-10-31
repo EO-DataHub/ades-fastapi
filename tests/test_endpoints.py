@@ -344,12 +344,15 @@ def test_list_processes_no_access(mock_check_workflow_access, mock_opa_request):
     }
 
 
+@patch("ades_fastapi.__init__.get_workflow_id_from_url")
 @patch("ades_fastapi.utils.opa_request")
 def test_deploy_process_from_url(
     mock_opa_request,
+    mock_get_workflow_id_from_url,
 ):
     # Configure mocks
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
+    mock_get_workflow_id_from_url.return_value = True, "test_workflow"
 
     headers = {
         "authorization": "Bearer valid_token",
@@ -488,7 +491,11 @@ def test_update_process_from_file(mock_opa_request):
     response = client.put(
         "/ades/test_workspace/ogc-api/processes/test_workflow",
         headers=headers,
-        content="test_workflow-file-contents",
+        content="""
+        $graph:
+      - class: CommandLineTool
+        id: test_workflow_id
+    """,
     )
     assert response.status_code == 204
     assert response.headers["Content-Type"] == "application/json"

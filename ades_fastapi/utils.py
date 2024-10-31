@@ -5,6 +5,7 @@ import boto3
 import botocore
 import jwt
 import requests
+import yaml
 from fastapi import Request
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
@@ -278,6 +279,39 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
         for link in content_dict["links"]:
             link["href"] = link["href"].replace("http://localhost:8080", ades_ingress_path)
     return content_dict
+
+
+def get_workflow_id_from_file(data: str) -> tuple:
+    try:
+        cwl_dict = yaml.safe_load(data)
+    except yaml.YAMLError:
+        logger.error("Error decoding CWL file")
+        return False, "Error decoding CWL file as YAML"
+    if not isinstance(cwl_dict, dict):
+        return False, "CWL file is not valid YAML, was it passed in correctly?"
+    if "$graph" not in cwl_dict:
+        return False, "No '$graph' found in CWL"
+    for item in cwl_dict["$graph"]:
+        if item.get("class") == "Workflow":
+            return True, item["id"]
+    return False, "No Workflow found in CWL file"
+
+
+def get_workflow_id_from_url(url: str) -> tuple:
+    response = requests.get(url)
+    try:
+        cwl_dict = yaml.safe_load(response.text)
+    except yaml.YAMLError:
+        logger.error("Error decoding CWL file")
+        return False, "Error decoding CWL file as YAML"
+    if not isinstance(cwl_dict, dict):
+        return False, "CWL file is not valid YAML"
+    if "$graph" not in cwl_dict:
+        return False, "No '$graph' found in CWL"
+    for item in cwl_dict["$graph"]:
+        if item.get("class") == "Workflow":
+            return True, item["id"]
+    return False, "No Workflow found in CWL file"
 
 
 def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoint: str) -> dict:
