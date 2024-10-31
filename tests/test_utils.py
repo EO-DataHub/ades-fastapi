@@ -12,6 +12,8 @@ from ades_fastapi.utils import (
     get_access_policy,
     get_path_params,
     get_user_details,
+    get_workflow_id_from_file,
+    get_workflow_id_from_url,
     list_jobs_dict,
     opa_request,
     replace_href_links,
@@ -405,6 +407,64 @@ def test_replace_href_links():
     result = replace_href_links(content_dict, ades_ingress_path)
     assert result["links"][0]["href"] == "http://ades-ingress/test1"
     assert result["links"][1]["href"] == "http://ades-ingress/test2"
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url_missing_workflow(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph:
+      - class: CommandLineTool
+        id: test_workflow_id
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    success, result = get_workflow_id_from_url(url)
+    assert result == "No Workflow found in CWL file"
+    assert not success
+    mock_get.assert_called_once_with(url)
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url_not_yaml(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph
+      - class: CommandLineTool
+        id test_workflow_id
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    success, result = get_workflow_id_from_url(url)
+    assert result == "Error decoding CWL file as YAML"
+    assert not success
+    mock_get.assert_called_once_with(url)
+
+
+def test_get_workflow_id_from_file_missing_workflow():
+    cwl_str = """
+    $graph:
+      - class: CommandLineTool
+        id: test_workflow_id
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "No Workflow found in CWL file"
+    assert not success
+
+
+def test_get_workflow_id_from_file_not_yaml():
+    cwl_str = """
+    $graph
+      - class: CommandLineTool
+        id test_workflow_id
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "Error decoding CWL file as YAML"
+    assert not success
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
