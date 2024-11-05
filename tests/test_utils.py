@@ -68,13 +68,13 @@ def test_get_user_details(mock_jwt_decode):
     request.headers = {"authorization": "Bearer testtoken"}
 
     mock_jwt_decode.return_value = {
-        "preferred_username": "testuser",
+        "preferred_username": "my-workspace",
         "realm_access": {"roles": ["role1", "role2"]},
     }
 
     username, roles = get_user_details(request)
 
-    assert username == "testuser"
+    assert username == "my-workspace"
     assert roles == ["role1", "role2"]
     mock_jwt_decode.assert_called_once_with(
         "testtoken",
@@ -84,13 +84,10 @@ def test_get_user_details(mock_jwt_decode):
 
 
 @mock.patch("ades_fastapi.utils.boto3.client")
-@mock.patch("ades_fastapi.utils.convert_workspace_to_username")
 @mock.patch("ades_fastapi.utils.logger")
-def test_get_access_policy(mock_logger, mock_convert_workspace_to_username, mock_boto3_client):
+def test_get_access_policy(mock_logger, mock_boto3_client):
     mock_s3_client = mock.Mock()
     mock_boto3_client.return_value = mock_s3_client
-
-    mock_convert_workspace_to_username.return_value = "converted_workspace"
 
     mock_s3_client.get_object.return_value = {
         "Body": mock.Mock(read=mock.Mock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -98,7 +95,7 @@ def test_get_access_policy(mock_logger, mock_convert_workspace_to_username, mock
 
     ades_policy_bucket = "test-bucket"
     ades_policy_prefix = "test-prefix"
-    deploy_workspace = "test_workspace"
+    deploy_workspace = "test-workspace"
     workflow_id = "test_workflow"
 
     result = get_access_policy(
@@ -106,10 +103,9 @@ def test_get_access_policy(mock_logger, mock_convert_workspace_to_username, mock
     )
 
     assert result == {"public": True}
-    mock_convert_workspace_to_username.assert_called_once_with(deploy_workspace)
     mock_s3_client.get_object.assert_called_once_with(
         Bucket=ades_policy_bucket,
-        Key=f"{ades_policy_prefix}/converted_workspace/{workflow_id}.access-policy.json",
+        Key=f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json",
     )
 
     # Test for NoSuchKey error
@@ -124,7 +120,7 @@ def test_get_access_policy(mock_logger, mock_convert_workspace_to_username, mock
     mock_logger.info.assert_any_call(
         "No access policy found for workflow %s in workspace %s",
         workflow_id,
-        "converted_workspace",
+        deploy_workspace,
     )
 
     # Test for other ClientError
@@ -139,18 +135,16 @@ def test_get_access_policy(mock_logger, mock_convert_workspace_to_username, mock
     mock_logger.info.assert_any_call(
         "Error getting access policy for workflow %s in workspace %s",
         workflow_id,
-        "converted_workspace",
+        deploy_workspace,
     )
 
 
 @mock.patch("ades_fastapi.utils.opa_request")
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.get_access_policy")
-@mock.patch("ades_fastapi.utils.convert_username_to_workspace")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_policy(
     mock_logger,
-    mock_convert_username_to_workspace,
     mock_get_access_policy,
     mock_get_user_details,
     mock_opa_request,
@@ -166,10 +160,10 @@ def test_check_policy(
     ades_policy_bucket = "test-bucket"
     ades_policy_prefix = "test-prefix"
 
-    mock_get_user_details.return_value = ("testuser", ["role1", "role2"])
+    mock_get_user_details.return_value = ("my-workspace", ["role1", "role2"])
     mock_get_access_policy.return_value = {
         "public": True,
-        "allowed_access": {"users": ["testuser"]},
+        "allowed_access": {"workspaces": ["test-workspace"]},
     }
     mock_opa_request.return_value = mock.Mock(
         status_code=200, json=mock.Mock(return_value={"result": True})
@@ -183,32 +177,34 @@ def test_check_policy(
         ades_policy_bucket,
         ades_policy_prefix,
     )
-    assert result is True
-    mock_logger.info.assert_any_call("Logged in as user: %s", "testuser")
+    assert result[0] is True
+    assert result[1] is False
+    mock_logger.info.assert_any_call("Logged in as user: %s", "my-workspace")
     mock_logger.info.assert_any_call("Roles: %s", ["role1", "role2"])
     mock_logger.debug.assert_any_call("Input parameters from path: %s", path_params)
     mock_logger.info.assert_any_call("Checking policy for workflow access")
     mock_logger.info.assert_any_call(
-        "Access policy is: %s", {"public": True, "allowed_access": {"users": ["testuser"]}}
+        "Access policy is: %s",
+        {"public": True, "allowed_access": {"workspaces": ["test-workspace"]}},
     )
     mock_opa_request.assert_called_once_with(
         {
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "testuser",
+                "username": "my-workspace",
                 "method": "GET",
                 "is_public": True,
-                "allowed_users": ["testuser"],
+                "allowed_workspaces": ["test-workspace"],
+                "is_user_service": False,
             }
         },
         opa_service_endpoint,
     )
 
     # Test for job monitoring
-    path_params = {"deploy_workspace": "test_workspace", "job_id": "test_job"}
-    job_owners = {"test_workspace-test_job": "testuser"}
-    mock_convert_username_to_workspace.return_value = "test_workspace"
+    path_params = {"deploy_workspace": "test-workspace", "job_id": "test_job"}
+    job_owners = {"test-workspace-test_job": "my-workspace"}
     result = check_policy(
         request,
         path_params,
@@ -217,17 +213,17 @@ def test_check_policy(
         ades_policy_bucket,
         ades_policy_prefix,
     )
-    assert result is True
+    assert result[0] is True
+    assert result[1] is False
     mock_logger.info.assert_any_call("Checking job owner for job access")
-    mock_convert_username_to_workspace.assert_called_once_with("testuser")
     mock_opa_request.assert_called_with(
         {
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "testuser",
+                "username": "my-workspace",
                 "method": "GET",
-                "executing_user": "test_workspace",
+                "calling_workspace": "my-workspace",
             }
         },
         opa_service_endpoint,
@@ -245,9 +241,23 @@ def test_check_policy(
         ades_policy_bucket,
         ades_policy_prefix,
     )
-    assert result is False
+    assert result[0] is False
+    assert result[1] is False
+    mock_opa_request.assert_called_with(
+        {
+            "input": {
+                "roles": ["role1", "role2"],
+                "path": "/test/path",
+                "username": "my-workspace",
+                "method": "GET",
+                "calling_workspace": "my-workspace",
+            }
+        },
+        opa_service_endpoint,
+    )
 
     # Test missing access_policy
+    path_params = {"deploy_workspace": "test_workspace", "workflow_id": "test_workflow"}
     mock_get_access_policy.return_value = {}
     result = check_policy(
         request,
@@ -257,7 +267,37 @@ def test_check_policy(
         ades_policy_bucket,
         ades_policy_prefix,
     )
-    assert result is False
+    assert result[0] is False
+    assert result[1] is False
+    mock_opa_request.assert_called_with(
+        {
+            "input": {
+                "roles": ["role1", "role2"],
+                "path": "/test/path",
+                "username": "my-workspace",
+                "method": "GET",
+            }
+        },
+        opa_service_endpoint,
+    )
+    mock_logger.info.assert_any_call("No access policy found")
+
+    # Test user service
+    mock_opa_request.return_value = mock.Mock(
+        status_code=200, json=mock.Mock(return_value={"result": True})
+    )
+    mock_get_access_policy.return_value = {"user_service": True}
+    result = check_policy(
+        request,
+        path_params,
+        job_owners,
+        opa_service_endpoint,
+        ades_policy_bucket,
+        ades_policy_prefix,
+    )
+    assert result[0] is True
+    assert result[1] is True
+    mock_logger.info.assert_any_call("No access policy found")
 
 
 @mock.patch("ades_fastapi.utils.opa_request")
@@ -282,7 +322,7 @@ def test_check_policy_partial_policy(
     ades_policy_prefix = "test-prefix"
 
     # Missing public and allowed users from policy
-    mock_get_user_details.return_value = ("testuser", ["role1", "role2"])
+    mock_get_user_details.return_value = ("my-workspace", ["role1", "role2"])
     mock_get_access_policy.return_value = {"id": "test_workflow"}
     mock_opa_request.return_value = mock.Mock(
         status_code=200, json=mock.Mock(return_value={"result": False})
@@ -297,17 +337,19 @@ def test_check_policy_partial_policy(
         ades_policy_prefix,
     )
 
-    assert result is False
+    assert result[0] is False
+    assert result[1] is False
     mock_logger.info.assert_any_call("Access policy is: %s", {"id": "test_workflow"})
     mock_opa_request.assert_called_once_with(
         {
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "testuser",
+                "username": "my-workspace",
                 "method": "GET",
                 "is_public": False,
-                "allowed_users": [],
+                "allowed_workspaces": [],
+                "is_user_service": False,
             }
         },
         opa_service_endpoint,
@@ -328,14 +370,15 @@ def test_check_policy_partial_policy(
         ades_policy_prefix,
     )
 
-    assert result is False
-    mock_logger.info.assert_any_call("Access policy is: %s", {})
+    assert result[0] is False
+    assert result[1] is False
+    mock_logger.info.assert_any_call("No access policy found")
     mock_opa_request.assert_called_with(
         {
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "testuser",
+                "username": "my-workspace",
                 "method": "GET",
             }
         },
@@ -354,11 +397,9 @@ def test_convert_username_to_workspace():
 
 @mock.patch("ades_fastapi.utils.get_user_details")
 @mock.patch("ades_fastapi.utils.boto3.client")
-@mock.patch("ades_fastapi.utils.convert_workspace_to_username")
 @mock.patch("ades_fastapi.utils.logger")
 def test_check_workflow_access(
     mock_logger,
-    mock_convert_workspace_to_username,
     mock_boto3_client,
     mock_get_user_details,
 ):
@@ -366,7 +407,6 @@ def test_check_workflow_access(
     mock_boto3_client.return_value = mock_s3_client
 
     mock_get_user_details.return_value = "test-workspace", []
-    mock_convert_workspace_to_username.return_value = "converted_workspace"
 
     mock_s3_client.get_object.return_value = {
         "Body": mock.Mock(read=mock.Mock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -375,7 +415,7 @@ def test_check_workflow_access(
     request = mock.Mock(spec=Request)
     request.headers = {"authorization": "Bearer testtoken"}
 
-    deploy_workspace = "deployed_workspace"
+    deploy_workspace = "deployed-workspace"
     ades_policy_bucket = "test-bucket"
     workflow_id = "test_workflow"
 
@@ -386,16 +426,18 @@ def test_check_workflow_access(
         workflow_id=workflow_id,
         ades_policy_prefix="test-prefix",
     )
-    assert result is True
+    assert result[0] is True
+    assert result[1] == "Workflow is public"
     mock_s3_client.get_object.assert_called_once_with(
         Bucket=ades_policy_bucket,
-        Key="test-prefix/converted_workspace/test_workflow.access-policy.json",
+        Key=f"test-prefix/{deploy_workspace}/test_workflow.access-policy.json",
     )
+
     mock_logger.info.assert_any_call(
         "Checking user %s has access to workflow %s in workspace %s",
-        "test_workspace",
+        "test-workspace",
         workflow_id,
-        "deployed_workspace",
+        deploy_workspace,
     )
 
 
