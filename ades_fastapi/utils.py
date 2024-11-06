@@ -270,7 +270,7 @@ def check_workflow_access(
                     deploy_workspace,
                 )
                 return True, "Workspace has access to this workflow (group)"
-    return False
+    return False, ""
 
 
 def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
