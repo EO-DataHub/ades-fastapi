@@ -402,8 +402,6 @@ async def execute_process(
 
     username, _ = get_user_details(request)
 
-    print(username)
-
     try:
         body = await request.json()
         # Add workspace to body
