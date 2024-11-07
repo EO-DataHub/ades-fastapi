@@ -192,7 +192,7 @@ def test_check_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
                 "is_public": True,
                 "allowed_workspaces": ["test-workspace"],
@@ -221,7 +221,7 @@ def test_check_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
                 "calling_workspace": "my-workspace",
             }
@@ -248,7 +248,7 @@ def test_check_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
                 "calling_workspace": "my-workspace",
             }
@@ -274,7 +274,7 @@ def test_check_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
             }
         },
@@ -345,7 +345,7 @@ def test_check_policy_partial_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
                 "is_public": False,
                 "allowed_workspaces": [],
@@ -378,7 +378,7 @@ def test_check_policy_partial_policy(
             "input": {
                 "roles": ["role1", "role2"],
                 "path": "/test/path",
-                "username": "my-workspace",
+                "workspace": "my-workspace",
                 "method": "GET",
             }
         },

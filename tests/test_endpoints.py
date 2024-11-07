@@ -617,15 +617,25 @@ def test_execute_process(mock_check_policy, mock_opa_request, mock_requests_post
     mock_requests_post.assert_called_with(
         f"{ADES_SERVICE_ENDPOINT}/test_workspace/ogc-api/processes/test_workflow/execution",
         headers=expected_headers,
-        json={"inputs": {"input1": "value1", "workspace": "test_user"}},
+        json={
+            "inputs": {
+                "input1": "value1",
+                "calling_workspace": "test_user",
+                "executing_workspace": "test_user",
+            }
+        },
     )
 
 
+@patch("ades_fastapi.__init__.get_user_details")
 @patch("requests.post")
 @patch("ades_fastapi.utils.opa_request")
 @patch("ades_fastapi.__init__.check_policy")
-def test_execute_process_user_service(mock_check_policy, mock_opa_request, mock_requests_post):
+def test_execute_process_user_service(
+    mock_check_policy, mock_opa_request, mock_requests_post, mock_get_user_details
+):
     # Configure mocks
+    mock_get_user_details.return_value = "test_user", []
     mock_requests_post.return_value = MagicMock(
         status_code=200,
         json=lambda: {
@@ -663,7 +673,13 @@ def test_execute_process_user_service(mock_check_policy, mock_opa_request, mock_
     mock_requests_post.assert_called_with(
         f"{ADES_SERVICE_ENDPOINT}/test_workspace/ogc-api/processes/test_workflow/execution",
         headers=expected_headers,
-        json={"inputs": {"input1": "value1", "workspace": "test_workspace"}},
+        json={
+            "inputs": {
+                "input1": "value1",
+                "calling_workspace": "test_user",
+                "executing_workspace": "test_workspace",
+            }
+        },
     )
 
 

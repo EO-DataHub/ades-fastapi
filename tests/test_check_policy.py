@@ -15,7 +15,7 @@ def mock_jwt_decode(token, options, algorithms):
 
 
 def mock_requests_post(url, json):
-    if json["input"]["username"] == "test_user":
+    if json["input"]["workspace"] == "test_user":
         return MagicMock(status_code=200, json=lambda: {"result": True})
     return MagicMock(status_code=403, json=lambda: {"result": False})
 
