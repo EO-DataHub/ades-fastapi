@@ -622,6 +622,7 @@ def test_execute_process(mock_check_policy, mock_opa_request, mock_requests_post
                 "input1": "value1",
                 "calling_workspace": "test_user",
                 "executing_workspace": "test_user",
+                "user_token": "valid_token",
             }
         },
     )
@@ -647,9 +648,10 @@ def test_execute_process_user_service(
         headers={"Content-Type": "application/json"},
     )
     headers = {
-        "Prefer": "respond-async",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
+        "prefer": "respond-async",
+        "content-Type": "application/json",
+        "accept": "application/json",
+        "authorization": "Bearer valid_token",
     }
     mock_check_policy.return_value = True, True
     mock_opa_request.return_value = MagicMock(status_code=200, json=lambda: {"result": True})
@@ -678,6 +680,7 @@ def test_execute_process_user_service(
                 "input1": "value1",
                 "calling_workspace": "test_user",
                 "executing_workspace": "test_workspace",
+                "user_token": "valid_token",
             }
         },
     )
