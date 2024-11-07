@@ -28,6 +28,12 @@ def opa_request(input_data: dict, opa_service_endpoint: str) -> requests.Respons
     return requests.post(opa_service_endpoint, json=input_data)
 
 
+def get_user_token(request: Request) -> str:
+    """Get user token from the request"""
+    token = request.headers.get("authorization", "")
+    return token.replace("Bearer ", "")
+
+
 def get_user_details(request: Request) -> tuple:
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
@@ -100,7 +106,7 @@ def check_policy(
         "input": {
             "roles": roles,
             "path": request.url.path,
-            "username": username,
+            "workspace": username,
             "method": request.method,
         }
     }
@@ -144,9 +150,9 @@ def check_policy(
         workspace_job_key = f"{deploy_workspace}-{job_id}"
 
         # Get executing workspace for the given job
-        execute_username = job_owners.get(workspace_job_key)
+        calling_workspace = job_owners.get(workspace_job_key)
 
-        input_data["input"]["calling_workspace"] = execute_username
+        input_data["input"]["calling_workspace"] = calling_workspace
     elif request.method == "POST" and path_params.get("deploy_workspace"):
         # User is deploying a workflow
         logger.info("Checking policy for workflow deployment")

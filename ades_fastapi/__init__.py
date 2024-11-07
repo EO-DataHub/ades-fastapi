@@ -17,6 +17,7 @@ from .utils import (
     check_workflow_access,
     get_path_params,
     get_user_details,
+    get_user_token,
     get_workflow_id_from_file,
     get_workflow_id_from_url,
     replace_href_links,
@@ -392,7 +393,8 @@ async def execute_process(
     is_user_service: tuple = Depends(opa_dependency),
 ):
     """Endpoint to execute a workflow in a workspace"""
-    logger.info("Executing workflow %s in workspace %s", workflow_id, deploy_workspace)
+    log_text = "user-service" if is_user_service else "workflow"
+    logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
 
     headers = {
         "Prefer": "respond-async",
@@ -404,16 +406,29 @@ async def execute_process(
 
     try:
         body = await request.json()
-        # Add workspace to body
+        # Add calling workspace to body
+        logger.info("Setting calling workspace to %s", username)
+        body["inputs"].update({"calling_workspace": username})
         if is_user_service:
             executing_workspace = deploy_workspace
         else:
             executing_workspace = username
         logger.info("Setting executing workspace to %s", executing_workspace)
-        body["inputs"].update({"workspace": executing_workspace})
+        body["inputs"].update({"executing_workspace": executing_workspace})
+        # Add user token to body
+        user_token = get_user_token(request)
+        logger.info("Setting user token in execution call")
+        body["inputs"].update({"user_token": user_token})
 
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
+
+    print(
+        "URL is",
+        f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
+    )
+    print("Headers are ", headers)
+    print("Body is ", body)
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
