@@ -309,6 +309,7 @@ def get_workflow_id_from_url(url: str) -> tuple:
         cwl_dict = yaml.safe_load(response.text)
     except yaml.YAMLError:
         logger.error("Error decoding CWL file")
+        logger.error(response.text)
         return False, "Error decoding CWL file as YAML"
     if not isinstance(cwl_dict, dict):
         return False, "CWL file is not valid YAML"
