@@ -423,12 +423,12 @@ async def execute_process(
     except JSONDecodeError as err:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from err
 
-    print(
+    logger.debug(
         "URL is",
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
     )
-    print("Headers are ", headers)
-    print("Body is ", body)
+    logger.debug("Headers are ", headers)
+    logger.debug("Body is ", body)
 
     response = requests.post(
         f"{ADES_SERVICE_ENDPOINT}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
