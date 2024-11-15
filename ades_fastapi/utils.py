@@ -298,7 +298,12 @@ def get_workflow_id_from_file(data: str) -> tuple:
 
 
 def get_workflow_id_from_url(url: str) -> tuple:
-    response = requests.get(url)
+    # Need to mimic browser headers to get around some sites blocking requests
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+    response = requests.get(url, headers=headers)
     try:
         cwl_dict = yaml.safe_load(response.text)
     except yaml.YAMLError:

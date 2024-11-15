@@ -420,10 +420,14 @@ def test_get_workflow_id_from_url_missing_workflow(mock_get):
     mock_get.return_value = mock_response
 
     url = "http://test-url"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
     success, result = get_workflow_id_from_url(url)
     assert result == "No Workflow found in CWL file"
     assert not success
-    mock_get.assert_called_once_with(url)
+    mock_get.assert_called_once_with(url, headers=headers)
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
@@ -437,10 +441,14 @@ def test_get_workflow_id_from_url_not_yaml(mock_get):
     mock_get.return_value = mock_response
 
     url = "http://test-url"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
     success, result = get_workflow_id_from_url(url)
     assert result == "Error decoding CWL file as YAML"
     assert not success
-    mock_get.assert_called_once_with(url)
+    mock_get.assert_called_once_with(url, headers=headers)
 
 
 def test_get_workflow_id_from_file_missing_workflow():
