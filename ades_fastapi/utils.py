@@ -1,25 +1,28 @@
 import json
 import logging
+from enum import Enum
 
 import boto3
 import botocore
 import jwt
 import requests
 import yaml
-from fastapi import Request
+from fastapi import HTTPException, Request
+
+from .job_saver import JobSaver
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
+
+
+class WorkflowType(Enum):
+    WORKFLOW = "workflow"
+    USER_SERVICE = "user-service"
+    OTHER = "other"  # not for prod use
 
 
 def get_path_params(request: Request):
     logger.debug("CALCULATING PATH PARAMETERS")
     return request.scope.get("path_params", {})
-
-
-def save_data(job_owner_storage_dir: str, job_owners: dict):
-    """Save job owners to files"""
-    with open(f"{job_owner_storage_dir}/job-owners.json", "w") as f:
-        json.dump(job_owners, f)
 
 
 def opa_request(input_data: dict, opa_service_endpoint: str) -> requests.Response:
@@ -84,103 +87,6 @@ def get_access_policy(
     return json.loads(s3_data.get("Body").read().decode("utf-8"))
 
 
-def check_policy(
-    request: Request,
-    path_params: dict,
-    job_owners: dict,
-    opa_service_endpoint: str,
-    ades_policy_bucket: str,
-    ades_policy_prefix: str = None,
-) -> tuple:
-    """Check OPA policy to determine if the request is allowed"""
-    username, roles = get_user_details(request)
-
-    # Default to not a user-service
-    is_us = False
-
-    # Add values for logs
-    logger.info("Logged in as user: %s", username)
-    logger.info("Roles: %s", roles)
-
-    input_data = {
-        "input": {
-            "roles": roles,
-            "path": request.url.path,
-            "workspace": username,
-            "method": request.method,
-        }
-    }
-
-    # Log path parameters
-    logger.debug("Input parameters from path: %s", path_params)
-
-    # Add values for workflow access
-    if (
-        request.method in ["POST", "GET"]
-        and path_params.get("deploy_workspace")
-        and path_params.get("workflow_id")
-    ):
-        # User is executing or interrogating a workflow
-        logger.info("Checking policy for workflow access")
-        # Get access policy for workflow
-        access_policy = get_access_policy(
-            path_params["deploy_workspace"],
-            path_params["workflow_id"],
-            ades_policy_bucket,
-            ades_policy_prefix,
-        )
-        if access_policy:
-            logger.info("Access policy is: %s", access_policy)
-            input_data["input"]["is_public"] = access_policy.get("public", False)
-            input_data["input"]["allowed_workspaces"] = access_policy.get("allowed_access", {}).get(
-                "workspaces", []
-            )
-            input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
-            if access_policy.get("user_service", False):
-                is_us = True
-        else:
-            logger.info("No access policy found")
-    elif path_params.get("deploy_workspace") and path_params.get("job_id"):
-        # User is monitoring a job
-        logger.info("Checking job owner for job access")
-        # Get executing workspace for the given job
-        deploy_workspace = path_params["deploy_workspace"]
-        job_id = path_params["job_id"]
-
-        workspace_job_key = f"{deploy_workspace}-{job_id}"
-
-        # Get executing workspace for the given job
-        calling_workspace = job_owners.get(workspace_job_key)
-
-        input_data["input"]["calling_workspace"] = calling_workspace
-    elif request.method == "POST" and path_params.get("deploy_workspace"):
-        # User is deploying a workflow
-        logger.info("Checking policy for workflow deployment")
-        # Get deploying workspace
-        deploy_workspace = path_params["deploy_workspace"]
-        input_data["input"]["deploying_user"] = deploy_workspace
-    elif path_params.get("deploy_workspace") and path_params.get("workflow_job_id"):
-        # User is accessing logs
-        logger.info("Checking job owner for logs access")
-        # Get executing workspace for the given job
-        workflow_job_id = path_params["workflow_job_id"]
-
-        job_id = workflow_job_id[-36:]
-
-        # Get deployed workspace for the given job
-        deploy_workspace = path_params["deploy_workspace"]
-
-        # Get executing workspace for the given job
-        execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
-
-        input_data["input"]["calling_workspace"] = execute_workspace
-
-    response = opa_request(input_data, opa_service_endpoint)
-    if response.status_code != 200 or not response.json().get("result", False):
-        return False, is_us
-    return True, is_us
-
-
 def convert_workspace_to_username(workspace: str) -> str:
     return workspace.replace("_", "-")
 
@@ -189,94 +95,6 @@ def convert_username_to_workspace(username: str) -> str:
     if not username:
         return ""
     return username.replace("-", "_")
-
-
-def check_workflow_access(
-    request: Request,
-    deploy_workspace: str,
-    ades_policy_bucket: str,
-    workflow_id: str,
-    ades_policy_prefix: str = None,
-) -> tuple:
-    """Check if the workflow is accessible to the current user"""
-    username, _ = get_user_details(request)
-
-    if username == deploy_workspace:
-        return True, "Workspace owns this workflow"
-
-    logger.info(
-        "Checking user %s has access to workflow %s in workspace %s",
-        username,
-        workflow_id,
-        deploy_workspace,
-    )
-
-    user_groups = set()  # temporary while waiting for group support
-
-    # Creat S3 client
-    s3_client = boto3.client("s3")
-
-    if ades_policy_prefix:
-        key = f"{ades_policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
-    else:
-        key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
-
-    logger.debug("Policy key is %s", key)
-    logger.debug("Policy bucket is %s", ades_policy_bucket)
-
-    try:
-        s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
-    except botocore.exceptions.ClientError as err:
-        if err.response["Error"]["Code"] == "NoSuchKey":
-            logger.info(
-                "No access policy found for workflow %s in workspace %s",
-                workflow_id,
-                deploy_workspace,
-            )
-            return False, ""
-        else:
-            logger.info(
-                "Error getting access policy for workflow %s in workspace %s",
-                workflow_id,
-                deploy_workspace,
-            )
-            return False, ""
-
-    workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
-
-    logger.info("Workflow policy is: %s", workflow_policy)
-
-    ## TODO: Could also use OPA check here instead
-
-    # Check if workflow is a user service
-    if workflow_policy.get("user_service"):
-        logger.info("Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace)
-        return True, "Workflow is a user-service"
-    # Check if workflow is public
-    elif workflow_policy.get("public"):
-        logger.info("Workflow %s in workspace %s is public", workflow_id, deploy_workspace)
-        return True, "Workflow is public"
-    else:
-        # Check if user is in the allowed list
-        if username in workflow_policy.get("allowed_access", {}).get("workspaces", {}):
-            logger.info(
-                "User %s is in the allowed list for workflow %s in workspace %s",
-                username,
-                workflow_id,
-                deploy_workspace,
-            )
-            return True, "Workspace has access to this workflow (user)"
-        else:
-            allowed_groups = set(workflow_policy.get("allowed_access", {}).get("groups", set()))
-            if user_groups & allowed_groups:
-                logger.info(
-                    "User %s is in the allowed groups for workflow %s in workspace %s",
-                    username,
-                    workflow_id,
-                    deploy_workspace,
-                )
-                return True, "Workspace has access to this workflow (group)"
-    return False, ""
 
 
 def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
@@ -335,3 +153,109 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     )
 
     return response.json()
+
+
+def configure_request(
+    body: dict, token: str, calling_workspace: str, executing_workspace: str = None
+):
+    # Add calling workspace to body
+    logger.info("Setting calling workspace to %s", calling_workspace)
+    try:
+        body["inputs"].update({"calling_workspace": calling_workspace})
+        logger.info(
+            "Setting executing workspace to %s",
+            executing_workspace if executing_workspace else calling_workspace,
+        )
+        body["inputs"].update(
+            {
+                "executing_workspace": executing_workspace
+                if executing_workspace
+                else calling_workspace
+            }
+        )
+        # Add user token to body
+        logger.info("Setting user token in execution call")
+        body["inputs"].update({"user_token": token})
+    except KeyError as e:
+        logger.error("KeyError: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid input payload") from e
+
+
+async def execute_user_service(
+    request: requests.Request,
+    deployed_workspace: str,
+    base_url: str,
+    service_url: str,
+    workflow_id: str,
+    job_saver: JobSaver,
+) -> requests.Response:
+    print("HERERER")
+    calling_workspace, _ = get_user_details(request)
+    token = get_user_token(request)
+    body = await request.json()
+    configure_request(body, token, calling_workspace, deployed_workspace)
+    response = send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
+    # Record the calling workspace for the generated jobID
+    if response.status_code == 201:
+        job_saver.record_owner(response, deployed_workspace, calling_workspace)
+        try:
+            content_json = replace_href_links(response.json(), base_url)
+            content = json.dumps(content_json, indent=2)
+        except json.JSONDecodeError:
+            content = response.text
+
+        if "Location" in response.headers:
+            response.headers["Location"] = response.headers["Location"].replace(
+                "http://localhost:8080", base_url
+            )
+    else:
+        content = response.text
+    return response, content
+
+
+async def execute_workflow(
+    request: requests.Request,
+    deployed_workspace: str,
+    service_url: str,
+    base_url: str,
+    workflow_id: str,
+    job_saver: JobSaver,
+) -> requests.Response:
+    calling_workspace, _ = get_user_details(request)
+    token = get_user_token(request)
+    body = await request.json()
+    configure_request(body, token, calling_workspace)
+    response = send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
+    # Record the calling workspace for the generated jobID
+    if response.status_code == 201:
+        job_saver.record_owner(response, deployed_workspace, calling_workspace)
+        try:
+            content_json = replace_href_links(response.json(), base_url)
+            content = json.dumps(content_json, indent=2)
+        except json.JSONDecodeError:
+            content = response.text
+
+        if "Location" in response.headers:
+            response.headers["Location"] = response.headers["Location"].replace(
+                "http://localhost:8080", base_url
+            )
+    else:
+        content = response.text
+    return response, content
+
+
+def send_execute_to_ades(
+    service_url: str, deploy_workspace: str, workflow_id: str, body: dict
+) -> requests.Response:
+    headers = {
+        "Prefer": "respond-async",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    response = requests.post(
+        f"{service_url}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
+        headers=headers,
+        json=body,
+    )
+
+    return response
