@@ -168,9 +168,9 @@ def configure_request(
         )
         body["inputs"].update(
             {
-                "executing_workspace": executing_workspace
-                if executing_workspace
-                else calling_workspace
+                "executing_workspace": (
+                    executing_workspace if executing_workspace else calling_workspace
+                )
             }
         )
         # Add user token to body
