@@ -199,16 +199,37 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "details"))
+@patch("ades_fastapi.ades_client.get_user_details", return_value=("test-workspace", "details"))
 async def test_get_all_jobs(mock_get_user_details, mock_send_request, ades_client):
-    mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"jobID": "job-id"})
+    mock_send_request.return_value = MagicMock(
+        status_code=200, json=lambda: {"jobID": "job-id-details"}
+    )
     request = MagicMock()
-    request.headers = {"authorization": "Bearer token"}
+    request.headers = {"authorization": "Bearer token", "Content-Type": "application/json"}
     workspace_jobs = {
-        "username": [{"deploy_workspace": "test-deploy-workspace", "jobID": "job-id"}]
+        "test-workspace": [
+            {"deploy_workspace": "test-deploy-workspace-1", "jobID": "job-id-1"},
+            {"deploy_workspace": "test-deploy-workspace-2", "jobID": "job-id-2"},
+        ]
     }
     content = ades_client.get_all_jobs(request, workspace_jobs)
-    assert json.loads(content) == {"workspace": "username", "jobs": [{"jobID": "job-id"}]}
+    assert json.loads(content) == {
+        "workspace": "test-workspace",
+        "jobs": [{"jobID": "job-id-details"}, {"jobID": "job-id-details"}],
+    }
+
+    calls = mock_send_request.call_args_list
+
+    assert calls[0][0] == (
+        "GET",
+        {"Content-Type": "application/json"},
+        "test-deploy-workspace-1/ogc-api/jobs/job-id-1",
+    )
+    assert calls[1][0] == (
+        "GET",
+        {"Content-Type": "application/json"},
+        "test-deploy-workspace-2/ogc-api/jobs/job-id-2",
+    )
 
 
 @pytest.mark.asyncio
