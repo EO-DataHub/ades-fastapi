@@ -106,7 +106,6 @@ def root():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     logger.info("Getting ADES root")
     response = ades_client.get_root()
-    print("here")
     if response.status_code == 200:
         return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: available</p>")
     else:
