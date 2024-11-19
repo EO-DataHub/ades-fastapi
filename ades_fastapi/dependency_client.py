@@ -63,6 +63,7 @@ class DependencyClient:
         if (
             deploy_workspace and workflow_id and request.method in ["POST", "GET"]
         ):  # not needed for PUT updates
+            # Checking access to workflow for details and execution
             logger.debug(
                 "Checking accecss policy for workflow %s in workspace %s",
                 workflow_id,
@@ -88,6 +89,7 @@ class DependencyClient:
                 logger.info("No access policy found")
 
         if deploy_workspace and job_id:
+            # Check access to job
             logger.debug(
                 "Checking job access for job %s deployed to workspace %s", job_id, deploy_workspace
             )
@@ -99,6 +101,7 @@ class DependencyClient:
             input_data["input"]["calling_workspace"] = calling_workspace
 
         if deploy_workspace and workflow_job_id:
+            # Checking access to job logs
             job_id = workflow_job_id[-36:]
             workflow_id = workflow_job_id.replace(job_id, "", 1)
             logger.debug(
@@ -112,62 +115,6 @@ class DependencyClient:
             execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
 
             input_data["input"]["calling_workspace"] = execute_workspace
-
-        # Add values for workflow access
-        # if (
-        #     request.method in ["POST", "GET"]
-        #     and path_params.get("deploy_workspace")
-        #     and path_params.get("workflow_id")
-        # ):
-        #     # User is executing or interrogating a workflow
-        #     logger.info("Checking policy for workflow access")
-        #     # Get access policy for workflow
-        #     access_policy = get_access_policy(
-        #         path_params["deploy_workspace"],
-        #         path_params["workflow_id"],
-        #         self.ades_policy_bucket,
-        #         self.ades_policy_prefix,
-        #     )
-        #     if access_policy:
-        #         print(access_policy)
-        #         logger.info("Access policy is: %s", access_policy)
-        #         input_data["input"]["is_public"] = access_policy.get("public", False)
-        #         input_data["input"]["allowed_workspaces"] = access_policy.get(
-        #             "allowed_access", {}
-        #         ).get("workspaces", [])
-        #         input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
-        #         if access_policy.get("user_service", False):
-        #             wf_type = WorkflowType.USER_SERVICE
-        #     else:
-        #         logger.info("No access policy found")
-        # elif path_params.get("deploy_workspace") and path_params.get("job_id"):
-        #     # User is monitoring a job
-        #     logger.info("Checking job owner for job access")
-        #     # Get executing workspace for the given job
-        #     deploy_workspace = path_params["deploy_workspace"]
-        #     job_id = path_params["job_id"]
-
-        #     workspace_job_key = f"{deploy_workspace}-{job_id}"
-
-        #     # Get executing workspace for the given job
-        #     calling_workspace = job_owners.get(workspace_job_key)
-
-        #     input_data["input"]["calling_workspace"] = calling_workspace
-        # elif path_params.get("deploy_workspace") and path_params.get("workflow_job_id"):
-        #     # User is accessing logs
-        #     logger.info("Checking job owner for logs access")
-        #     # Get executing workspace for the given job
-        #     workflow_job_id = path_params["workflow_job_id"]
-
-        #     job_id = workflow_job_id[-36:]
-
-        #     # Get deployed workspace for the given job
-        #     deploy_workspace = path_params["deploy_workspace"]
-
-        #     # Get executing workspace for the given job
-        #     execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
-
-        #     input_data["input"]["calling_workspace"] = execute_workspace
 
         response = self._opa_request(input_data)
 

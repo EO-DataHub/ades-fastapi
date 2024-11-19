@@ -177,9 +177,7 @@ class ADESClient:
     def list_workflows(self, request: requests.Request, deploy_workspace: str):
         headers = dict(request.headers)
         headers.pop("authorization", None)
-        print(self._send_request)
         response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/processes")
-        print(response)
 
         if "application/json" in response.headers["Content-Type"]:
             final_content = {}
