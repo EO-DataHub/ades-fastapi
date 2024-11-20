@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from ades_fastapi.api import app
 from ades_fastapi.utils import WorkflowType
@@ -30,6 +31,7 @@ def test_root(mock_get_root, mock_check_access):
     )
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades", headers=headers)
+    mock_get_root.assert_called_once()
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "text/html; charset=utf-8"
     assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: available</p>"
@@ -49,6 +51,8 @@ def test_workspace_root(mock_get_workspace_root, mock_check_access):
     )
     headers = {"authorization": "Bearer valid_token"}
     response = client.get("/ades/test_workspace/ogc-api", headers=headers)
+    calls = mock_get_workspace_root.call_args
+    assert calls[0][0] == "test_workspace"
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Data": "Response Data"}
@@ -64,6 +68,10 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.delete(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+    calls = mock_undeploy_workflow.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == workflow_id
     assert response.status_code == 200
     assert response.json() == {"Result": "undeployed"}
 
@@ -80,6 +88,9 @@ def test_list_processes(mock_list_workflows, mock_check_access):
     )
     deploy_workspace = "test_workspace"
     response = client.get(f"/{deploy_workspace}/ogc-api/processes")
+    calls = mock_list_workflows.call_args
+    assert isinstance(calls[0][0], Request)
+    assert calls[0][1] == deploy_workspace
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"workflowID": "test-workflow"}
@@ -97,6 +108,9 @@ def test_deploy_workflow(mock_deploy_workflow, mock_check_access):
     )
     deploy_workspace = "test_workspace"
     response = client.post(f"/{deploy_workspace}/ogc-api/processes")
+    calls = mock_deploy_workflow.call_args
+    assert isinstance(calls[0][0], Request)
+    assert calls[0][1] == deploy_workspace
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Result": "deployed"}
@@ -115,6 +129,10 @@ def test_update_workflow(mock_update_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.put(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+    calls = mock_update_workflow.call_args
+    assert isinstance(calls[0][0], Request)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == workflow_id
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Result": "updated"}
@@ -122,7 +140,7 @@ def test_update_workflow(mock_update_workflow, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_workflow")
-def test_get_workflow(mock_get_workflow, mock_check_access):
+def test_process_details(mock_get_workflow, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -133,6 +151,11 @@ def test_get_workflow(mock_get_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.get(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}")
+    calls = mock_get_workflow.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == workflow_id
+    assert calls[0][3] == WorkflowType.WORKFLOW
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Details": "workflow"}
@@ -158,6 +181,10 @@ def test_execute_process_user_service(
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
+    calls = mock_execute_user_service.call_args
+    assert isinstance(calls[0][0], Request)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == workflow_id
     assert response.status_code == 201
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
@@ -186,6 +213,10 @@ def test_execute_process_workflow(
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
+    calls = mock_execute_workflow.call_args
+    assert isinstance(calls[0][0], Request)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == workflow_id
     assert response.status_code == 201
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
@@ -219,6 +250,10 @@ def test_execute_process_status(mock_get_job_status, mock_check_access):
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
     response = client.get(f"/{deploy_workspace}/ogc-api/jobs/{job_id}")
+    calls = mock_get_job_status.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == job_id
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
@@ -237,6 +272,10 @@ def test_execute_process_results(mock_get_job_results, mock_check_access):
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
     response = client.get(f"/{deploy_workspace}/ogc-api/jobs/{job_id}/results")
+    calls = mock_get_job_results.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == job_id
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Results": "available"}
@@ -254,6 +293,10 @@ def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_ch
     )
     deploy_workspace = "test_workspace"
     response = client.get(f"/{deploy_workspace}/ogc-api/jobs")
+    calls = mock_get_deployed_workspaced_jobs.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert isinstance(calls[0][2], dict)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"jobs": [{"jobID": "job_1234"}]}
@@ -267,6 +310,9 @@ def test_get_all_jobs(mock_get_all_jobs, mock_check_access):
     # Configure mocks
     mock_get_all_jobs.return_value = '{"jobs": [{"jobID": "job_1234"}]}'
     response = client.get("/ogc-api/jobs")
+    calls = mock_get_all_jobs.call_args
+    assert isinstance(calls[0][0], dict)
+    assert isinstance(calls[0][1], dict)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"jobs": [{"jobID": "job_1234"}]}
@@ -285,6 +331,11 @@ def test_get_log(mock_get_log, mock_check_access):
     workflow_job_id = "test-workflow-1234"
     log_name = "test.log"
     response = client.get(f"/{deploy_workspace}/temp/{workflow_job_id}/{log_name}")
+    calls = mock_get_log.call_args
+    assert calls[0][0] == workflow_job_id
+    assert calls[0][1] == log_name
+    assert calls[0][2] == deploy_workspace
+    assert isinstance(calls[0][3], dict)
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.text == "Some log text"
@@ -303,6 +354,10 @@ def test_delete_job(mock_delete_job, mock_check_access):
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
     response = client.delete(f"/{deploy_workspace}/ogc-api/jobs/{job_id}")
+    calls = mock_delete_job.call_args
+    assert isinstance(calls[0][0], dict)
+    assert calls[0][1] == deploy_workspace
+    assert calls[0][2] == job_id
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Result": "deleted"}
@@ -316,6 +371,11 @@ def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
     mock_generate_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    mock_get_quote_from_airbus.assert_called_once_with(
+        "https://dev.sar.api.oneatlas.airbus.com",
+        {"acquisitions": ["12345"]},
+        {"Authorization": "Bearer valid_token", "Content-Type": "application/json"},
+    )
     assert response.status_code == 200
     assert response.json() == result
 
