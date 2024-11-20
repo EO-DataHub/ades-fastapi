@@ -138,40 +138,60 @@ def test_get_workflow(mock_get_workflow, mock_check_access):
     assert response.json() == {"Details": "workflow"}
 
 
+@patch("ades_fastapi.api.get_user_details")
+@patch("ades_fastapi.api.job_saver")
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.execute_user_service")
-def test_execute_process_user_service(mock_execute_user_service, mock_check_access):
+def test_execute_process_user_service(
+    mock_execute_user_service, mock_check_access, mock_job_saver, mock_get_user_details
+):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.USER_SERVICE
     # Configure mocks
+    mock_get_user_details.return_value = "test_user", []
+    mock_job_saver.record_owner.return_value = None
+    mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_user_service.return_value = (
-        MagicMock(status_code=200, headers={"Content-Type": "application/json"}),
+        mock_response,
         '{"Status": "executing"}',
     )
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
+    mock_job_saver.record_owner.assert_called_once_with(
+        mock_response, deploy_workspace, "test_user"
+    )
 
 
+@patch("ades_fastapi.api.get_user_details")
+@patch("ades_fastapi.api.job_saver")
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.execute_workflow")
-def test_execute_process_workflow(mock_execute_workflow, mock_check_access):
+def test_execute_process_workflow(
+    mock_execute_workflow, mock_check_access, mock_job_saver, mock_get_user_details
+):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
+    mock_get_user_details.return_value = "test_user", []
+    mock_job_saver.record_owner.return_value = None
+    mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_workflow.return_value = (
-        MagicMock(status_code=200, headers={"Content-Type": "application/json"}),
+        mock_response,
         '{"Status": "executing"}',
     )
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution")
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
+    mock_job_saver.record_owner.assert_called_once_with(
+        mock_response, deploy_workspace, "test_user"
+    )
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
