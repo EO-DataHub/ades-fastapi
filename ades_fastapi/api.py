@@ -236,14 +236,12 @@ async def execute_process(
                 request,
                 deploy_workspace,
                 workflow_id,
-                job_saver,
             )
         case WorkflowType.WORKFLOW:
             response, content = await ades_client.execute_workflow(
                 request,
                 deploy_workspace,
                 workflow_id,
-                job_saver,
             )
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
