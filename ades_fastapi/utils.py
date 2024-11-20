@@ -7,9 +7,7 @@ import botocore
 import jwt
 import requests
 import yaml
-from fastapi import HTTPException, Request
-
-from .job_saver import JobSaver
+from fastapi import Request
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
@@ -153,108 +151,3 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     )
 
     return response.json()
-
-
-def configure_request(
-    body: dict, token: str, calling_workspace: str, executing_workspace: str = None
-):
-    # Add calling workspace to body
-    logger.info("Setting calling workspace to %s", calling_workspace)
-    try:
-        body["inputs"].update({"calling_workspace": calling_workspace})
-        logger.info(
-            "Setting executing workspace to %s",
-            executing_workspace if executing_workspace else calling_workspace,
-        )
-        body["inputs"].update(
-            {
-                "executing_workspace": (
-                    executing_workspace if executing_workspace else calling_workspace
-                )
-            }
-        )
-        # Add user token to body
-        logger.info("Setting user token in execution call")
-        body["inputs"].update({"user_token": token})
-    except KeyError as e:
-        logger.error("KeyError: %s", e)
-        raise HTTPException(status_code=400, detail="Invalid input payload") from e
-
-
-async def execute_user_service(
-    request: requests.Request,
-    deployed_workspace: str,
-    base_url: str,
-    service_url: str,
-    workflow_id: str,
-    job_saver: JobSaver,
-) -> requests.Response:
-    calling_workspace, _ = get_user_details(request)
-    token = get_user_token(request)
-    body = await request.json()
-    configure_request(body, token, calling_workspace, deployed_workspace)
-    response = send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
-    # Record the calling workspace for the generated jobID
-    if response.status_code == 201:
-        job_saver.record_owner(response, deployed_workspace, calling_workspace)
-        try:
-            content_json = replace_href_links(response.json(), base_url)
-            content = json.dumps(content_json, indent=2)
-        except json.JSONDecodeError:
-            content = response.text
-
-        if "Location" in response.headers:
-            response.headers["Location"] = response.headers["Location"].replace(
-                "http://localhost:8080", base_url
-            )
-    else:
-        content = response.text
-    return response, content
-
-
-async def execute_workflow(
-    request: requests.Request,
-    deployed_workspace: str,
-    service_url: str,
-    base_url: str,
-    workflow_id: str,
-    job_saver: JobSaver,
-) -> requests.Response:
-    calling_workspace, _ = get_user_details(request)
-    token = get_user_token(request)
-    body = await request.json()
-    configure_request(body, token, calling_workspace)
-    response = send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
-    # Record the calling workspace for the generated jobID
-    if response.status_code == 201:
-        job_saver.record_owner(response, deployed_workspace, calling_workspace)
-        try:
-            content_json = replace_href_links(response.json(), base_url)
-            content = json.dumps(content_json, indent=2)
-        except json.JSONDecodeError:
-            content = response.text
-
-        if "Location" in response.headers:
-            response.headers["Location"] = response.headers["Location"].replace(
-                "http://localhost:8080", base_url
-            )
-    else:
-        content = response.text
-    return response, content
-
-
-def send_execute_to_ades(
-    service_url: str, deploy_workspace: str, workflow_id: str, body: dict
-) -> requests.Response:
-    headers = {
-        "Prefer": "respond-async",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    response = requests.post(
-        f"{service_url}/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
-        headers=headers,
-        json=body,
-    )
-
-    return response
