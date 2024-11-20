@@ -176,7 +176,7 @@ class ADESClient:
 
         try:
             content = json.dumps(response.json())
-        except json.json.JSONDecodeError:
+        except json.JSONDecodeError:
             content = response.text
 
         return response, content
@@ -391,7 +391,7 @@ class ADESClient:
             try:
                 content_json = replace_href_links(response.json(), self.base_url)
                 content = json.dumps(content_json, indent=2)
-            except json.json.JSONDecodeError:
+            except json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
