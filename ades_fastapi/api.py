@@ -185,7 +185,7 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
     """Endpoint to update a workflow in a workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
 
-    response, content = await ades_client.update_workflow(request, deploy_workspace)
+    response, content = await ades_client.update_workflow(request, deploy_workspace, workflow_id)
 
     return Response(
         content=content,
