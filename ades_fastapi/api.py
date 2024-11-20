@@ -137,7 +137,7 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = ades_client.undeploy_workflow(
-        request.headers, deploy_workspace, workflow_id
+        dict(request.headers), deploy_workspace, workflow_id
     )
 
     return Response(
@@ -207,7 +207,7 @@ def process_details(
     logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = ades_client.get_workflow(
-        request.headers, deploy_workspace, workflow_id, wf_type
+        dict(request.headers), deploy_workspace, workflow_id, wf_type
     )
 
     return Response(
@@ -265,7 +265,7 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
 
-    response, content = ades_client.get_job_status(request.headers, deploy_workspace, job_id)
+    response, content = ades_client.get_job_status(dict(request.headers), deploy_workspace, job_id)
 
     return Response(
         content=content,
@@ -281,7 +281,7 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
 
-    response, content = ades_client.get_job_results(request.headers, deploy_workspace, job_id)
+    response, content = ades_client.get_job_results(dict(request.headers), deploy_workspace, job_id)
 
     return Response(
         content=content,
@@ -296,7 +296,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request.headers, deploy_workspace, job_saver.job_owners
+        dict(request.headers), deploy_workspace, job_saver.job_owners
     )
 
     return Response(
@@ -310,7 +310,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
-    content = ades_client.get_all_jobs(request.headers, job_saver.workspace_jobs)
+    content = ades_client.get_all_jobs(dict(request.headers), job_saver.workspace_jobs)
 
     return Response(
         content=content,
@@ -325,7 +325,9 @@ def get_all_jobs(request: Request):
 def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
 
-    response = ades_client.get_log(workflow_job_id, file_name, deploy_workspace, request.headers)
+    response = ades_client.get_log(
+        workflow_job_id, file_name, deploy_workspace, dict(request.headers)
+    )
 
     return Response(
         content=response.content,
@@ -339,7 +341,7 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
-    response, content = ades_client.delete_job(request.headers, deploy_workspace, job_id)
+    response, content = ades_client.delete_job(dict(request.headers), deploy_workspace, job_id)
 
     return Response(
         content=content,
