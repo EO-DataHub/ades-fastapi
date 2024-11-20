@@ -7,7 +7,6 @@ import requests
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from .job_saver import JobSaver
 from .utils import (
     WorkflowType,
     get_user_details,
@@ -79,7 +78,15 @@ class ADESClient:
                 )
                 return False, ""
 
-        workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
+        try:
+            workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
+        except json.JSONDecodeError:
+            logger.error(
+                "Policy for workflow %s in workspace %s is not valid JSON",
+                workflow_id,
+                deploy_workspace,
+            )
+            return False, ""
 
         logger.info("Workflow policy is: %s", workflow_policy)
 
@@ -265,6 +272,9 @@ class ADESClient:
             logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
+            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
         elif "application/cwl+yaml" in request.headers["Content-Type"]:
             logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
             # Handle string file content
@@ -272,6 +282,9 @@ class ADESClient:
 
             # Prepare the payload for the subsequent API request
             data = {"data": file_content}  # Decode bytes to string
+            success, workflow_id = get_workflow_id_from_file(data["data"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
         else:
             raise HTTPException(
                 status_code=415,
@@ -286,7 +299,7 @@ class ADESClient:
         )
 
         try:
-            content = json.dumps(response.json())
+            content = json.dumps(response.json(), indent=2)
         except json.JSONDecodeError:
             content = response.text if response.text else ""
 
@@ -365,29 +378,25 @@ class ADESClient:
     async def execute_user_service(
         self,
         request: requests.Request,
-        deployed_workspace: str,
-        base_url: str,
-        service_url: str,
+        deploy_workspace: str,
         workflow_id: str,
-        job_saver: JobSaver,
     ) -> requests.Response:
         calling_workspace, _ = get_user_details(request)
         token = get_user_token(request)
         body = await request.json()
-        ADESClient._configure_execute_request(body, token, calling_workspace, deployed_workspace)
-        response = self._send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
+        self._configure_execute_request(body, token, calling_workspace, deploy_workspace)
+        response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
-            job_saver.record_owner(response, deployed_workspace, calling_workspace)
             try:
-                content_json = replace_href_links(response.json(), base_url)
+                content_json = replace_href_links(response.json(), self.base_url)
                 content = json.dumps(content_json, indent=2)
             except json.json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
                 response.headers["Location"] = response.headers["Location"].replace(
-                    "http://localhost:8080", base_url
+                    "http://localhost:8080", self.base_url
                 )
         else:
             content = response.text
@@ -397,28 +406,24 @@ class ADESClient:
         self,
         request: requests.Request,
         deployed_workspace: str,
-        service_url: str,
-        base_url: str,
         workflow_id: str,
-        job_saver: JobSaver,
     ) -> requests.Response:
         calling_workspace, _ = get_user_details(request)
         token = get_user_token(request)
         body = await request.json()
-        ADESClient._configure_execute_request(body, token, calling_workspace)
-        response = self._send_execute_to_ades(service_url, deployed_workspace, workflow_id, body)
+        self._configure_execute_request(body, token, calling_workspace)
+        response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
-            job_saver.record_owner(response, deployed_workspace, calling_workspace)
             try:
-                content_json = replace_href_links(response.json(), base_url)
+                content_json = replace_href_links(response.json(), self.base_url)
                 content = json.dumps(content_json, indent=2)
             except json.json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
                 response.headers["Location"] = response.headers["Location"].replace(
-                    "http://localhost:8080", base_url
+                    "http://localhost:8080", self.base_url
                 )
         else:
             content = response.text
