@@ -125,7 +125,7 @@ def workspace_root(deploy_workspace: str):
         content=content,
         status_code=response.status_code,
         headers=response.headers,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
     )
 
 
@@ -143,7 +143,7 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     return Response(
         content=content,
         status_code=response.status_code,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
     )
 
 
@@ -156,7 +156,7 @@ def list_processes(deploy_workspace: str, request: Request):
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -174,7 +174,7 @@ async def deploy_workflow(
         content=content,
         status_code=response.status_code,
         headers=response.headers,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
     )
 
 
@@ -212,7 +212,7 @@ def process_details(
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -267,7 +267,7 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -283,7 +283,7 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -299,7 +299,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -329,7 +329,7 @@ def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str,
 
     return Response(
         content=response.content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
@@ -343,7 +343,7 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        media_type=response.headers["Content-Type"],
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
