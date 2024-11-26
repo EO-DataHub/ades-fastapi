@@ -765,7 +765,7 @@ def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
     mock_generate_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"})
     assert response.status_code == 200
     assert response.json() == result
 
@@ -774,7 +774,7 @@ def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
 def test_quote_invalid_token(mock_generate_access_token):
     mock_generate_access_token.return_value = None
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"})
     assert response.status_code == 500
 
 
@@ -784,5 +784,5 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
     mock_generate_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"})
     assert response.status_code == 404
