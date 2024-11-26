@@ -648,7 +648,7 @@ def get_quote_from_planet(body: dict) -> str:
 
         try:
             feature = requests.get(
-                f"{os.environ['PLANET_API_URL']}/api/catalogue/stac/catalogs/supported-datasets/planet/collections/{collection_id}/items/{acquisition_id}"
+                f"{os.environ['BASE_URL']}/api/catalogue/stac/catalogs/supported-datasets/planet/collections/{collection_id}/items/{acquisition_id}"
             ).json()
         except requests.exceptions.JSONDec as e:
             raise HTTPException(404) from e
