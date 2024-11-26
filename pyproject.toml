@@ -71,6 +71,7 @@ dependencies = [
   "pyyaml",
   "boto3",
   "kubernetes",
+  "httpx",
   "pyproj",
   "shapely",
 ]
