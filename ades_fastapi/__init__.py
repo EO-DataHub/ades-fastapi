@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from kubernetes import client, config
 from pydantic import BaseModel
+from pyproj import Geod
+from shapely.geometry import Polygon
 
 from .utils import (
     check_policy,
@@ -634,40 +636,100 @@ def get_quote_from_airbus(url: str, body: dict, headers: dict) -> dict:
     return response.json()
 
 
+def get_quote_from_planet(body: dict) -> str:
+    """Get a quote from Planet API"""
+    acquisition_ids = body["acquisitions"]
+    collection_id = body["collection"]
+
+    total_areas = 0
+
+    for acquisition_id in acquisition_ids:
+
+        try:
+            feature = requests.get(
+                f"{os.environ['PLANET_API_URL']}/api/catalogue/stac/catalogs/supported-datasets/planet/collections/{collection_id}/items/{acquisition_id}"
+            ).json()
+        except requests.exceptions.JSONDec as e:
+            raise HTTPException(404) from e
+
+        coordinates = feature["geometry"]["coordinates"][0]  # double nested
+
+        area = calculate_area(coordinates)
+
+        total_areas += round_area(area)
+
+    return f"{total_areas} km2"
+
+
+def calculate_area(coordinates: list) -> float:
+    """Calculates area in km2 of polygon given a list of coordinates"""
+
+    polygon = Polygon(coordinates)
+    geod = Geod(ellps="WGS84")
+    poly_area, _ = geod.geometry_area_perimeter(polygon)
+
+    return poly_area / 1e6  # convert from m2 to km2
+
+
+def round_area(area: float) -> int:
+    """Area is an estimate. Add 5% and round up to nearest 100"""
+
+    return int(round(area * 1.05, -2))
+
+
 class QuoteRequest(BaseModel):
     """Request body for quote endpoint"""
 
+    catalogueId: str
     acquisitionId: str
+    collectionId: str = None
 
 
 @app.post("/quotes")
 def quote(request: Request, body: QuoteRequest):
     """Return a quote for a given acquisition ID"""
-    if AIRBUS_ENV == "prod":
-        url = "https://sar.api.oneatlas.airbus.com"
-    else:
-        url = "https://dev.sar.api.oneatlas.airbus.com"
 
-    access_token = generate_access_token(request)
-    if not access_token:
-        return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
+    catalogue_name = body.catalogueId.lower()
 
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-    acquisition_id = body.acquisitionId
-    request_body = {"acquisitions": [acquisition_id]}
+    if catalogue_name == "airbus":
+        if AIRBUS_ENV == "prod":
+            url = "https://sar.api.oneatlas.airbus.com"
+        else:
+            url = "https://dev.sar.api.oneatlas.airbus.com"
 
-    try:
-        response_body = get_quote_from_airbus(url, request_body, headers)
-    except requests.RequestException as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
-
-    for item in response_body:
-        if item.get("acquisitionId") == acquisition_id:
+        access_token = generate_access_token(request)
+        if not access_token:
             return JSONResponse(
-                content=item,
-                status_code=200,
+                status_code=500, content={"detail": "Failed to generate access token"}
             )
 
-    return JSONResponse(
-        status_code=404, content={"detail": "Quote not found for given acquisition ID"}
-    )
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+        acquisition_id = body.acquisitionId
+        request_body = {"acquisitions": [acquisition_id]}
+
+        try:
+            response_body = get_quote_from_airbus(url, request_body, headers)
+        except requests.RequestException as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+        for item in response_body:
+            if item.get("acquisitionId") == acquisition_id:
+                return JSONResponse(
+                    content=item,
+                    status_code=200,
+                )
+
+        return JSONResponse(
+            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+        )
+
+    elif catalogue_name == "planet":
+        acquisition_id = body.acquisitionId
+        collection_id = body.collectionId
+        request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
+        response_body = get_quote_from_planet(request_body)
+
+        return JSONResponse(
+            content=response_body,
+            status_code=200,
+        )
