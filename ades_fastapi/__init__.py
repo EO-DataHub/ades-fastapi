@@ -739,4 +739,3 @@ def quote(request: Request, body: QuoteRequest):
             content={"message:" f"{catalogue_name} not recognised"},
             status_code=404,
         )
-
