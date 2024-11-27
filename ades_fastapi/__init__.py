@@ -605,7 +605,7 @@ def get_secret_airbus_api_key(username):
     return api_key
 
 
-def generate_access_token(request: Request):
+def generate_airbus_access_token(request: Request):
     """Generate access token for Airbus API"""
     if AIRBUS_ENV == "prod":
         url = "https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token"
@@ -697,7 +697,7 @@ def quote(request: Request, body: QuoteRequest):
         else:
             url = "https://dev.sar.api.oneatlas.airbus.com"
 
-        access_token = generate_access_token(request)
+        access_token = generate_airbus_access_token(request)
         if not access_token:
             return JSONResponse(
                 status_code=500, content={"detail": "Failed to generate access token"}
