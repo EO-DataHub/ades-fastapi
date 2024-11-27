@@ -759,11 +759,11 @@ def test_delete_job_no_access(mock_job_owners, mock_opa_request):
 
 
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote__airbus(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote__airbus(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
     result = {"acquisitionId": "12345", "price": 100}
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
-    mock_generate_access_token.return_value = "valid_token"
+    mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
@@ -784,9 +784,9 @@ def test_quote__planet(mock_get_quote_from_planet):
     assert response.json() == result
 
 
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote_invalid_token(mock_generate_access_token):
-    mock_generate_access_token.return_value = None
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote_invalid_token(mock_generate_airbus_access_token):
+    mock_generate_airbus_access_token.return_value = None
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
@@ -795,10 +795,10 @@ def test_quote_invalid_token(mock_generate_access_token):
 
 
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote_id_not_matched(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
-    mock_generate_access_token.return_value = "valid_token"
+    mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
