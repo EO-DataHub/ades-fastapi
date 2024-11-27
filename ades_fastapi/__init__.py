@@ -733,3 +733,10 @@ def quote(request: Request, body: QuoteRequest):
             content=response_body,
             status_code=200,
         )
+
+    else:
+        return JSONResponse(
+            content={"message:" f"{catalogue_name} not recognised"},
+            status_code=404,
+        )
+
