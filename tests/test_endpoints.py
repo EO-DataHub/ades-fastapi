@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from ades_fastapi.__init__ import app
+from ades_fastapi.__init__ import app, calculate_area, round_area
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
@@ -759,30 +759,72 @@ def test_delete_job_no_access(mock_job_owners, mock_opa_request):
 
 
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote__airbus(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
     result = {"acquisitionId": "12345", "price": 100}
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
-    mock_generate_access_token.return_value = "valid_token"
+    mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post(
+        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+    )
     assert response.status_code == 200
     assert response.json() == result
 
 
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote_invalid_token(mock_generate_access_token):
-    mock_generate_access_token.return_value = None
+@patch("ades_fastapi.__init__.get_quote_from_planet")
+def test_quote__planet(mock_get_quote_from_planet):
+    result = "100 km2"
+    mock_get_quote_from_planet.return_value = result
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post(
+        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "planet"}
+    )
+    assert response.status_code == 200
+    assert response.json() == result
+
+
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote_invalid_token(mock_generate_airbus_access_token):
+    mock_generate_airbus_access_token.return_value = None
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post(
+        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+    )
     assert response.status_code == 500
 
 
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
-@patch("ades_fastapi.__init__.generate_access_token")
-def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote_id_not_matched(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
     mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
-    mock_generate_access_token.return_value = "valid_token"
+    mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post("/ades/quotes", headers=headers, json={"acquisitionId": "12345"})
+    response = client.post(
+        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+    )
     assert response.status_code == 404
+
+
+def test_calculate_area():
+    coordinates = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
+    area = calculate_area(coordinates)
+
+    assert area == 12308.778361469453
+
+
+@pytest.mark.parametrize(
+    "area, expected_approximation",
+    [
+        pytest.param(1, 100),
+        pytest.param(10, 100),
+        pytest.param(20, 100),
+        pytest.param(101, 200),
+        pytest.param(1001, 1100),
+    ],
+)
+def test_round_area(area, expected_approximation):
+
+    approx_area = round_area(area)
+
+    assert approx_area == expected_approximation
