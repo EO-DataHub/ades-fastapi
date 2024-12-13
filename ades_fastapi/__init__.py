@@ -669,12 +669,12 @@ def calculate_area(coordinates: list) -> float:
     geod = Geod(ellps="WGS84")
     poly_area, _ = geod.geometry_area_perimeter(polygon)
 
-    return poly_area / 1e6  # convert from m2 to km2
+    return abs(poly_area / 1e6)  # convert from m2 to km2, ensure value is positive
 
 
 def round_area(area: float) -> int:
     """Area is an estimate. Add 5% and round up to nearest 100"""
-    return int(math.ceil(area * 1.05 / 100.0)) * 100
+    return int(math.ceil(area))
 
 
 class QuoteRequest(BaseModel):
