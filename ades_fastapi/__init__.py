@@ -673,7 +673,7 @@ def calculate_area(coordinates: list) -> float:
 
 
 def round_area(area: float) -> int:
-    """Area is an estimate. Add 5% and round up to nearest 100"""
+    """Area is an estimate. Round up to the nearest integer."""
     return int(math.ceil(area))
 
 
