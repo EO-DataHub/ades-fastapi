@@ -816,11 +816,10 @@ def test_calculate_area():
 @pytest.mark.parametrize(
     "area, expected_approximation",
     [
-        pytest.param(1, 100),
-        pytest.param(10, 100),
-        pytest.param(20, 100),
-        pytest.param(101, 200),
-        pytest.param(1001, 1100),
+        pytest.param(0.9, 1),
+        pytest.param(1, 1),
+        pytest.param(1.1, 2),
+        pytest.param(1.001, 2),
     ],
 )
 def test_round_area(area, expected_approximation):
