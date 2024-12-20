@@ -760,13 +760,38 @@ def test_delete_job_no_access(mock_job_owners, mock_opa_request):
 
 @patch("ades_fastapi.__init__.get_quote_from_airbus")
 @patch("ades_fastapi.__init__.generate_airbus_access_token")
-def test_quote__airbus(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"acquisitionId": "12345", "price": 100}
-    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
+def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+    result = {"currency": "EUR", "price": 100}
+    mock_get_quote_from_airbus.return_value = [
+        {"acquisitionId": "otherId", "price": 200},
+        {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
+    ]
     mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
-        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+        "/ades/quotes",
+        headers=headers,
+        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
+    )
+    assert response.status_code == 200
+    assert response.json() == result
+
+
+@patch("ades_fastapi.__init__.get_quote_from_airbus")
+@patch("ades_fastapi.__init__.generate_airbus_access_token")
+def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+    result = {"currency": "EUR", "price": 100}
+    mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
+    mock_generate_airbus_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post(
+        "/ades/quotes",
+        headers=headers,
+        json={
+            "acquisitionId": "12345",
+            "catalogueId": "airbus",
+            "collectionId": "airbus_pneo_data",
+        },
     )
     assert response.status_code == 200
     assert response.json() == result
@@ -789,7 +814,9 @@ def test_quote_invalid_token(mock_generate_airbus_access_token):
     mock_generate_airbus_access_token.return_value = None
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
-        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+        "/ades/quotes",
+        headers=headers,
+        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
     )
     assert response.status_code == 500
 
