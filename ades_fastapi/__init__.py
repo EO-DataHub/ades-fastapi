@@ -702,7 +702,7 @@ def quote(request: Request, body: QuoteRequest):
                 url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
             request_body = {"acquisitions": [acquisition_id]}
         else:
-            url = "https://data.api.oneatlas.airbus.com/api/v1/prices"
+            url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
             if collection_id == "airbus_pneo_data":
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
@@ -781,7 +781,7 @@ def quote(request: Request, body: QuoteRequest):
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
         try:
-            response_body = get_quote_from_airbus(f"{url}/v1/sar/prices", request_body, headers)
+            response_body = get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
             return JSONResponse(status_code=500, content={"detail": str(e)})
 
