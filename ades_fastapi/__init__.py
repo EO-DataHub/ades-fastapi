@@ -683,7 +683,7 @@ class QuoteRequest(BaseModel):
     acquisitionId: str
     collectionId: str = None
     coordinates: list = None
-    item_uuids: list = None
+    item_uuids: list = []
 
 
 @app.post("/quotes")
