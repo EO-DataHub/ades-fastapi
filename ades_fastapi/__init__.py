@@ -683,7 +683,7 @@ class QuoteRequest(BaseModel):
     acquisitionId: str
     collectionId: str = None
     coordinates: list = None
-    item_uuid: str = None
+    item_uuids: list = None
 
 
 @app.post("/quotes")
@@ -706,17 +706,19 @@ def quote(request: Request, body: QuoteRequest):
             if collection_id == "airbus_pneo_data":
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
-                item_uuid = body.item_uuid
+                item_uuids = body.item_uuids
                 item_id = None
+                if len(item_uuids) > 1:
+                    product_type = "PleiadesNeoArchiveMulti"
             elif collection_id == "airbus_phr_data":
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
-                item_uuid = None
+                item_uuids = None
                 item_id = body.acquisitionId
             elif collection_id == "airbus_spot_data":
                 product_type = "SPOTArchive1.5Mono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
-                item_uuid = None
+                item_uuids = None
                 item_id = body.acquisitionId
             else:
                 return JSONResponse(
@@ -765,10 +767,11 @@ def quote(request: Request, body: QuoteRequest):
                 "delivery": {"type": "network"},
             }
 
-            if item_uuid:
-                request_body["items"][0]["dataSourceIds"] = [
-                    {"catalogId": "PublicMOC", "catalogItemId": item_uuid}
-                ]
+            if item_uuids:
+                for item_uuid in item_uuids:
+                    request_body["items"][0]["dataSourceIds"] = [
+                        {"catalogId": "PublicMOC", "catalogItemId": item_uuid}
+                    ]
             if item_id:
                 request_body["items"][0]["datastripIds"] = [item_id]
 
