@@ -703,6 +703,7 @@ def quote(request: Request, body: QuoteRequest):
             request_body = {"acquisitions": [acquisition_id]}
         else:
             url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
+            spectral_processing = "bundle"
             if collection_id == "airbus_pneo_data":
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
@@ -710,6 +711,7 @@ def quote(request: Request, body: QuoteRequest):
                 item_id = None
                 if len(item_uuids) > 1:
                     product_type = "PleiadesNeoArchiveMulti"
+                    spectral_processing = "full_bundle"
             elif collection_id == "airbus_phr_data":
                 product_type = "PleiadesArchiveMono"
                 contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
@@ -759,7 +761,7 @@ def quote(request: Request, body: QuoteRequest):
                             {"key": "priority", "value": "standard"},
                             {"key": "processing_level", "value": "primary"},
                             {"key": "radiometric_processing", "value": "reflectance"},
-                            {"key": "spectral_processing", "value": "bundle"},
+                            {"key": "spectral_processing", "value": spectral_processing},
                         ],
                     }
                 ],
@@ -768,10 +770,12 @@ def quote(request: Request, body: QuoteRequest):
             }
 
             if item_uuids:
+                request_body["items"][0]["dataSourceIds"] = []
                 for item_uuid in item_uuids:
-                    request_body["items"][0]["dataSourceIds"] = [
+                    request_body["items"][0]["dataSourceIds"].append(
                         {"catalogId": "PublicMOC", "catalogItemId": item_uuid}
-                    ]
+                    )
+
             if item_id:
                 request_body["items"][0]["datastripIds"] = [item_id]
 
