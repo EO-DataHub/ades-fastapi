@@ -632,7 +632,7 @@ def generate_airbus_access_token(request: Request):
 
 def get_quote_from_airbus(url: str, body: dict, headers: dict) -> dict:
     """Get a quote from Airbus API"""
-    response = requests.post(f"{url}/v1/sar/prices", json=body, headers=headers)
+    response = requests.post(url, json=body, headers=headers)
     response.raise_for_status()
     return response.json()
 
@@ -645,7 +645,6 @@ def get_quote_from_planet(body: dict) -> str:
     total_areas = 0
 
     for acquisition_id in acquisition_ids:
-
         try:
             feature = requests.get(
                 f"{os.environ['BASE_URL']}/api/catalogue/stac/catalogs/supported-datasets/planet/collections/{collection_id}/items/{acquisition_id}"
@@ -683,6 +682,8 @@ class QuoteRequest(BaseModel):
     catalogueId: str
     acquisitionId: str
     collectionId: str = None
+    coordinates: list = None
+    item_uuid: str = None
 
 
 @app.post("/quotes")
@@ -690,12 +691,86 @@ def quote(request: Request, body: QuoteRequest):
     """Return a quote for a given acquisition ID"""
 
     catalogue_name = body.catalogueId.lower()
+    collection_id = body.collectionId
+    acquisition_id = body.acquisitionId
 
     if catalogue_name == "airbus":
-        if AIRBUS_ENV == "prod":
-            url = "https://sar.api.oneatlas.airbus.com"
+        if collection_id == "airbus_sar_data":
+            if AIRBUS_ENV == "prod":
+                url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
+            else:
+                url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
+            request_body = {"acquisitions": [acquisition_id]}
         else:
-            url = "https://dev.sar.api.oneatlas.airbus.com"
+            url = "https://data.api.oneatlas.airbus.com/api/v1/prices"
+            if collection_id == "airbus_pneo_data":
+                product_type = "PleiadesNeoArchiveMono"
+                contract_id = "CTR24005241"
+                item_uuid = body.item_uuid
+                item_id = None
+            elif collection_id == "airbus_phr_data":
+                product_type = "PleiadesArchiveMono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuid = None
+                item_id = body.acquisitionId
+            elif collection_id == "airbus_spot_data":
+                product_type = "SPOTArchive1.5Mono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuid = None
+                item_id = body.acquisitionId
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": f"Collection {collection_id} not recognised"},
+                )
+            request_body = {
+                "aoi": [
+                    {
+                        "id": 1,
+                        "name": "Polygon 1",
+                        "geometry": {"type": "Polygon", "coordinates": body.coordinates},
+                    }
+                ],
+                "programReference": "",
+                "contractId": contract_id,
+                "items": [
+                    {
+                        "notifications": [],
+                        "stations": [],
+                        "productTypeId": product_type,
+                        "aoiId": 1,
+                        "properties": [],
+                    }
+                ],
+                "primaryMarket": "NQUAL",
+                "secondaryMarket": "",
+                "customerReference": "Polygon 1",
+                "optionsPerProductType": [
+                    {
+                        "productTypeId": product_type,
+                        "options": [
+                            {"key": "delivery_method", "value": "on_the_flow"},
+                            {"key": "fullStrip", "value": "false"},
+                            {"key": "image_format", "value": "dimap_jpeg2000_regular"},
+                            {"key": "licence", "value": "standard"},
+                            {"key": "pixel_coding", "value": "12bits"},
+                            {"key": "priority", "value": "standard"},
+                            {"key": "processing_level", "value": "primary"},
+                            {"key": "radiometric_processing", "value": "reflectance"},
+                            {"key": "spectral_processing", "value": "bundle"},
+                        ],
+                    }
+                ],
+                "orderGroup": "",
+                "delivery": {"type": "network"},
+            }
+
+            if item_uuid:
+                request_body["items"][0]["dataSourceIds"] = [
+                    {"catalogId": "PublicMOC", "catalogItemId": item_uuid}
+                ]
+            if item_id:
+                request_body["items"][0]["datastripIds"] = [item_id]
 
         access_token = generate_airbus_access_token(request)
         if not access_token:
@@ -704,28 +779,36 @@ def quote(request: Request, body: QuoteRequest):
             )
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-        acquisition_id = body.acquisitionId
-        request_body = {"acquisitions": [acquisition_id]}
 
         try:
-            response_body = get_quote_from_airbus(url, request_body, headers)
+            response_body = get_quote_from_airbus(f"{url}/v1/sar/prices", request_body, headers)
         except requests.RequestException as e:
             return JSONResponse(status_code=500, content={"detail": str(e)})
 
-        for item in response_body:
-            if item.get("acquisitionId") == acquisition_id:
-                return JSONResponse(
-                    content=item,
-                    status_code=200,
-                )
+        price_json = {}
+        if collection_id == "airbus_sar_data":
+            for item in response_body:
+                if item.get("acquisitionId") == acquisition_id:
+                    price_json = {
+                        "currency": item["price"]["currency"],
+                        "price": item["price"]["total"],
+                    }
+        else:
+            price_json = {
+                "currency": response_body["currency"],
+                "price": response_body["totalAmount"],
+            }
 
+        if price_json:
+            return JSONResponse(
+                content=price_json,
+                status_code=200,
+            )
         return JSONResponse(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
         )
 
     elif catalogue_name == "planet":
-        acquisition_id = body.acquisitionId
-        collection_id = body.collectionId
         request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
         response_body = get_quote_from_planet(request_body)
 
