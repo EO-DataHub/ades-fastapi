@@ -770,11 +770,10 @@ def quote(request: Request, body: QuoteRequest):
             }
 
             if item_uuids:
-                request_body["items"][0]["dataSourceIds"] = []
+                data_source_ids = []
                 for item_uuid in item_uuids:
-                    request_body["items"][0]["dataSourceIds"].append(
-                        {"catalogId": "PublicMOC", "catalogItemId": item_uuid}
-                    )
+                    data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
+                request_body["items"][0]["dataSourceIds"] = data_source_ids
 
             if item_id:
                 request_body["items"][0]["datastripIds"] = [item_id]
@@ -800,6 +799,7 @@ def quote(request: Request, body: QuoteRequest):
                         "currency": item["price"]["currency"],
                         "price": item["price"]["total"],
                     }
+                    break
         else:
             price_json = {
                 "currency": response_body["currency"],
