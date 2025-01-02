@@ -755,7 +755,7 @@ def quote(request: Request, body: QuoteRequest):
                         "options": [
                             {"key": "delivery_method", "value": "on_the_flow"},
                             {"key": "fullStrip", "value": "false"},
-                            {"key": "image_format", "value": "dimap_jpeg2000_regular"},
+                            {"key": "image_format", "value": "dimap_geotiff"},
                             {"key": "licence", "value": "standard"},
                             {"key": "pixel_coding", "value": "12bits"},
                             {"key": "priority", "value": "standard"},
