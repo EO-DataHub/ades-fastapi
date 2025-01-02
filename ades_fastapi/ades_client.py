@@ -159,7 +159,7 @@ class ADESClient:
 
     def get_workspace_root(self, deploy_workspace: str):
         try:
-            url = f"{deploy_workspace}/ogc-api"
+            url = f"{deploy_workspace}/ogc-api/"
             response = self._send_request("GET", url)
             content = json.dumps(response.json())
         except requests.exceptions.ConnectionError:
