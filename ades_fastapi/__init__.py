@@ -680,7 +680,7 @@ class QuoteRequest(BaseModel):
     """Request body for quote endpoint"""
 
     catalogueId: str
-    acquisitionId: str
+    acquisitionId: str = None
     collectionId: str = None
     coordinates: list = None
     item_uuids: list = []
