@@ -8,10 +8,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
-from .airbus_client import AirbusClient, QuoteRequest
+from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
-from .utils import WorkflowType, get_user_details
+from .planet_client import PlanetClient
+from .utils import QuoteRequest, WorkflowType, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -81,6 +82,7 @@ ades_client = ADESClient(
 )
 
 airbus_client = AirbusClient(AIRBUS_ENV)
+planet_client = PlanetClient()
 
 dependency_client = DependencyClient(
     OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX, ENABLE_OPA_POLICY_CHECK
@@ -294,7 +296,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
-        dict(request.headers), deploy_workspace, job_saver.job_owners
+        request, deploy_workspace, job_saver.job_owners
     )
 
     return Response(
@@ -351,31 +353,54 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
 @app.post("/quotes")
 def quote(request: Request, body: QuoteRequest):
     """Return a quote for a given acquisition ID"""
-    if AIRBUS_ENV == "prod":
-        url = "https://sar.api.oneatlas.airbus.com"
-    else:
-        url = "https://dev.sar.api.oneatlas.airbus.com"
 
-    access_token = airbus_client.generate_access_token(request)
-    if not access_token:
-        return JSONResponse(status_code=500, content={"detail": "Failed to generate access token"})
+    catalogue_name = body.catalogueId.lower()
 
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-    acquisition_id = body.acquisitionId
-    request_body = {"acquisitions": [acquisition_id]}
+    if catalogue_name == "airbus":
+        if AIRBUS_ENV == "prod":
+            url = "https://sar.api.oneatlas.airbus.com"
+        else:
+            url = "https://dev.sar.api.oneatlas.airbus.com"
 
-    try:
-        response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
-    except requests.RequestException as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
-
-    for item in response_body:
-        if item.get("acquisitionId") == acquisition_id:
+        access_token = airbus_client.generate_access_token(request)
+        if not access_token:
             return JSONResponse(
-                content=item,
-                status_code=200,
+                status_code=500, content={"detail": "Failed to generate access token"}
             )
 
-    return JSONResponse(
-        status_code=404, content={"detail": "Quote not found for given acquisition ID"}
-    )
+        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+        acquisition_id = body.acquisitionId
+        request_body = {"acquisitions": [acquisition_id]}
+
+        try:
+            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
+        except requests.RequestException as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+        for item in response_body:
+            if item.get("acquisitionId") == acquisition_id:
+                return JSONResponse(
+                    content=item,
+                    status_code=200,
+                )
+
+        return JSONResponse(
+            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
+        )
+
+    elif catalogue_name == "planet":
+        acquisition_id = body.acquisitionId
+        collection_id = body.collectionId
+        request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
+        response_body = planet_client.get_quote_from_planet(request_body)
+
+        return JSONResponse(
+            content=response_body,
+            status_code=200,
+        )
+
+    else:
+        return JSONResponse(
+            content={"message:" f"{catalogue_name} not recognised"},
+            status_code=404,
+        )

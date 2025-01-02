@@ -8,8 +8,17 @@ import jwt
 import requests
 import yaml
 from fastapi import Request
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
+
+
+class QuoteRequest(BaseModel):
+    """Request body for quote endpoint"""
+
+    catalogueId: str
+    acquisitionId: str
+    collectionId: str = None
 
 
 class WorkflowType(Enum):
