@@ -64,7 +64,10 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
-    mock_undeploy_workflow.return_value = MagicMock(status_code=200), '{"Result": "undeployed"}'
+    mock_response = MagicMock(status_code=200)
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_undeploy_workflow.return_value = mock_response, '{"Result": "undeployed"}'
+
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.delete(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}")
