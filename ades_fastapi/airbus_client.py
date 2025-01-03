@@ -4,17 +4,10 @@ import logging
 import requests
 from fastapi import Request
 from kubernetes import client, config
-from pydantic import BaseModel
 
 from .utils import get_user_details
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
-
-
-class QuoteRequest(BaseModel):
-    """Request body for quote endpoint"""
-
-    acquisitionId: str
 
 
 class AirbusClient:
@@ -68,6 +61,6 @@ class AirbusClient:
 
     def get_quote_from_airbus(self, url: str, body: dict, headers: dict) -> dict:
         """Get a quote from Airbus API"""
-        response = requests.post(f"{url}/v1/sar/prices", json=body, headers=headers)
+        response = requests.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()

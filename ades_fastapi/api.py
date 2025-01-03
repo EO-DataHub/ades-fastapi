@@ -355,12 +355,92 @@ def quote(request: Request, body: QuoteRequest):
     """Return a quote for a given acquisition ID"""
 
     catalogue_name = body.catalogueId.lower()
+    collection_id = body.collectionId
+    acquisition_id = body.acquisitionId
 
     if catalogue_name == "airbus":
-        if AIRBUS_ENV == "prod":
-            url = "https://sar.api.oneatlas.airbus.com"
+        if collection_id == "airbus_sar_data":
+            if AIRBUS_ENV == "prod":
+                url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
+            else:
+                url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
+            request_body = {"acquisitions": [acquisition_id]}
         else:
-            url = "https://dev.sar.api.oneatlas.airbus.com"
+            url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
+            spectral_processing = "bundle"
+            if collection_id == "airbus_pneo_data":
+                product_type = "PleiadesNeoArchiveMono"
+                contract_id = "CTR24005241"
+                item_uuids = body.item_uuids
+                item_id = None
+                if len(item_uuids) > 1:
+                    product_type = "PleiadesNeoArchiveMulti"
+                    spectral_processing = "full_bundle"
+            elif collection_id == "airbus_phr_data":
+                product_type = "PleiadesArchiveMono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                item_id = body.acquisitionId
+            elif collection_id == "airbus_spot_data":
+                product_type = "SPOTArchive1.5Mono"
+                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
+                item_uuids = None
+                item_id = body.acquisitionId
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": f"Collection {collection_id} not recognised"},
+                )
+            request_body = {
+                "aoi": [
+                    {
+                        "id": 1,
+                        "name": "Polygon 1",
+                        "geometry": {"type": "Polygon", "coordinates": body.coordinates},
+                    }
+                ],
+                "programReference": "",
+                "contractId": contract_id,
+                "items": [
+                    {
+                        "notifications": [],
+                        "stations": [],
+                        "productTypeId": product_type,
+                        "aoiId": 1,
+                        "properties": [],
+                    }
+                ],
+                "primaryMarket": "NQUAL",
+                "secondaryMarket": "",
+                "customerReference": "Polygon 1",
+                "optionsPerProductType": [
+                    {
+                        "productTypeId": product_type,
+                        "options": [
+                            {"key": "delivery_method", "value": "on_the_flow"},
+                            {"key": "fullStrip", "value": "false"},
+                            {"key": "image_format", "value": "dimap_geotiff"},
+                            {"key": "licence", "value": "standard"},
+                            {"key": "pixel_coding", "value": "12bits"},
+                            {"key": "priority", "value": "standard"},
+                            {"key": "processing_level", "value": "primary"},
+                            {"key": "radiometric_processing", "value": "reflectance"},
+                            {"key": "spectral_processing", "value": spectral_processing},
+                        ],
+                    }
+                ],
+                "orderGroup": "",
+                "delivery": {"type": "network"},
+            }
+
+            if item_uuids:
+                data_source_ids = []
+                for item_uuid in item_uuids:
+                    data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
+                request_body["items"][0]["dataSourceIds"] = data_source_ids
+
+            if item_id:
+                request_body["items"][0]["datastripIds"] = [item_id]
 
         access_token = airbus_client.generate_access_token(request)
         if not access_token:
@@ -369,28 +449,37 @@ def quote(request: Request, body: QuoteRequest):
             )
 
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-        acquisition_id = body.acquisitionId
-        request_body = {"acquisitions": [acquisition_id]}
 
         try:
             response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
         except requests.RequestException as e:
             return JSONResponse(status_code=500, content={"detail": str(e)})
 
-        for item in response_body:
-            if item.get("acquisitionId") == acquisition_id:
-                return JSONResponse(
-                    content=item,
-                    status_code=200,
-                )
+        price_json = {}
+        if collection_id == "airbus_sar_data":
+            for item in response_body:
+                if item.get("acquisitionId") == acquisition_id:
+                    price_json = {
+                        "currency": item["price"]["currency"],
+                        "price": item["price"]["total"],
+                    }
+                    break
+        else:
+            price_json = {
+                "currency": response_body["currency"],
+                "price": response_body["totalAmount"],
+            }
 
+        if price_json:
+            return JSONResponse(
+                content=price_json,
+                status_code=200,
+            )
         return JSONResponse(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
         )
 
     elif catalogue_name == "planet":
-        acquisition_id = body.acquisitionId
-        collection_id = body.collectionId
         request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
         response_body = planet_client.get_quote_from_planet(request_body)
 

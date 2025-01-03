@@ -64,7 +64,10 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
-    mock_undeploy_workflow.return_value = MagicMock(status_code=200), '{"Result": "undeployed"}'
+    mock_response = MagicMock(status_code=200)
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_undeploy_workflow.return_value = mock_response, '{"Result": "undeployed"}'
+
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.delete(f"/{deploy_workspace}/ogc-api/processes/{workflow_id}")
@@ -365,21 +368,65 @@ def test_delete_job(mock_delete_job, mock_check_access):
 
 @patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus(mock_generate_access_token, mock_get_quote_from_airbus):
-    result = {"acquisitionId": "12345", "price": 100}
-    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}, result]
-    mock_generate_access_token.return_value = "valid_token"
+def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+    result = {"currency": "EUR", "price": 100}
+    mock_get_quote_from_airbus.return_value = [
+        {"acquisitionId": "otherId", "price": 200},
+        {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
+    ]
+    mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
-        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
-    )
-    mock_get_quote_from_airbus.assert_called_once_with(
-        "https://dev.sar.api.oneatlas.airbus.com",
-        {"acquisitions": ["12345"]},
-        {"Authorization": "Bearer valid_token", "Content-Type": "application/json"},
+        "/ades/quotes",
+        headers=headers,
+        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
     )
     assert response.status_code == 200
     assert response.json() == result
+
+
+@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
+@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
+def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
+    result = {"currency": "EUR", "price": 100}
+    mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
+    mock_generate_airbus_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post(
+        "/ades/quotes",
+        headers=headers,
+        json={
+            "acquisitionId": "12345",
+            "catalogueId": "airbus",
+            "collectionId": "airbus_spot_data",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == result
+    assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["datastripIds"]) == 1
+
+
+@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
+@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
+def test_quote__airbus_optical_multi_order(
+    mock_generate_airbus_access_token, mock_get_quote_from_airbus
+):
+    result = {"currency": "EUR", "price": 100}
+    mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
+    mock_generate_airbus_access_token.return_value = "valid_token"
+    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
+    response = client.post(
+        "/ades/quotes",
+        headers=headers,
+        json={
+            "item_uuids": ["12345", "67890"],
+            "catalogueId": "airbus",
+            "collectionId": "airbus_pneo_data",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == result
+    assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["dataSourceIds"]) == 2
 
 
 @patch("ades_fastapi.planet_client.PlanetClient.get_quote_from_planet")
@@ -403,7 +450,9 @@ def test_quote_invalid_token(mock_generate_access_token):
     mock_generate_access_token.return_value = None
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
-        "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
+        "/ades/quotes",
+        headers=headers,
+        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
     )
     assert response.status_code == 500
 
