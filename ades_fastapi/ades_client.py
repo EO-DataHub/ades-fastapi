@@ -1,0 +1,547 @@
+import json
+import logging
+
+import boto3
+import botocore
+import requests
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from .utils import (
+    WorkflowType,
+    get_user_details,
+    get_user_token,
+    get_workflow_id_from_file,
+    get_workflow_id_from_url,
+    replace_href_links,
+)
+
+logger = logging.getLogger(__name__)  # Add this line to define the logger
+
+
+class ADESClient:
+    def __init__(
+        self, service_endpoint: str, base_url: str, policy_bucket: str, policy_prefix: str
+    ):
+        self.service_endpoint = service_endpoint
+        self.base_url = base_url
+        self.policy_bucket = policy_bucket
+        self.policy_prefix = policy_prefix
+
+    def _check_workflow_access(
+        self,
+        request: Request,
+        deploy_workspace: str,
+        workflow_id: str,
+    ) -> tuple:
+        """Check if the workflow is accessible to the current user"""
+        username, _ = get_user_details(request)
+
+        if username == deploy_workspace:
+            return True, "Workspace owns this workflow"
+
+        logger.info(
+            "Checking user %s has access to workflow %s in workspace %s",
+            username,
+            workflow_id,
+            deploy_workspace,
+        )
+
+        user_groups = set()  # temporary while waiting for group support
+
+        # Creat S3 client
+        s3_client = boto3.client("s3")
+
+        if self.policy_prefix:
+            key = f"{self.policy_prefix}/{deploy_workspace}/{workflow_id}.access-policy.json"
+        else:
+            key = f"{deploy_workspace}/{workflow_id}.access-policy.json"
+
+        logger.debug("Policy key is %s", key)
+        logger.debug("Policy bucket is %s", self.policy_bucket)
+
+        try:
+            s3_data = s3_client.get_object(Bucket=self.policy_bucket, Key=key)
+        except botocore.exceptions.ClientError as err:
+            if err.response["Error"]["Code"] == "NoSuchKey":
+                logger.info(
+                    "No access policy found for workflow %s in workspace %s",
+                    workflow_id,
+                    deploy_workspace,
+                )
+                return False, ""
+            else:
+                logger.info(
+                    "Error getting access policy for workflow %s in workspace %s",
+                    workflow_id,
+                    deploy_workspace,
+                )
+                return False, ""
+
+        try:
+            workflow_policy = json.loads(s3_data["Body"].read().decode("utf-8"))
+        except json.JSONDecodeError:
+            logger.error(
+                "Policy for workflow %s in workspace %s is not valid JSON",
+                workflow_id,
+                deploy_workspace,
+            )
+            return False, ""
+
+        logger.info("Workflow policy is: %s", workflow_policy)
+
+        ## TODO: Could also use OPA check here instead
+
+        # Check if workflow is a user service
+        if workflow_policy.get("user_service"):
+            logger.info(
+                "Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace
+            )
+            return True, "Workflow is a user-service"
+        # Check if workflow is public
+        elif workflow_policy.get("public"):
+            logger.info("Workflow %s in workspace %s is public", workflow_id, deploy_workspace)
+            return True, "Workflow is public"
+        else:
+            # Check if user is in the allowed list
+            if username in workflow_policy.get("allowed_access", {}).get("workspaces", {}):
+                logger.info(
+                    "User %s is in the allowed list for workflow %s in workspace %s",
+                    username,
+                    workflow_id,
+                    deploy_workspace,
+                )
+                return True, "Workspace has access to this workflow (user)"
+            else:
+                allowed_groups = set(workflow_policy.get("allowed_access", {}).get("groups", set()))
+                if user_groups & allowed_groups:
+                    logger.info(
+                        "User %s is in the allowed groups for workflow %s in workspace %s",
+                        username,
+                        workflow_id,
+                        deploy_workspace,
+                    )
+                    return True, "Workspace has access to this workflow (group)"
+        return False, ""
+
+    def _send_request(self, verb: str, headers: dict = None, url_path: str = None, data=None):
+        # Construct requests function
+        if verb == "GET":
+            func = requests.get
+        elif verb == "POST":
+            func = requests.post
+        elif verb == "PUT":
+            func = requests.put
+        elif verb == "DELETE":
+            func = requests.delete
+
+        if url_path:
+            url = f"{self.service_endpoint}/{url_path}"
+        else:
+            url = self.service_endpoint
+
+        try:
+            if data:
+                response = func(url, headers=headers, **data)
+            else:
+                response = func(url, headers=headers)
+        except requests.exceptions.ConnectionError:
+            return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+
+        return response
+
+    def get_root(self):
+        try:
+            response = self._send_request("GET")
+        except requests.exceptions.ConnectionError:
+            return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+        return response
+
+    def get_workspace_root(self, deploy_workspace: str):
+        try:
+            url = f"{deploy_workspace}/ogc-api/"
+            response = self._send_request("GET", url)
+            content = json.dumps(response.json())
+        except requests.exceptions.ConnectionError:
+            return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+        except json.JSONDecodeError:
+            content = response.text
+        return response, content
+
+    def undeploy_workflow(self, headers: dict, deploy_workspace: str, workflow_id: str):
+        headers.pop("authorization", None)
+        response = self._send_request(
+            "DELETE", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}"
+        )
+
+        try:
+            content = json.dumps(response.json())
+        except json.JSONDecodeError:
+            content = response.text
+
+        return response, content
+
+    def list_workflows(self, request: requests.Request, deploy_workspace: str):
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/processes")
+
+        if "application/json" in response.headers["Content-Type"]:
+            final_content = {}
+            final_content["processes"] = []
+            content_json = response.json()
+            content_json = replace_href_links(content_json, self.base_url)
+            final_content["links"] = content_json.get("links")
+            for process_json in content_json["processes"]:
+                access, description = self._check_workflow_access(
+                    request,
+                    deploy_workspace,
+                    process_json["id"],
+                )
+                if access:
+                    process_json = replace_href_links(process_json, self.base_url)
+                    process_json.update({"AccessReasoning": description})
+                    final_content["processes"].append(process_json)
+            content = json.dumps(final_content)
+        else:
+            content = response.text
+
+        return response, content
+
+    async def deploy_workflow(self, request: requests.Request, deploy_workspace: str):
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+
+        if "application/json" in request.headers["Content-Type"]:
+            logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
+            # Handle HTTP file content
+            data = {"json": await request.json()}
+            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
+
+        elif "application/cwl+yaml" in request.headers["Content-Type"]:
+            logger.info(
+                "Deploying workflow from CWL file content to workspace %s", deploy_workspace
+            )
+            # Handle string file content
+            file_content = await request.body()
+
+            # Prepare the payload for the subsequent API request
+            data = {"data": file_content}  # Decode bytes to string
+            success, workflow_id = get_workflow_id_from_file(data["data"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
+
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    "Unsupported content type. Only application/json and "
+                    "application/cwl+yaml are supported"
+                ),
+            )
+        response = self._send_request(
+            "POST", headers, f"{deploy_workspace}/ogc-api/processes", data
+        )
+
+        if "application/json" in response.headers["Content-Type"]:
+            content_json = response.json()
+            content_json = replace_href_links(content_json, self.base_url)
+            content = json.dumps(content_json, indent=2)
+        else:
+            content = response.text
+
+        # Need to include Location header from ADES to support deploy status endpoint
+        response.headers = {
+            "Location": response.headers.get("Location", "").replace(
+                "http://localhost:8080", self.base_url
+            ),
+            "Content-Type": response.headers["Content-Type"],
+        }
+
+        return response, content
+
+    async def update_workflow(
+        self, request: requests.Request, deploy_workspace: str, workflow_id: str
+    ):
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+
+        if "application/json" in request.headers["Content-Type"]:
+            logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
+            # Handle HTTP file content
+            data = {"json": await request.json()}
+            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
+        elif "application/cwl+yaml" in request.headers["Content-Type"]:
+            logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
+            # Handle string file content
+            file_content = await request.body()
+
+            # Prepare the payload for the subsequent API request
+            data = {"data": file_content}  # Decode bytes to string
+            success, workflow_id = get_workflow_id_from_file(data["data"])
+            if not success:
+                raise HTTPException(status_code=400, detail=workflow_id)
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    "Unsupported content type. Only application/json and "
+                    "application/cwl+yaml are supported"
+                ),
+            )
+
+        response = self._send_request(
+            "PUT", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}", data
+        )
+
+        try:
+            content = json.dumps(response.json(), indent=2)
+        except json.JSONDecodeError:
+            content = response.text if response.text else ""
+
+        # Need to include Location header from ADES to support deploy status endpoint
+        response.headers.update(
+            {
+                "Location": response.headers.get("Location", "").replace(
+                    "http://localhost:8080", self.base_url
+                ),
+            }
+        )
+
+        return response, content
+
+    def get_workflow(
+        self, headers: dict, deploy_workspace: str, workflow_id: str, wf_type: WorkflowType
+    ):
+        headers.pop("authorization", None)
+        response = self._send_request(
+            "GET", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}"
+        )
+        try:
+            content_json = response.json()
+            content_json = replace_href_links(content_json, self.base_url)
+            if wf_type is WorkflowType.USER_SERVICE:
+                content_json.update({"AccessReasoning": "Workflow is a user-service"})
+            content = json.dumps(content_json, indent=2)
+        except json.JSONDecodeError:
+            # Update Content-Type header to avoid warning generated by ADES response
+            response.headers["Content-Type"] = "text/plain"
+            content = response.text
+
+        return response, content
+
+    @staticmethod
+    def _configure_execute_request(
+        body: dict, token: str, calling_workspace: str, executing_workspace: str = None
+    ):
+        # Add calling workspace to body
+        logger.info("Setting calling workspace to %s", calling_workspace)
+        try:
+            body["inputs"].update({"calling_workspace": calling_workspace})
+            logger.info(
+                "Setting executing workspace to %s",
+                executing_workspace if executing_workspace else calling_workspace,
+            )
+            body["inputs"].update(
+                {
+                    "executing_workspace": (
+                        executing_workspace if executing_workspace else calling_workspace
+                    )
+                }
+            )
+            # Add user token to body
+            logger.info("Setting user token in execution call")
+            body["inputs"].update({"user_token": token})
+        except KeyError as e:
+            logger.error("KeyError: %s", e)
+            raise HTTPException(status_code=400, detail="Invalid input payload") from e
+
+    def _send_execute_to_ades(
+        self, deploy_workspace: str, workflow_id: str, body: dict
+    ) -> requests.Response:
+        headers = {
+            "Prefer": "respond-async",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        data = {"json": body}
+        response = self._send_request(
+            "POST", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}/execution", data
+        )
+
+        return response
+
+    async def execute_user_service(
+        self,
+        request: requests.Request,
+        deploy_workspace: str,
+        workflow_id: str,
+    ) -> requests.Response:
+        calling_workspace, _ = get_user_details(request)
+        token = get_user_token(request)
+        body = await request.json()
+        self._configure_execute_request(body, token, calling_workspace, deploy_workspace)
+        response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
+        # Record the calling workspace for the generated jobID
+        if response.status_code == 201:
+            try:
+                content_json = replace_href_links(response.json(), self.base_url)
+                content = json.dumps(content_json, indent=2)
+            except json.JSONDecodeError:
+                content = response.text
+
+            if "Location" in response.headers:
+                response.headers["Location"] = response.headers["Location"].replace(
+                    "http://localhost:8080", self.base_url
+                )
+        else:
+            content = response.text
+        return response, content
+
+    async def execute_workflow(
+        self,
+        request: requests.Request,
+        deployed_workspace: str,
+        workflow_id: str,
+    ) -> requests.Response:
+        calling_workspace, _ = get_user_details(request)
+        token = get_user_token(request)
+        body = await request.json()
+        self._configure_execute_request(body, token, calling_workspace)
+        response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
+        # Record the calling workspace for the generated jobID
+        if response.status_code == 201:
+            try:
+                content_json = replace_href_links(response.json(), self.base_url)
+                content = json.dumps(content_json, indent=2)
+            except json.json.JSONDecodeError:
+                content = response.text
+
+            if "Location" in response.headers:
+                response.headers["Location"] = response.headers["Location"].replace(
+                    "http://localhost:8080", self.base_url
+                )
+        else:
+            content = response.text
+        return response, content
+
+    def get_job_status(self, headers: dict, deploy_workspace: str, job_id: str):
+        headers.pop("authorization", None)
+        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}")
+
+        content = replace_href_links(response.json(), self.base_url)
+
+        content = json.dumps(content).replace("http://localhost:8080", self.base_url)
+
+        return response, content
+
+    def get_job_results(self, headers: dict, deploy_workspace: str, job_id: str):
+        headers.pop("authorization", None)
+        response = self._send_request(
+            "GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}/results"
+        )
+        try:
+            content = json.dumps(response.json()).replace("http://localhost:8080", self.base_url)
+        except json.JSONDecodeError:
+            content = response.text
+
+        return response, content
+
+    def get_deployed_workspaced_jobs(self, request, deploy_workspace: str, job_owners):
+        username, _ = get_user_details(request)
+
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+
+        # Get all jobs in the deployed workspace
+        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/jobs")
+        try:
+            response_json = response.json()
+            jobs = response_json["jobs"]
+        except json.JSONDecodeError:
+            logger.error("Response is not JSON serializable")
+            return response, response.text
+        except KeyError:
+            logger.error("No jobs found in workspace %s", deploy_workspace)
+            jobs = []
+
+        filtered_jobs = []
+
+        logger.info(
+            "Filtering jobs to those that were called by user %s deployed in workspace %s",
+            username,
+            deploy_workspace,
+        )
+        for job in jobs:
+            job_id = job.get("jobID", "")
+            deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
+            if job_owners.get(deploy_workspace_and_job_id) == username:
+                filtered_jobs.append(job)
+
+        response_json["jobs"] = filtered_jobs
+
+        content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
+
+        return response, content
+
+    def get_all_jobs(self, request, workspace_jobs):
+        username, _ = get_user_details(request)
+
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+
+        job_details_list = []
+
+        for job in workspace_jobs.get(username, []):
+            deploy_workspace = job["deploy_workspace"]
+            job_id = job["jobID"]
+            response = self._send_request(
+                "GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}"
+            )
+            job_details_list.append(response.json())
+
+        response_json = {"workspace": username, "jobs": job_details_list}
+
+        content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
+
+        return content
+
+    def get_log(
+        self,
+        workflow_job_id: str,
+        file_name: str,
+        deploy_workspace: str,
+        headers: dict,
+    ):
+        # Extract workflow and job ids
+        workflow_id = workflow_job_id[:-37]
+        job_id = workflow_job_id[-36:]
+
+        logger.info(
+            "Accessing logs: %s for workflow: %s and job: %s", file_name, workflow_id, job_id
+        )
+
+        headers.pop("authorization", None)
+
+        response = self._send_request(
+            "GET", headers, f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}"
+        )
+
+        return response
+
+    def delete_job(self, headers: dict, deploy_workspace: str, job_id: str):
+        headers.pop("authorization", None)
+        response = self._send_request(
+            "DELETE", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}"
+        )
+
+        try:
+            content = json.dumps(response.json()).replace("http://localhost:8080", self.base_url)
+        except json.JSONDecodeError:
+            content = response.text
+
+        return response, content
