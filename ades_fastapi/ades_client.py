@@ -216,9 +216,9 @@ class ADESClient:
             logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
-            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            success, detail = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
 
         elif "application/cwl+yaml" in request.headers["Content-Type"]:
             logger.info(
@@ -229,9 +229,9 @@ class ADESClient:
 
             # Prepare the payload for the subsequent API request
             data = {"data": file_content}  # Decode bytes to string
-            success, workflow_id = get_workflow_id_from_file(data["data"])
+            success, detail = get_workflow_id_from_file(data["data"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
 
         else:
             raise HTTPException(
@@ -272,9 +272,9 @@ class ADESClient:
             logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
-            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            success, detail = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
         elif "application/cwl+yaml" in request.headers["Content-Type"]:
             logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
             # Handle string file content
@@ -282,9 +282,9 @@ class ADESClient:
 
             # Prepare the payload for the subsequent API request
             data = {"data": file_content}  # Decode bytes to string
-            success, workflow_id = get_workflow_id_from_file(data["data"])
+            success, detail = get_workflow_id_from_file(data["data"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
         else:
             raise HTTPException(
                 status_code=415,
@@ -295,7 +295,7 @@ class ADESClient:
             )
 
         response = self._send_request(
-            "PUT", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}", data
+            "PUT", headers, f"{deploy_workspace}/ogc-api/processes/{detail}", data
         )
 
         try:
