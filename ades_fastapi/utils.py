@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
-ILLEGAL_INPUTS = os.getenv("ILLEGAL_INPUTS", "token").split(",")
+ILLEGAL_WORKFLOW_INPUTS = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
 
 
 class QuoteRequest(BaseModel):
@@ -120,7 +120,7 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
 def check_workflow_inputs(data: dict) -> tuple:
     inputs = data.get("inputs", [])
     for key, _ in inputs.items():
-        if key in ILLEGAL_INPUTS:
+        if key in ILLEGAL_WORKFLOW_INPUTS:
             return False, f"Input {key} is not allowed in workflow"
     return True, data["id"]
 
