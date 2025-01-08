@@ -157,7 +157,7 @@ def test_check_policy_get_job(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -189,7 +189,7 @@ def test_check_policy_deploy_workflow(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -223,7 +223,7 @@ def test_check_policy_update_workflow(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -259,7 +259,7 @@ def test_check_policy_logs(mock_opa_request, mock_get_user_details, dependency_c
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -295,7 +295,7 @@ def test_check_policy_execute_workflow_no_policy(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -341,7 +341,7 @@ def test_check_policy_execute_workflow_user_service(
 @patch("ades_fastapi.dependency_client.DependencyClient._check_policy")
 def test_check_access(mock_check_policy, mock_get_path_params, dependency_client):
     mock_get_path_params.return_value = {"deploy_workspace": "test-workspace"}
-    mock_check_policy.return_value = True, WorkflowType.WORKFLOW
+    mock_check_policy.return_value = True, WorkflowType.DEFAULT
 
     mock_request = MagicMock(method="GET", scope={"deploy_workspace": "test-workspace"})
 
@@ -350,7 +350,7 @@ def test_check_access(mock_check_policy, mock_get_path_params, dependency_client
     mock_check_policy.assert_called_once_with(mock_request, job_owners)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -375,7 +375,7 @@ def test_check_access_denied(
     passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
 
     assert passed is False
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -397,7 +397,7 @@ def test_check_access_no_access_policy(
     passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -431,7 +431,7 @@ def test_check_access_job_access(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.WORKFLOW
+    assert workflow_type == WorkflowType.DEFAULT
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
@@ -470,9 +470,7 @@ def test_check_access_job_access_user_service(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert (
-        workflow_type == WorkflowType.WORKFLOW
-    )  # check but this is incorrect and not used after in the code
+    assert workflow_type == WorkflowType.DEFAULT  # check but this is not used after in the code
 
 
 @patch("requests.post")

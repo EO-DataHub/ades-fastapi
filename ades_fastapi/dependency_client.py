@@ -41,7 +41,7 @@ class DependencyClient:
         logger.info("Roles: %s", roles)
 
         # Set default workflow type
-        wf_type = WorkflowType.WORKFLOW
+        wf_type = WorkflowType.DEFAULT
 
         input_data = {
             "input": {
@@ -85,6 +85,8 @@ class DependencyClient:
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
                 if access_policy.get("user_service", False):
                     wf_type = WorkflowType.USER_SERVICE
+                else:
+                    wf_type = WorkflowType.WORKFLOW
             else:
                 logger.info("No access policy found")
 
