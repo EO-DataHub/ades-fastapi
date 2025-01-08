@@ -4,6 +4,8 @@ import os
 
 import requests
 
+from .utils import WorkflowType
+
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 
@@ -21,7 +23,11 @@ class JobSaver:
         self.load_data()
 
     def record_owner(
-        self, response: requests.Response, deploy_workspace: str, calling_workspace: str
+        self,
+        response: requests.Response,
+        deploy_workspace: str,
+        calling_workspace: str,
+        workflow_type: WorkflowType = WorkflowType.WORKFLOW,
     ):
         """Record workspace of job owner"""
         try:
@@ -31,7 +37,7 @@ class JobSaver:
             raise WorkflowExecutionException("Job ID not found in response") from e
 
         # Record jobID and, along with deployed workspace, relate to calling workspace for job/log access
-        self.update_job_owners(deploy_workspace, calling_workspace, job_id)
+        self.update_job_owners(deploy_workspace, calling_workspace, job_id, workflow_type)
 
         # Record jobID against calling workspace
 
@@ -64,10 +70,19 @@ class JobSaver:
             except Exception as e:
                 logger.error("Failed to load workpace jobs from file: %s", e)
 
-    def update_job_owners(self, deploy_workspace: str, calling_workspace: str, job_id: str):
+    def update_job_owners(
+        self,
+        deploy_workspace: str,
+        calling_workspace: str,
+        job_id: str,
+        workflow_type: WorkflowType,
+    ):
         """Update job owners"""
         deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
-        new_job_dict = {deploy_workspace_and_job_id: calling_workspace}
+        allowed_workspaces = {"calling": calling_workspace, "deployed": None}
+        if workflow_type == WorkflowType.USER_SERVICE:
+            allowed_workspaces.update({"deployed": deploy_workspace})
+        new_job_dict = {deploy_workspace_and_job_id: allowed_workspaces}
         self.job_owners.update(new_job_dict)
 
         if calling_workspace not in self.workspace_jobs:
