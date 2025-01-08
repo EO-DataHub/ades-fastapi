@@ -390,7 +390,7 @@ def test_send_request_get_root_no_headers(mock_request, ades_client):
     mock_request.return_value = mock_response
     response = ades_client._send_request("GET")
 
-    mock_request.assert_called_once_with("http://test-service-endpoint", headers={})
+    mock_request.assert_called_once_with("http://test-service-endpoint", headers=None)
     assert response == mock_response
 
 
