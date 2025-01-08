@@ -55,8 +55,8 @@ async def test_deploy_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 
     mock_send_request.assert_called_once_with(
         "POST",
-        {"Content-Type": "application/json"},
         "test-deploy-workspace/ogc-api/processes",
+        {"Content-Type": "application/json"},
         {"json": {"executionUnit": {"href": "http://test-url"}}},
     )
 
@@ -100,8 +100,8 @@ async def test_deploy_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
     mock_send_request.assert_called_once_with(
         "POST",
-        {"Content-Type": "application/cwl+yaml"},
         "test-deploy-workspace/ogc-api/processes",
+        {"Content-Type": "application/cwl+yaml"},
         {"data": b"test-cwl-content"},
     )
 
@@ -144,8 +144,8 @@ async def test_update_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 
     mock_send_request.assert_called_once_with(
         "PUT",
-        {"Content-Type": "application/json"},
         "test-deploy-workspace/ogc-api/processes/workflow-id",
+        {"Content-Type": "application/json"},
         {"json": {"executionUnit": {"href": "http://test-url"}}},
     )
 
@@ -175,8 +175,8 @@ async def test_update_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
     mock_send_request.assert_called_once_with(
         "PUT",
-        {"Content-Type": "application/cwl+yaml"},
         "test-deploy-workspace/ogc-api/processes/workflow-id",
+        {"Content-Type": "application/cwl+yaml"},
         {"data": b"test-cwl-content"},
     )
 
@@ -368,7 +368,7 @@ def test_send_execute_to_ades(mock_send_request, ades_client):
     response = ades_client._send_execute_to_ades("deploy_workspace", "workflow-id", body)
 
     mock_send_request.assert_called_once_with(
-        "POST", headers, "deploy_workspace/ogc-api/processes/workflow-id/execution", {"json": body}
+        "POST", "deploy_workspace/ogc-api/processes/workflow-id/execution", headers, {"json": body}
     )
     assert response == mock_response
 
@@ -390,7 +390,7 @@ def test_send_request_get_root_no_headers(mock_request, ades_client):
     mock_request.return_value = mock_response
     response = ades_client._send_request("GET")
 
-    mock_request.assert_called_once_with("http://test-service-endpoint", headers=None)
+    mock_request.assert_called_once_with("http://test-service-endpoint", headers={})
     assert response == mock_response
 
 
@@ -401,7 +401,7 @@ def test_send_request_get_workflow(mock_request, ades_client):
     headers = {"Content-Type": "application/json"}
     url_path = "test/path"
     data = {"json": {"inputs": {"inputs": "value"}}}
-    response = ades_client._send_request("GET", headers, url_path, data)
+    response = ades_client._send_request("GET", url_path, headers, data)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/test/path", headers=headers, **data
@@ -416,7 +416,7 @@ def test_send_request_execute_workflow(mock_request, ades_client):
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/ogc-api/workflow-id"
     data = {"json": {"inputs": {"inputs": "value"}}}
-    response = ades_client._send_request("POST", headers, url_path, data)
+    response = ades_client._send_request("POST", url_path, headers, data)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
@@ -431,7 +431,7 @@ def test_send_request_update_workflow(mock_request, ades_client):
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/ogc-api/workflow-id"
     data = {"data": "some workflow content"}
-    response = ades_client._send_request("PUT", headers, url_path, data)
+    response = ades_client._send_request("PUT", url_path, headers, data)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
@@ -446,7 +446,7 @@ def test_send_request_deploy_workflow(mock_request, ades_client):
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/ogc-api/workflow-id"
     data = {"json": {"execution_body": "http://link/to/workflow"}}
-    response = ades_client._send_request("POST", headers, url_path, data)
+    response = ades_client._send_request("POST", url_path, headers, data)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
@@ -460,7 +460,7 @@ def test_send_request_delete_workflow(mock_request, ades_client):
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/ogc-api/workflow-id"
-    response = ades_client._send_request("DELETE", headers, url_path)
+    response = ades_client._send_request("DELETE", url_path, headers)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers
@@ -474,7 +474,7 @@ def test_send_request_delete_job(mock_request, ades_client):
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/ogc-api/jobs/job_id"
-    response = ades_client._send_request("DELETE", headers, url_path)
+    response = ades_client._send_request("DELETE", url_path, headers)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/ogc-api/jobs/job_id", headers=headers
@@ -488,7 +488,7 @@ def test_send_request_view_log(mock_request, ades_client):
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
     url_path = "deploy_workspace/temp/workflow-id-12345"
-    response = ades_client._send_request("GET", headers, url_path)
+    response = ades_client._send_request("GET", url_path, headers)
 
     mock_request.assert_called_once_with(
         "http://test-service-endpoint/deploy_workspace/temp/workflow-id-12345", headers=headers
@@ -558,13 +558,13 @@ async def test_get_all_jobs(mock_get_user_details, mock_send_request, ades_clien
 
     assert calls[0][0] == (
         "GET",
-        {"Content-Type": "application/json"},
         "test-deploy-workspace-1/ogc-api/jobs/job-id-1",
+        {"Content-Type": "application/json"},
     )
     assert calls[1][0] == (
         "GET",
-        {"Content-Type": "application/json"},
         "test-deploy-workspace-2/ogc-api/jobs/job-id-2",
+        {"Content-Type": "application/json"},
     )
 
 
