@@ -383,7 +383,12 @@ class ADESClient:
     ) -> requests.Response:
         calling_workspace, _ = get_user_details(request)
         token = get_user_token(request)
-        body = await request.json()
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as err:
+            raise HTTPException(
+                status_code=400, detail="Invalid input payload, not valid JSON"
+            ) from err
         self._configure_execute_request(body, token, calling_workspace, deploy_workspace)
         response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
@@ -410,7 +415,12 @@ class ADESClient:
     ) -> requests.Response:
         calling_workspace, _ = get_user_details(request)
         token = get_user_token(request)
-        body = await request.json()
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as err:
+            raise HTTPException(
+                status_code=400, detail="Invalid input payload, not valid JSON"
+            ) from err
         self._configure_execute_request(body, token, calling_workspace)
         response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
