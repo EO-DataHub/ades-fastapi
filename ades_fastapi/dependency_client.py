@@ -41,7 +41,7 @@ class DependencyClient:
         logger.info("Roles: %s", roles)
 
         # Set default workflow type
-        wf_type = WorkflowType.WORKFLOW
+        wf_type = WorkflowType.DEFAULT
 
         input_data = {
             "input": {
@@ -85,6 +85,8 @@ class DependencyClient:
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
                 if access_policy.get("user_service", False):
                     wf_type = WorkflowType.USER_SERVICE
+                else:
+                    wf_type = WorkflowType.WORKFLOW
             else:
                 logger.info("No access policy found")
 
@@ -93,12 +95,14 @@ class DependencyClient:
             logger.debug(
                 "Checking job access for job %s deployed to workspace %s", job_id, deploy_workspace
             )
-            workspace_job_key = f"{deploy_workspace}-{job_id}"
 
-            # Get executing workspace for the given job
-            calling_workspace = job_owners.get(workspace_job_key)
+            # Get calling workspace for the given job
+            allowed_workspaces = job_owners.get(f"{deploy_workspace}-{job_id}", {})
 
-            input_data["input"]["calling_workspace"] = calling_workspace
+            input_data["input"]["calling_workspace"] = allowed_workspaces.get("calling", None)
+            if allowed_workspaces.get("deployed", None):
+                # If deployed workspace is not None, add this to the policy request body
+                input_data["input"]["deployed_workspace"] = allowed_workspaces.get("deployed", None)
 
         if deploy_workspace and workflow_job_id:
             # Checking access to job logs
@@ -111,10 +115,13 @@ class DependencyClient:
                 deploy_workspace,
             )
 
-            # Get executing workspace for the given job
-            execute_workspace = job_owners.get(f"{deploy_workspace}-{job_id}")
+            # Get calling workspace for the given job
+            allowed_workspaces = job_owners.get(f"{deploy_workspace}-{job_id}")
 
-            input_data["input"]["calling_workspace"] = execute_workspace
+            input_data["input"]["calling_workspace"] = allowed_workspaces["calling"]
+            if allowed_workspaces["deployed"]:
+                # If deployed workspace is not None, add this to the policy request body
+                input_data["input"]["deployed_workspace"] = allowed_workspaces["deployed"]
 
         response = self._opa_request(input_data)
 

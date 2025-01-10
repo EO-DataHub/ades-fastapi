@@ -24,6 +24,7 @@ class QuoteRequest(BaseModel):
 
 
 class WorkflowType(Enum):
+    DEFAULT = "default"
     WORKFLOW = "workflow"
     USER_SERVICE = "user-service"
     OTHER = "other"  # not for prod use
