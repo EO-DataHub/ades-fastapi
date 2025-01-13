@@ -69,6 +69,10 @@ class DependencyClient:
                 workflow_id,
                 deploy_workspace,
             )
+
+            # Set workflow type to WORKFLOW
+            wf_type = WorkflowType.WORKFLOW
+
             ## Load access policy
             access_policy = get_access_policy(
                 path_params["deploy_workspace"],
@@ -85,8 +89,6 @@ class DependencyClient:
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
                 if access_policy.get("user_service", False):
                     wf_type = WorkflowType.USER_SERVICE
-                else:
-                    wf_type = WorkflowType.WORKFLOW
             else:
                 logger.info("No access policy found")
 
