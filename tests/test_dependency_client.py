@@ -295,7 +295,7 @@ def test_check_policy_execute_workflow_no_policy(
     mock_opa_request.assert_called_once_with(expected_input_data)
 
     assert passed is True
-    assert workflow_type == WorkflowType.DEFAULT
+    assert workflow_type == WorkflowType.WORKFLOW
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
