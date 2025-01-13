@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 
 import boto3
 import botocore
@@ -124,7 +125,13 @@ class ADESClient:
                     return True, "Workspace has access to this workflow (group)"
         return False, ""
 
-    def _send_request(self, verb: str, headers: dict = None, url_path: str = None, data=None):
+    def _send_request(
+        self,
+        verb: str,
+        url_path: str = "",
+        headers: Optional[dict] = None,
+        data: Optional[dict] = None,
+    ):
         # Construct requests function
         if verb == "GET":
             func = requests.get
@@ -171,7 +178,7 @@ class ADESClient:
     def undeploy_workflow(self, headers: dict, deploy_workspace: str, workflow_id: str):
         headers.pop("authorization", None)
         response = self._send_request(
-            "DELETE", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}"
+            "DELETE", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers
         )
 
         try:
@@ -184,7 +191,7 @@ class ADESClient:
     def list_workflows(self, request: requests.Request, deploy_workspace: str):
         headers = dict(request.headers)
         headers.pop("authorization", None)
-        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/processes")
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/processes", headers)
 
         if "application/json" in response.headers["Content-Type"]:
             final_content = {}
@@ -216,9 +223,9 @@ class ADESClient:
             logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
-            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            success, detail = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
 
         elif "application/cwl+yaml" in request.headers["Content-Type"]:
             logger.info(
@@ -229,9 +236,9 @@ class ADESClient:
 
             # Prepare the payload for the subsequent API request
             data = {"data": file_content}  # Decode bytes to string
-            success, workflow_id = get_workflow_id_from_file(data["data"])
+            success, detail = get_workflow_id_from_file(data["data"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
 
         else:
             raise HTTPException(
@@ -242,7 +249,7 @@ class ADESClient:
                 ),
             )
         response = self._send_request(
-            "POST", headers, f"{deploy_workspace}/ogc-api/processes", data
+            "POST", f"{deploy_workspace}/ogc-api/processes", headers, data
         )
 
         if "application/json" in response.headers["Content-Type"]:
@@ -272,9 +279,9 @@ class ADESClient:
             logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
-            success, workflow_id = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
+            success, detail = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
         elif "application/cwl+yaml" in request.headers["Content-Type"]:
             logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
             # Handle string file content
@@ -282,9 +289,9 @@ class ADESClient:
 
             # Prepare the payload for the subsequent API request
             data = {"data": file_content}  # Decode bytes to string
-            success, workflow_id = get_workflow_id_from_file(data["data"])
+            success, detail = get_workflow_id_from_file(data["data"])
             if not success:
-                raise HTTPException(status_code=400, detail=workflow_id)
+                raise HTTPException(status_code=400, detail=detail)
         else:
             raise HTTPException(
                 status_code=415,
@@ -295,7 +302,7 @@ class ADESClient:
             )
 
         response = self._send_request(
-            "PUT", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}", data
+            "PUT", f"{deploy_workspace}/ogc-api/processes/{detail}", headers, data
         )
 
         try:
@@ -319,7 +326,7 @@ class ADESClient:
     ):
         headers.pop("authorization", None)
         response = self._send_request(
-            "GET", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}"
+            "GET", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers
         )
         try:
             content_json = response.json()
@@ -370,7 +377,7 @@ class ADESClient:
         }
         data = {"json": body}
         response = self._send_request(
-            "POST", headers, f"{deploy_workspace}/ogc-api/processes/{workflow_id}/execution", data
+            "POST", f"{deploy_workspace}/ogc-api/processes/{workflow_id}/execution", headers, data
         )
 
         return response
@@ -441,7 +448,7 @@ class ADESClient:
 
     def get_job_status(self, headers: dict, deploy_workspace: str, job_id: str):
         headers.pop("authorization", None)
-        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}")
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
 
         content = replace_href_links(response.json(), self.base_url)
 
@@ -452,7 +459,7 @@ class ADESClient:
     def get_job_results(self, headers: dict, deploy_workspace: str, job_id: str):
         headers.pop("authorization", None)
         response = self._send_request(
-            "GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}/results"
+            "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}/results", headers
         )
         try:
             content = json.dumps(response.json()).replace("http://localhost:8080", self.base_url)
@@ -468,7 +475,7 @@ class ADESClient:
         headers.pop("authorization", None)
 
         # Get all jobs in the deployed workspace
-        response = self._send_request("GET", headers, f"{deploy_workspace}/ogc-api/jobs")
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs", headers)
         try:
             response_json = response.json()
             jobs = response_json["jobs"]
@@ -510,7 +517,7 @@ class ADESClient:
             deploy_workspace = job["deploy_workspace"]
             job_id = job["jobID"]
             response = self._send_request(
-                "GET", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}"
+                "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers
             )
             job_details_list.append(response.json())
 
@@ -538,7 +545,7 @@ class ADESClient:
         headers.pop("authorization", None)
 
         response = self._send_request(
-            "GET", headers, f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}"
+            "GET", f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}", headers
         )
 
         return response
@@ -546,7 +553,7 @@ class ADESClient:
     def delete_job(self, headers: dict, deploy_workspace: str, job_id: str):
         headers.pop("authorization", None)
         response = self._send_request(
-            "DELETE", headers, f"{deploy_workspace}/ogc-api/jobs/{job_id}"
+            "DELETE", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers
         )
 
         try:

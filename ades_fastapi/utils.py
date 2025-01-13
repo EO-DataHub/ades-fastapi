@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from enum import Enum
 
 import boto3
@@ -11,6 +12,8 @@ from fastapi import Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
+
+ILLEGAL_WORKFLOW_INPUTS = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
 
 
 class QuoteRequest(BaseModel):
@@ -115,6 +118,14 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
     return content_dict
 
 
+def check_workflow_inputs(data: dict) -> tuple:
+    inputs = data.get("inputs", [])
+    for key, _ in inputs.items():
+        if key in ILLEGAL_WORKFLOW_INPUTS:
+            return False, f"Input {key} is not allowed in workflow"
+    return True, data["id"]
+
+
 def get_workflow_id_from_file(data: str) -> tuple:
     try:
         cwl_dict = yaml.safe_load(data)
@@ -127,7 +138,8 @@ def get_workflow_id_from_file(data: str) -> tuple:
         return False, "No '$graph' found in CWL"
     for item in cwl_dict["$graph"]:
         if item.get("class") == "Workflow":
-            return True, item["id"]
+            success, details = check_workflow_inputs(item)
+            return success, details
     return False, "No Workflow found in CWL file"
 
 
@@ -150,7 +162,8 @@ def get_workflow_id_from_url(url: str) -> tuple:
         return False, "No '$graph' found in CWL"
     for item in cwl_dict["$graph"]:
         if item.get("class") == "Workflow":
-            return True, item["id"]
+            success, details = check_workflow_inputs(item)
+            return success, details
     return False, "No Workflow found in CWL file"
 
 

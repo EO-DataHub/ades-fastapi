@@ -146,6 +146,58 @@ def test_replace_href_links():
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+          input1:
+            type: string
+          input2:
+            type: string
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+    success, result = get_workflow_id_from_url(url)
+    assert result == "test_workflow_id"
+    assert success
+    mock_get.assert_called_once_with(url, headers=headers)
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
+def test_get_workflow_id_from_url_illegal_input(mock_get):
+    mock_response = mock.Mock()
+    mock_response.text = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+          token:
+            type: string
+          input2:
+            type: string
+    """
+    mock_get.return_value = mock_response
+
+    url = "http://test-url"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+    success, result = get_workflow_id_from_url(url)
+    assert result == "Input token is not allowed in workflow"
+    assert not success
+    mock_get.assert_called_once_with(url, headers=headers)
+
+
+@mock.patch("ades_fastapi.utils.requests.get")
 def test_get_workflow_id_from_url_missing_workflow(mock_get):
     mock_response = mock.Mock()
     mock_response.text = """
@@ -196,6 +248,40 @@ def test_get_workflow_id_from_file_missing_workflow():
 
     success, result = get_workflow_id_from_file(cwl_str)
     assert result == "No Workflow found in CWL file"
+    assert not success
+
+
+def test_get_workflow_id_from_file():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+            input1:
+                type: string
+            input2:
+                type: string
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "test_workflow_id"
+    assert success
+
+
+def test_get_workflow_id_from_file_illegal_input():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+            token:
+                type: string
+            input2:
+                type: string
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "Input token is not allowed in workflow"
     assert not success
 
 
