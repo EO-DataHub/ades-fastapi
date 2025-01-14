@@ -168,7 +168,8 @@ class ADESClient:
         try:
             url = f"{deploy_workspace}/ogc-api/"
             response = self._send_request("GET", url)
-            content = json.dumps(response.json())
+            content_json = response.json()
+            content = json.dumps(replace_href_links(content_json, self.base_url))
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
         except json.JSONDecodeError:
@@ -496,10 +497,15 @@ class ADESClient:
         for job in jobs:
             job_id = job.get("jobID", "")
             deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
-            if job_owners.get(deploy_workspace_and_job_id) == username:
+            allowed_workspaces = job_owners.get(deploy_workspace_and_job_id, {})
+            if isinstance(allowed_workspaces, dict):
+                if allowed_workspaces.get("calling", "") == username:
+                    filtered_jobs.append(job)
+            elif allowed_workspaces == username:
                 filtered_jobs.append(job)
 
         response_json["jobs"] = filtered_jobs
+        response_json["numberTotal"] = len(filtered_jobs)
 
         content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
 
