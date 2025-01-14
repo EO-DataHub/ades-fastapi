@@ -530,7 +530,7 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
         request, "test-deploy-workspace", job_owners
     )
     assert response.status_code == 200
-    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}]}
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
 
 
 @pytest.mark.asyncio
