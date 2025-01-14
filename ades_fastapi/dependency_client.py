@@ -100,11 +100,16 @@ class DependencyClient:
 
             # Get calling workspace for the given job
             allowed_workspaces = job_owners.get(f"{deploy_workspace}-{job_id}", {})
-
-            input_data["input"]["calling_workspace"] = allowed_workspaces.get("calling", None)
-            if allowed_workspaces.get("deployed", None):
-                # If deployed workspace is not None, add this to the policy request body
-                input_data["input"]["deployed_workspace"] = allowed_workspaces.get("deployed", None)
+            if isinstance(allowed_workspaces, dict):
+                input_data["input"]["calling_workspace"] = allowed_workspaces.get("calling", None)
+                if allowed_workspaces.get("deployed", None):
+                    # If deployed workspace is not None, add this to the policy request body
+                    input_data["input"]["deployed_workspace"] = allowed_workspaces.get(
+                        "deployed", None
+                    )
+            else:
+                input_data["input"]["calling_workspace"] = allowed_workspaces
+                input_data["input"]["deployed_workspace"] = None
 
         if deploy_workspace and workflow_job_id:
             # Checking access to job logs
