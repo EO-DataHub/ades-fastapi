@@ -119,10 +119,16 @@ def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
 
 
 def check_workflow_inputs(data: dict) -> tuple:
-    inputs = data.get("inputs", [])
-    for key, _ in inputs.items():
-        if key in ILLEGAL_WORKFLOW_INPUTS:
-            return False, f"Input {key} is not allowed in workflow"
+    inputs = data.get("inputs", {})
+    if isinstance(inputs, list):
+        for input in inputs:
+            if input["id"] in ["token"]:
+                return False, f"Input {input['id']} is not allowed in workflow"
+    elif isinstance(inputs, dict):
+        for key, _ in inputs.items():
+            print(key)
+            if key in ["token"]:
+                return False, f"Input {key} is not allowed in workflow"
     return True, data["id"]
 
 
