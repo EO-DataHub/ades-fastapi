@@ -228,7 +228,15 @@ async def test_list_workflows(
     )
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
-    response, content = ades_client.list_workflows(request, "test-deploy-workspace")
+    response, content = ades_client.list_workflows(
+        request, "test-deploy-workspace", limit=10, skip=0
+    )
+    mock_send_request.assert_called_once_with(
+        "GET",
+        "test-deploy-workspace/ogc-api/processes",
+        {},
+        data={"params": {"limit": 10, "skip": 0}},
+    )
     assert response.status_code == 200
     assert json.loads(content) == {"processes": [], "links": []}
 
@@ -527,10 +535,13 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     request.headers = {"authorization": "Bearer token"}
     job_owners = {"test-deploy-workspace-job-id": "username"}
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test-deploy-workspace", job_owners
+        request, "test-deploy-workspace", job_owners, limit=10, skip=0
+    )
+    mock_send_request.assert_called_once_with(
+        "GET", "test-deploy-workspace/ogc-api/jobs", {}, data={"params": {"limit": 10, "skip": 0}}
     )
     assert response.status_code == 200
-    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}]}
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
 
 
 @pytest.mark.asyncio

@@ -149,8 +149,10 @@ class ADESClient:
 
         try:
             if data:
+                logger.info("Sending %s request to %s with data %s", verb, url, data)
                 response = func(url, headers=headers, **data)
             else:
+                logger.info("Sending %s request to %s", verb, url)
                 response = func(url, headers=headers)
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
@@ -168,7 +170,8 @@ class ADESClient:
         try:
             url = f"{deploy_workspace}/ogc-api/"
             response = self._send_request("GET", url)
-            content = json.dumps(response.json())
+            content_json = response.json()
+            content = json.dumps(replace_href_links(content_json, self.base_url))
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
         except json.JSONDecodeError:
@@ -188,10 +191,18 @@ class ADESClient:
 
         return response, content
 
-    def list_workflows(self, request: requests.Request, deploy_workspace: str):
+    def list_workflows(
+        self, request: requests.Request, deploy_workspace: str, limit: int, skip: int
+    ):
         headers = dict(request.headers)
         headers.pop("authorization", None)
-        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/processes", headers)
+
+        # Add limit to data params
+        params = {"limit": limit, "skip": skip}
+
+        response = self._send_request(
+            "GET", f"{deploy_workspace}/ogc-api/processes", headers, data={"params": params}
+        )
 
         if "application/json" in response.headers["Content-Type"]:
             final_content = {}
@@ -468,14 +479,21 @@ class ADESClient:
 
         return response, content
 
-    def get_deployed_workspaced_jobs(self, request, deploy_workspace: str, job_owners):
+    def get_deployed_workspaced_jobs(
+        self, request, deploy_workspace: str, job_owners: dict, limit: int, skip: int
+    ):
         username, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
+        # Add limit to data params
+        params = {"limit": limit, "skip": skip}
+
         # Get all jobs in the deployed workspace
-        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs", headers)
+        response = self._send_request(
+            "GET", f"{deploy_workspace}/ogc-api/jobs", headers, data={"params": params}
+        )
         try:
             response_json = response.json()
             jobs = response_json["jobs"]
@@ -496,10 +514,15 @@ class ADESClient:
         for job in jobs:
             job_id = job.get("jobID", "")
             deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
-            if job_owners.get(deploy_workspace_and_job_id) == username:
+            allowed_workspaces = job_owners.get(deploy_workspace_and_job_id, {})
+            if isinstance(allowed_workspaces, dict):
+                if allowed_workspaces.get("calling", "") == username:
+                    filtered_jobs.append(job)
+            elif allowed_workspaces == username:
                 filtered_jobs.append(job)
 
         response_json["jobs"] = filtered_jobs
+        response_json["numberTotal"] = len(filtered_jobs)
 
         content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
 

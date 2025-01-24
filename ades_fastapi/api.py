@@ -150,11 +150,13 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
 
 @app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
-def list_processes(deploy_workspace: str, request: Request):
+def list_processes(deploy_workspace: str, request: Request, limit: int = 10, skip: int = 0):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
-    response, content = ades_client.list_workflows(request, deploy_workspace)
+    response, content = ades_client.list_workflows(
+        request, deploy_workspace, limit=limit, skip=skip
+    )
 
     return Response(
         content=content,
@@ -291,12 +293,14 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
-def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
+def get_deployed_workspaced_jobs(
+    deploy_workspace: str, request: Request, limit: int = 10, skip: int = 0
+):
     """Endpoint to list all jobs in a workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, deploy_workspace, job_saver.job_owners
+        request, deploy_workspace, job_saver.job_owners, limit=limit, skip=skip
     )
 
     return Response(
@@ -306,7 +310,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
     )
 
 
-@app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+# @app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
