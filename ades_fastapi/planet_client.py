@@ -36,7 +36,7 @@ class PlanetClient:
 
             total_areas += self.round_area(area)
 
-        return f"{total_areas} km2"
+        return {"value": total_areas, "units": "km2"}
 
     def calculate_area(self, coordinates: list) -> float:
         """Calculates area in km2 of polygon given a list of coordinates"""

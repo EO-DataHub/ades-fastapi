@@ -369,7 +369,7 @@ def test_delete_job(mock_delete_job, mock_check_access):
 @patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = [
         {"acquisitionId": "otherId", "price": 200},
         {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
@@ -388,7 +388,7 @@ def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_fro
 @patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -411,7 +411,7 @@ def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote
 def test_quote__airbus_optical_multi_order(
     mock_generate_airbus_access_token, mock_get_quote_from_airbus
 ):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
