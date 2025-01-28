@@ -445,7 +445,7 @@ def test_quote__airbus_optical_multi_order(
 
 @patch("ades_fastapi.planet_client.PlanetClient.get_quote_from_planet")
 def test_quote__planet(mock_get_quote_from_planet):
-    mock_get_quote_from_planet.return_value = "1000 km2"
+    mock_get_quote_from_planet.return_value = {"value": 34, "units": "km2"}
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes",
@@ -456,7 +456,7 @@ def test_quote__planet(mock_get_quote_from_planet):
         {"acquisitions": ["12345"], "collection": "collection-id"},
     )
     assert response.status_code == 200
-    assert response.json() == "1000 km2"
+    assert response.json() == {"value": 34, "units": "km2"}
 
 
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
