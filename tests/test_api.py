@@ -1,12 +1,25 @@
+import json
+import os
+import pytest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from ades_fastapi.api import app
-from ades_fastapi.utils import WorkflowType
+from ades_fastapi.api import app, quote
+from ades_fastapi.utils import WorkflowType, QuoteRequest
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def setenvvar(monkeypatch):
+    with patch.dict(os.environ, clear=True):
+        envvars = {
+            "BASE_URL": "https://url.com",
+        }
+        for k, v in envvars.items():
+            monkeypatch.setenv(k, v)
+        yield
 
 
 def override_opa_dependency_workflow():
@@ -467,3 +480,19 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
         "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
     )
     assert response.status_code == 404
+
+
+def test_quote_from_planet(requests_mock):
+
+    expected = {"value": 34, "units": "km2"}
+
+    mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
+
+    requests_mock.get('https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id', json=mock_planet_response)
+
+    body = QuoteRequest(**{"acquisitionId": "test_id", "collectionId": "test_collection", "catalogueId": "planet"})
+
+    response = quote(None, body)
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8")) == expected

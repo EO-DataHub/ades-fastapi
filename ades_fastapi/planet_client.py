@@ -40,7 +40,6 @@ class PlanetClient:
 
     def calculate_area(self, coordinates: list) -> float:
         """Calculates area in km2 of polygon given a list of coordinates"""
-
         polygon = Polygon(coordinates)
         geod = Geod(ellps="WGS84")
         poly_area, _ = geod.geometry_area_perimeter(polygon)
