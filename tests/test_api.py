@@ -1,12 +1,26 @@
+import json
+import os
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from ades_fastapi.api import app
-from ades_fastapi.utils import WorkflowType
+from ades_fastapi.api import app, quote
+from ades_fastapi.utils import QuoteRequest, WorkflowType
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def setenvvar(monkeypatch):
+    with patch.dict(os.environ, clear=True):
+        envvars = {
+            "BASE_URL": "https://url.com",
+        }
+        for k, v in envvars.items():
+            monkeypatch.setenv(k, v)
+        yield
 
 
 def override_opa_dependency_workflow():
@@ -369,7 +383,7 @@ def test_delete_job(mock_delete_job, mock_check_access):
 @patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = [
         {"acquisitionId": "otherId", "price": 200},
         {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
@@ -388,7 +402,7 @@ def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_fro
 @patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
 def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -411,7 +425,7 @@ def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote
 def test_quote__airbus_optical_multi_order(
     mock_generate_airbus_access_token, mock_get_quote_from_airbus
 ):
-    result = {"currency": "EUR", "price": 100}
+    result = {"units": "EUR", "value": 100}
     mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
     mock_generate_airbus_access_token.return_value = "valid_token"
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
@@ -431,7 +445,7 @@ def test_quote__airbus_optical_multi_order(
 
 @patch("ades_fastapi.planet_client.PlanetClient.get_quote_from_planet")
 def test_quote__planet(mock_get_quote_from_planet):
-    mock_get_quote_from_planet.return_value = "1000 km2"
+    mock_get_quote_from_planet.return_value = {"value": 34, "units": "km2"}
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes",
@@ -442,7 +456,7 @@ def test_quote__planet(mock_get_quote_from_planet):
         {"acquisitions": ["12345"], "collection": "collection-id"},
     )
     assert response.status_code == 200
-    assert response.json() == "1000 km2"
+    assert response.json() == {"value": 34, "units": "km2"}
 
 
 @patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
@@ -467,3 +481,24 @@ def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_ai
         "/ades/quotes", headers=headers, json={"acquisitionId": "12345", "catalogueId": "airbus"}
     )
     assert response.status_code == 404
+
+
+def test_quote_from_planet(requests_mock):
+
+    expected = {"value": 34, "units": "km2"}
+
+    mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
+
+    requests_mock.get(
+        "https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id",
+        json=mock_planet_response,
+    )
+
+    body = QuoteRequest(
+        **{"acquisitionId": "test_id", "collectionId": "test_collection", "catalogueId": "planet"}
+    )
+
+    response = quote(None, body)
+
+    assert response.status_code == 200
+    assert json.loads(response.body.decode("utf-8")) == expected

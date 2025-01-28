@@ -460,14 +460,14 @@ def quote(request: Request, body: QuoteRequest):
             for item in response_body:
                 if item.get("acquisitionId") == acquisition_id:
                     price_json = {
-                        "currency": item["price"]["currency"],
-                        "price": item["price"]["total"],
+                        "units": item["price"]["currency"],
+                        "value": item["price"]["total"],
                     }
                     break
         else:
             price_json = {
-                "currency": response_body["currency"],
-                "price": response_body["totalAmount"],
+                "units": response_body["currency"],
+                "value": response_body["totalAmount"],
             }
 
         if price_json:
