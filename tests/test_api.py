@@ -1,8 +1,8 @@
 import json
 import os
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -10,6 +10,7 @@ from ades_fastapi.api import app, quote
 from ades_fastapi.utils import WorkflowType, QuoteRequest
 
 client = TestClient(app)
+
 
 @pytest.fixture(autouse=True)
 def setenvvar(monkeypatch):
@@ -488,9 +489,14 @@ def test_quote_from_planet(requests_mock):
 
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 
-    requests_mock.get('https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id', json=mock_planet_response)
+    requests_mock.get(
+        "https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id",
+        json=mock_planet_response,
+    )
 
-    body = QuoteRequest(**{"acquisitionId": "test_id", "collectionId": "test_collection", "catalogueId": "planet"})
+    body = QuoteRequest(
+        **{"acquisitionId": "test_id", "collectionId": "test_collection", "catalogueId": "planet"}
+    )
 
     response = quote(None, body)
 
