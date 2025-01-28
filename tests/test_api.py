@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from ades_fastapi.api import app, quote
-from ades_fastapi.utils import WorkflowType, QuoteRequest
+from ades_fastapi.utils import QuoteRequest, WorkflowType
 
 client = TestClient(app)
 
