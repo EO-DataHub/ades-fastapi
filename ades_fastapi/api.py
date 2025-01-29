@@ -1,9 +1,10 @@
 import logging
 import os
 from distutils.util import strtobool
+from typing import List, Literal, Optional
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -294,13 +295,28 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
 @app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
 def get_deployed_workspaced_jobs(
-    deploy_workspace: str, request: Request, limit: int = 10, skip: int = 0
+    deploy_workspace: str,
+    request: Request,
+    limit: int = 10,
+    skip: int = 0,
+    status: Optional[
+        List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
+    ] = Query(  # noqa: B008
+        None
+    ),
+    datetime: Optional[str] = Query(None, examples="2023-01-01T00:00:00Z"),  # noqa: B008
 ):
     """Endpoint to list all jobs in a workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, deploy_workspace, job_saver.job_owners, limit=limit, skip=skip
+        request,
+        deploy_workspace,
+        job_saver.job_owners,
+        limit=limit,
+        skip=skip,
+        status=status,
+        datetime=datetime,
     )
 
     return Response(

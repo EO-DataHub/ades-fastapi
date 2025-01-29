@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional
+from typing import List, Optional
 
 import boto3
 import botocore
@@ -480,7 +480,14 @@ class ADESClient:
         return response, content
 
     def get_deployed_workspaced_jobs(
-        self, request, deploy_workspace: str, job_owners: dict, limit: int, skip: int
+        self,
+        request,
+        deploy_workspace: str,
+        job_owners: dict,
+        limit: Optional[int] = None,
+        skip: Optional[int] = None,
+        status: Optional[List[str]] = None,
+        datetime: Optional[str] = None,
     ):
         username, _ = get_user_details(request)
 
@@ -488,7 +495,15 @@ class ADESClient:
         headers.pop("authorization", None)
 
         # Add limit to data params
-        params = {"limit": limit, "skip": skip}
+        params = {}
+        if limit:
+            params.update({"limit": limit})
+        if skip:
+            params.update({"skip": skip})
+        if status:
+            params.update({"status": status})
+        if datetime:
+            params.update({"datetime": datetime})
 
         # Get all jobs in the deployed workspace
         response = self._send_request(
