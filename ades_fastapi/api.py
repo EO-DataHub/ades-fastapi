@@ -304,7 +304,11 @@ def get_deployed_workspaced_jobs(
     ] = Query(  # noqa: B008
         None
     ),
-    datetime: Optional[str] = Query(None, examples="2023-01-01T00:00:00Z"),  # noqa: B008
+    datetime: Optional[str] = Query(
+        None,
+        description="A date range to filter for the created date of workflow jobs.",
+        examples="2023-01-01T00:00:00Z/2023-01-02T00:00:00Z",
+    ),  # noqa: B008
 ):
     """Endpoint to list all jobs in a workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
