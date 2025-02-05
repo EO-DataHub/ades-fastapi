@@ -337,6 +337,43 @@ def test_check_policy_execute_workflow_user_service(
     assert workflow_type == WorkflowType.USER_SERVICE
 
 
+@patch("ades_fastapi.dependency_client.get_user_details")
+@patch("ades_fastapi.dependency_client.get_access_policy")
+@patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
+def test_check_policy_execute_workflow_user_service_workflow_owner(
+    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+):
+    mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
+    mock_get_access_policy.return_value = {"user_service": True}
+    mock_opa_request.return_value.status_code = 200
+    mock_opa_request.return_value.json.return_value = {"result": True}
+
+    mock_request = MagicMock(
+        method="POST",
+        url=MagicMock(path="/test/path"),
+        scope={"path_params": {"deploy_workspace": "test_user", "workflow_id": "test_workflow"}},
+    )
+
+    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+
+    expected_input_data = {
+        "input": {
+            "roles": ["role1", "role2"],
+            "path": "/test/path",
+            "workspace": "test_user",
+            "method": "POST",
+            "is_user_service": True,
+            "is_public": False,
+            "allowed_workspaces": [],
+        }
+    }
+
+    mock_opa_request.assert_called_once_with(expected_input_data)
+
+    assert passed is True
+    assert workflow_type == WorkflowType.WORKFLOW
+
+
 @patch("ades_fastapi.dependency_client.DependencyClient._get_path_params")
 @patch("ades_fastapi.dependency_client.DependencyClient._check_policy")
 def test_check_access(mock_check_policy, mock_get_path_params, dependency_client):

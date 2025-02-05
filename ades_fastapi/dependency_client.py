@@ -65,7 +65,7 @@ class DependencyClient:
         ):  # not needed for PUT updates
             # Checking access to workflow for details and execution
             logger.debug(
-                "Checking accecss policy for workflow %s in workspace %s",
+                "Checking access policy for workflow %s in workspace %s",
                 workflow_id,
                 deploy_workspace,
             )
@@ -87,7 +87,10 @@ class DependencyClient:
                     "allowed_access", {}
                 ).get("workspaces", [])
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
-                if access_policy.get("user_service", False):
+                # TODO: determine ownership based on workspaces in user group
+                if deploy_workspace == username:
+                    wf_type = WorkflowType.WORKFLOW
+                elif access_policy.get("user_service", False):
                     wf_type = WorkflowType.USER_SERVICE
             else:
                 logger.info("No access policy found")
