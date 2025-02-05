@@ -124,3 +124,7 @@ class JobSaver:
             logger.error("Job details not found for job %s in workspace %s", job_id, workspace)
             return None
         return json.loads(job_details.get("Body").read().decode("utf-8"))
+
+    def get_job_owner(self, workspace: str, workflow_id: str, job_id: str):
+        job_details = self.get_job_details(workspace, workflow_id, job_id)
+        return job_details["calling_workspace"]
