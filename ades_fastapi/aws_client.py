@@ -29,10 +29,9 @@ def generate_token(token: str, workspace: str, scope: str) -> str:
         "scope": scope,
     }
 
-    print("sending request")
     response = requests.post(
         KEYCLOAK_URL,
-        json=payload,
+        data=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
@@ -68,7 +67,6 @@ def get_credentials(
 
     # copy inpit dict
     creds_dict = copy.deepcopy(creds_dict)
-    print(creds_dict)
 
     if service_scope:
         session_name = f"executing_{workspace}_session"
