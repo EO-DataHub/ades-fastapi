@@ -41,6 +41,7 @@ def generate_token(token: str, workspace: str, scope: str) -> str:
 
     try:
         access_token = response.json().get("access_token")
+        logger.info("Access token generated successfully for scope %s", scope)
     except Exception as e:
         logger.error("Failed to generate workspace token: %s", e)
         logger.error("Response was %s with status code: %s", response.text, response.status_code)
