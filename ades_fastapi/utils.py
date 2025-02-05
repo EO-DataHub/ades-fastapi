@@ -127,7 +127,6 @@ def check_workflow_inputs(data: dict) -> tuple:
                 return False, f"Input {input['id']} is not allowed in workflow"
     elif isinstance(inputs, dict):
         for key, _ in inputs.items():
-            print(key)
             if key in ILLEGAL_WORKFLOW_INPUTS:
                 return False, f"Input {key} is not allowed in workflow"
     return True, data["id"]
