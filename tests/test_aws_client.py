@@ -1,5 +1,6 @@
 import copy
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs
 
 import pytest
 import requests_mock
@@ -202,11 +203,11 @@ def test_generate_token_workflow():
     scope = "workspace:workspace"
 
     expected_payload = {
-        "client_id": "client-id",
-        "client_secret": "client-secret",
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
+        "client_id": ["client-id"],
+        "client_secret": ["client-secret"],
+        "grant_type": ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        "subject_token": [token],
+        "scope": [scope],
     }
 
     with requests_mock.Mocker() as m:
@@ -216,7 +217,7 @@ def test_generate_token_workflow():
         result = generate_token(token, workspace, scope)
         last_request = m.last_request
 
-        assert last_request.json() == expected_payload
+        assert parse_qs(last_request.text) == expected_payload
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
         assert result == "new-access-token"
 
@@ -229,11 +230,11 @@ def test_generate_token_user_service():
     scope = "user_service:workspace"
 
     expected_payload = {
-        "client_id": "client-id",
-        "client_secret": "client-secret",
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
+        "client_id": ["client-id"],
+        "client_secret": ["client-secret"],
+        "grant_type": ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        "subject_token": [token],
+        "scope": [scope],
     }
 
     with requests_mock.Mocker() as m:
@@ -243,7 +244,7 @@ def test_generate_token_user_service():
         result = generate_token(token, workspace, scope)
         last_request = m.last_request
 
-        assert last_request.json() == expected_payload
+        assert parse_qs(last_request.text) == expected_payload
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
         assert result == "new-access-token"
 
@@ -256,11 +257,11 @@ def test_generate_token_error():
     scope = "workspace:workspace"
 
     expected_payload = {
-        "client_id": "client-id",
-        "client_secret": "client-secret",
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
+        "client_id": ["client-id"],
+        "client_secret": ["client-secret"],
+        "grant_type": ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        "subject_token": [token],
+        "scope": [scope],
     }
 
     with requests_mock.Mocker() as m:
@@ -270,7 +271,7 @@ def test_generate_token_error():
 
         last_request = m.last_request
 
-        assert last_request.json() == expected_payload
+        assert parse_qs(last_request.text) == expected_payload
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
 
 
@@ -282,11 +283,11 @@ def test_generate_token_blank_token():
     scope = "workspace:workspace"
 
     expected_payload = {
-        "client_id": "client-id",
-        "client_secret": "client-secret",
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
+        "client_id": ["client-id"],
+        "client_secret": ["client-secret"],
+        "grant_type": ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        "subject_token": [token],
+        "scope": [scope],
     }
 
     with requests_mock.Mocker() as m:
@@ -296,7 +297,7 @@ def test_generate_token_blank_token():
 
         last_request = m.last_request
 
-        assert last_request.json() == expected_payload
+        assert parse_qs(last_request.text) == expected_payload
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
 
 
@@ -308,11 +309,11 @@ def test_generate_token_missing_token():
     scope = "workspace:workspace"
 
     expected_payload = {
-        "client_id": "client-id",
-        "client_secret": "client-secret",
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
+        "client_id": ["client-id"],
+        "client_secret": ["client-secret"],
+        "grant_type": ["urn:ietf:params:oauth:grant-type:token-exchange"],
+        "subject_token": [token],
+        "scope": [scope],
     }
 
     with requests_mock.Mocker() as m:
@@ -322,5 +323,5 @@ def test_generate_token_missing_token():
 
         last_request = m.last_request
 
-        assert last_request.json() == expected_payload
+        assert parse_qs(last_request.text) == expected_payload
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
