@@ -6,8 +6,8 @@ import pytest
 import requests_mock
 
 from ades_fastapi.aws_client import (
-    generate_aws_credentials, 
-    generate_token, 
+    generate_aws_credentials,
+    generate_token,
     get_credentials,
 )
 
