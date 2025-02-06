@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import boto3
 import requests
 
 from .utils import WorkflowType
@@ -13,8 +14,12 @@ class WorkflowExecutionException(Exception):
     pass
 
 
+WORKFLOWS_BUCKET = os.getenv("WORKFLOWS_BUCKET", "workflows-bucket")
+
+
 class JobSaver:
     def __init__(self, storage_dir: str):
+        self.s3_client = boto3.client("s3")
         self.storage_dir = storage_dir
         self.job_owners = {}
         self.workspace_jobs = {}
@@ -25,6 +30,7 @@ class JobSaver:
     def record_owner(
         self,
         response: requests.Response,
+        workflow_id: str,
         deploy_workspace: str,
         calling_workspace: str,
         workflow_type: WorkflowType = WorkflowType.WORKFLOW,
@@ -40,7 +46,6 @@ class JobSaver:
         self.update_job_owners(deploy_workspace, calling_workspace, job_id, workflow_type)
 
         # Record jobID against calling workspace
-
         logger.info(
             "Job owner for the job %s deployed in workspace %s is %s",
             job_id,
@@ -48,8 +53,23 @@ class JobSaver:
             calling_workspace,
         )
 
+        job_details = {}
+        job_details["jobID"] = job_id
+        job_details["workflow_id"] = workflow_id
+        job_details["workflow_type"] = workflow_type.value
+        job_details["deploy_workspace"] = deploy_workspace
+        job_details["calling_workspace"] = calling_workspace
+
+        self.s3_client.put_object(
+            Bucket=WORKFLOWS_BUCKET,
+            Key=f"{deploy_workspace}/{job_id}",
+            Body=json.dumps(job_details),
+            ContentType="application/json",
+        )
+
     def save_to_file(self):
         """Save job owners and workspace jobs to file"""
+
         with open(f"{self.storage_dir}/{self.job_owner_filename}", "w") as f:
             json.dump(self.job_owners, f)
         with open(f"{self.storage_dir}/{self.workspace_jobs_filename}", "w") as f:
@@ -92,3 +112,19 @@ class JobSaver:
         )
 
         self.save_to_file()
+
+    def get_job_details(self, workspace: str, workflow_id: str, job_id: str) -> dict:
+        """Get job owner from S3 job details"""
+        try:
+            job_details = self.s3_client.get_object(
+                Bucket=WORKFLOWS_BUCKET,
+                Key=f"{workspace}/{job_id}",
+            )
+        except self.s3_client.exceptions.NoSuchKey:
+            logger.error("Job details not found for job %s in workspace %s", job_id, workspace)
+            return None
+        return json.loads(job_details.get("Body").read().decode("utf-8"))
+
+    def get_job_owner(self, workspace: str, workflow_id: str, job_id: str):
+        job_details = self.get_job_details(workspace, workflow_id, job_id)
+        return job_details["calling_workspace"]

@@ -206,7 +206,7 @@ def test_execute_process_user_service(
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
     mock_job_saver.record_owner.assert_called_once_with(
-        mock_response, deploy_workspace, "test_user", WorkflowType.USER_SERVICE
+        mock_response, workflow_id, deploy_workspace, "test_user", WorkflowType.USER_SERVICE
     )
 
 
@@ -238,7 +238,7 @@ def test_execute_process_workflow(
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Status": "executing"}
     mock_job_saver.record_owner.assert_called_once_with(
-        mock_response, deploy_workspace, "test_user", WorkflowType.WORKFLOW
+        mock_response, workflow_id, deploy_workspace, "test_user", WorkflowType.WORKFLOW
     )
 
 

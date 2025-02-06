@@ -250,44 +250,84 @@ async def test_get_workflow(mock_send_request, ades_client):
 
 def test_configure_execute_request_user_service(ades_client):
     body = {"inputs": {"input": "value"}}
-    token = "valid-token"
+    creds = {
+        "calling_workspace": {
+            "AccessKeyId": "valid-access-key-id-workspace",
+            "SecretAccessKey": "valid-secret-access-key-workspace",
+            "SessionToken": "valid-session-token-workspace",
+        },
+        "executing_workspace": {
+            "AccessKeyId": "valid-access-key-id",
+            "SecretAccessKey": "valid-secret-access-key",
+            "SessionToken": "valid-session-token",
+        },
+    }
     calling_workspace = "calling-workspace"
     executing_workspace = "executing-workspace"
 
-    ades_client._configure_execute_request(body, token, calling_workspace, executing_workspace)
+    ades_client._configure_execute_request(body, creds, calling_workspace, executing_workspace)
 
     assert body == {
         "inputs": {
             "input": "value",
-            "user_token": token,
             "calling_workspace": calling_workspace,
             "executing_workspace": executing_workspace,
+            "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+            "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+            "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "AWS_ACCESS_KEY_ID": "valid-access-key-id",
+            "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
+            "AWS_SESSION_TOKEN": "valid-session-token",
         }
     }
 
 
 def test_configure_execute_request_workflow(ades_client):
     body = {"inputs": {"input": "value"}}
-    token = "valid-token"
+    creds = {
+        "calling_workspace": {
+            "AccessKeyId": "valid-access-key-id-workspace",
+            "SecretAccessKey": "valid-secret-access-key-workspace",
+            "SessionToken": "valid-session-token-workspace",
+        },
+        "executing_workspace": {},
+    }
+
     calling_workspace = "calling-workspace"
 
-    ades_client._configure_execute_request(body, token, calling_workspace)
+    ades_client._configure_execute_request(body, creds, calling_workspace)
 
     assert body == {
         "inputs": {
             "input": "value",
-            "user_token": token,
             "calling_workspace": calling_workspace,
             "executing_workspace": calling_workspace,
+            "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+            "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+            "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+            "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+            "AWS_SESSION_TOKEN": "valid-session-token-workspace",
         }
     }
 
 
 @pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.generate_aws_credentials")
 @patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
 @patch("ades_fastapi.ades_client.get_user_details", return_value=("username", []))
-async def test_execute_workflow(mock_get_user_details, mock_send_execute_to_ades, ades_client):
+async def test_execute_workflow(
+    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
+):
     # Configure mocks
+    mock_generate_aws_credentials.return_value = {
+        "calling_workspace": {
+            "AccessKeyId": "valid-access-key-id-workspace",
+            "SecretAccessKey": "valid-secret-access-key-workspace",
+            "SessionToken": "valid-session-token-workspace",
+        },
+        "executing_workspace": {},
+    }
     mock_response = MagicMock(
         status_code=201,
         json=lambda: {"Status": "Running"},
@@ -310,7 +350,12 @@ async def test_execute_workflow(mock_get_user_details, mock_send_execute_to_ades
                 "input": "value",
                 "calling_workspace": "username",
                 "executing_workspace": "username",
-                "user_token": "valid-token",
+                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "AWS_SESSION_TOKEN": "valid-session-token-workspace",
             }
         },
     )
@@ -320,10 +365,25 @@ async def test_execute_workflow(mock_get_user_details, mock_send_execute_to_ades
 
 
 @pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.generate_aws_credentials")
 @patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
 @patch("ades_fastapi.ades_client.get_user_details", return_value=("username", []))
-async def test_execute_user_service(mock_get_user_details, mock_send_execute_to_ades, ades_client):
+async def test_execute_user_service(
+    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
+):
     # Configure mocks
+    mock_generate_aws_credentials.return_value = {
+        "calling_workspace": {
+            "AccessKeyId": "valid-access-key-id-workspace",
+            "SecretAccessKey": "valid-secret-access-key-workspace",
+            "SessionToken": "valid-session-token-workspace",
+        },
+        "executing_workspace": {
+            "AccessKeyId": "valid-access-key-id",
+            "SecretAccessKey": "valid-secret-access-key",
+            "SessionToken": "valid-session-token",
+        },
+    }
     mock_response = MagicMock(
         status_code=201,
         json=lambda: {"Status": "Running"},
@@ -346,7 +406,61 @@ async def test_execute_user_service(mock_get_user_details, mock_send_execute_to_
                 "input": "value",
                 "calling_workspace": "username",
                 "executing_workspace": "deploy_workspace",
-                "user_token": "valid-token",
+                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "AWS_ACCESS_KEY_ID": "valid-access-key-id",
+                "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
+                "AWS_SESSION_TOKEN": "valid-session-token",
+            }
+        },
+    )
+    assert response.headers["Location"] == "http://test-base-url/path/to/execution"
+    assert response.status_code == 201
+    assert content == json.dumps({"Status": "Running"}, indent=2)
+
+
+@pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.generate_aws_credentials")
+@patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
+@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", []))
+async def test_execute_user_service_missing_executing_creds(
+    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
+):
+    # Configure mocks
+    mock_generate_aws_credentials.return_value = {
+        "calling_workspace": {
+            "AccessKeyId": "valid-access-key-id-workspace",
+            "SecretAccessKey": "valid-secret-access-key-workspace",
+            "SessionToken": "valid-session-token-workspace",
+        },
+        "executing_workspace": None,
+    }
+    mock_response = MagicMock(
+        status_code=201,
+        json=lambda: {"Status": "Running"},
+        headers={"Location": "http://localhost:8080/path/to/execution"},
+    )
+    mock_send_execute_to_ades.return_value = mock_response
+
+    request = MagicMock(headers={"authorization": "Bearer valid-token"})
+    request.json = AsyncMock(return_value={"inputs": {"input": "value"}})
+
+    response, content = await ades_client.execute_user_service(
+        request, "deploy_workspace", "workflow-id"
+    )
+
+    mock_send_execute_to_ades.assert_called_once_with(
+        "deploy_workspace",
+        "workflow-id",
+        {
+            "inputs": {
+                "input": "value",
+                "calling_workspace": "username",
+                "executing_workspace": "deploy_workspace",
+                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
             }
         },
     )
