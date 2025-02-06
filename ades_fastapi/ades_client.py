@@ -450,9 +450,7 @@ class ADESClient:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-
         data = {"json": body}
-        print(data)
         response = self._send_request(
             "POST", f"{deploy_workspace}/ogc-api/processes/{workflow_id}/execution", headers, data
         )
