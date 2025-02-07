@@ -27,7 +27,7 @@ class QuoteRequest(BaseModel):
     itemUuids: list = []
 
 
-class QuotesResponse(BaseModel):
+class QuoteResponse(BaseModel):
     """Response body for quote endpoint"""
 
     value: float

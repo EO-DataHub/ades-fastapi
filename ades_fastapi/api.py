@@ -13,7 +13,7 @@ from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
 from .planet_client import PlanetClient
-from .utils import QuoteRequest, QuotesResponse, WorkflowType, get_user_details
+from .utils import QuoteRequest, QuoteResponse, WorkflowType, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -376,25 +376,44 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.post("/quotes", response_model=QuotesResponse)
-def quote(request: Request, body: Annotated[
-        QuoteRequest, Body(
+@app.post(
+    "/quotes",
+    response_model=QuoteResponse,
+    responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
+)
+def quote(
+    request: Request,
+    body: Annotated[
+        QuoteRequest,
+        Body(
             examples=[
-                {"catalogueId": "airbus", "acquisitionId": "12345_67890_12345", "collectionId": "airbus_sar_data",
-                 "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]], "itemUuids": [
-                    "12345678-1234-1234-1234-123456789012", "87654321-4321-4321-4321-210987654321"]},
-                {"catalogueId": "planet", "acquisitionId": "12345_67890_12345", "collectionId": "SkySatCollect"},
-
+                {
+                    "catalogueId": "airbus",
+                    "acquisitionId": "12345_67890_12345",
+                    "collectionId": "airbus_sar_data",
+                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]],
+                    "itemUuids": [
+                        "12345678-1234-1234-1234-123456789012",
+                        "87654321-4321-4321-4321-210987654321",
+                    ],
+                },
+                {
+                    "catalogueId": "planet",
+                    "acquisitionId": "12345_67890_12345",
+                    "collectionId": "SkySatCollect",
+                },
             ],
         ),
-    ]):
+    ],
+):
     """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection.
 
     * catalogueId: Name of catalogue. Currently `planet` and `airbus` are supported
     * acquisitionId: ID of item to be acquisitioned
     * collectionId: ID of collection containing item
     * coordinates: (Airbus-only) Coordinates are in the same format used by STAC
-    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and consists of a list of ids corresponding to individual mono items that are part of the order
+    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
+      consists of a list of ids corresponding to individual mono items that are part of the order
 
     """
 
