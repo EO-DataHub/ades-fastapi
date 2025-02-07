@@ -378,7 +378,7 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
 
 @app.post("/quotes", response_model=QuotesResponse)
 def quote(request: Request, body: QuoteRequest):
-    """Return a quote for Planet or Airbus catalogues for a given acquisition ID in a collection"""
+    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection."""
 
     catalogue_name = body.catalogueId.lower()
     collection_id = body.collectionId
