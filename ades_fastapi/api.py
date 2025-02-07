@@ -534,7 +534,7 @@ def quote(
             }
 
         if price_json:
-            return QuotesResponse(value=price_json["value"], units=price_json["units"])
+            return QuoteResponse(value=price_json["value"], units=price_json["units"])
 
         return JSONResponse(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
@@ -544,7 +544,7 @@ def quote(
         request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
         response_body = planet_client.get_quote_from_planet(request_body)
 
-        return QuotesResponse(value=response_body["value"], units=response_body["units"])
+        return QuoteResponse(value=response_body["value"], units=response_body["units"])
 
     else:
         return JSONResponse(
