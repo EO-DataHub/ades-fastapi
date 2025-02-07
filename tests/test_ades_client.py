@@ -228,7 +228,15 @@ async def test_list_workflows(
     )
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
-    response, content = ades_client.list_workflows(request, "test-deploy-workspace")
+    response, content = ades_client.list_workflows(
+        request, "test-deploy-workspace", limit=10, skip=0
+    )
+    mock_send_request.assert_called_once_with(
+        "GET",
+        "test-deploy-workspace/ogc-api/processes",
+        {},
+        data={"params": {"limit": 10, "skip": 0}},
+    )
     assert response.status_code == 200
     assert json.loads(content) == {"processes": [], "links": []}
 
@@ -640,11 +648,54 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
     job_owners = {"test-deploy-workspace-job-id": "username"}
+    # Test limit
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test-deploy-workspace", job_owners
+        request, "test-deploy-workspace", job_owners, limit=10
+    )
+    mock_send_request.assert_any_call(
+        "GET", "test-deploy-workspace/ogc-api/jobs", {}, data={"params": {"limit": 10}}
     )
     assert response.status_code == 200
-    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}]}
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
+
+    # Test limit and skip
+    response, content = ades_client.get_deployed_workspaced_jobs(
+        request, "test-deploy-workspace", job_owners, limit=10, skip=10
+    )
+    mock_send_request.assert_any_call(
+        "GET", "test-deploy-workspace/ogc-api/jobs", {}, data={"params": {"limit": 10, "skip": 10}}
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
+
+    # Test status
+    response, content = ades_client.get_deployed_workspaced_jobs(
+        request, "test-deploy-workspace", job_owners, status="running,failed"
+    )
+    mock_send_request.assert_any_call(
+        "GET",
+        "test-deploy-workspace/ogc-api/jobs",
+        {},
+        data={"params": {"status": "running,failed"}},
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
+
+    # Test datetime
+    response, content = ades_client.get_deployed_workspaced_jobs(
+        request,
+        "test-deploy-workspace",
+        job_owners,
+        datetime="2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
+    )
+    mock_send_request.assert_any_call(
+        "GET",
+        "test-deploy-workspace/ogc-api/jobs",
+        {},
+        data={"params": {"datetime": "2021-01-01T00:00:00Z/2021-01-02T00:00:00Z"}},
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {"jobs": [{"jobID": "job-id"}], "numberTotal": 1}
 
 
 @pytest.mark.asyncio

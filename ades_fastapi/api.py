@@ -1,9 +1,10 @@
 import logging
 import os
 from distutils.util import strtobool
+from typing import List, Literal, Optional
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -150,11 +151,13 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
 
 @app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
-def list_processes(deploy_workspace: str, request: Request):
+def list_processes(deploy_workspace: str, request: Request, limit: int = 10, skip: int = 0):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
-    response, content = ades_client.list_workflows(request, deploy_workspace)
+    response, content = ades_client.list_workflows(
+        request, deploy_workspace, limit=limit, skip=skip
+    )
 
     return Response(
         content=content,
@@ -293,12 +296,33 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
-def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
+def get_deployed_workspaced_jobs(
+    deploy_workspace: str,
+    request: Request,
+    limit: int = 10,
+    skip: int = 0,
+    status: Optional[
+        List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
+    ] = Query(  # noqa: B008
+        None
+    ),
+    datetime: Optional[str] = Query(
+        None,
+        description="A date range to filter for the created date of workflow jobs.",
+        example="2023-01-01T00:00:00Z/2023-01-02T00:00:00Z",
+    ),  # noqa: B008
+):
     """Endpoint to list all jobs in a workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, deploy_workspace, job_saver.job_owners
+        request,
+        deploy_workspace,
+        job_saver.job_owners,
+        limit=limit,
+        skip=skip,
+        status=status,
+        datetime=datetime,
     )
 
     return Response(
@@ -308,7 +332,7 @@ def get_deployed_workspaced_jobs(deploy_workspace: str, request: Request):
     )
 
 
-@app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+# @app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
