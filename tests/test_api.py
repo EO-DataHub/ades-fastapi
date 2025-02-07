@@ -445,7 +445,7 @@ def test_quote__airbus_optical_multi_order(
         "/ades/quotes",
         headers=headers,
         json={
-            "item_uuids": ["12345", "67890"],
+            "itemUuids": ["12345", "67890"],
             "catalogueId": "airbus",
             "collectionId": "airbus_pneo_data",
         },

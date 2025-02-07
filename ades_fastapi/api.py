@@ -1,10 +1,10 @@
 import logging
 import os
 from distutils.util import strtobool
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 import requests
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -13,7 +13,7 @@ from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
 from .planet_client import PlanetClient
-from .utils import QuoteRequest, QuotesResponse, WorkflowType, get_user_details
+from .utils import QuoteRequest, QuoteResponse, WorkflowType, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -376,9 +376,46 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.post("/quotes", response_model=QuotesResponse)
-def quote(request: Request, body: QuoteRequest):
-    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection."""
+@app.post(
+    "/quotes",
+    response_model=QuoteResponse,
+    responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
+)
+def quote(
+    request: Request,
+    body: Annotated[
+        QuoteRequest,
+        Body(
+            examples=[
+                {
+                    "catalogueId": "airbus",
+                    "acquisitionId": "12345_67890_12345",
+                    "collectionId": "airbus_sar_data",
+                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]],
+                    "itemUuids": [
+                        "12345678-1234-1234-1234-123456789012",
+                        "87654321-4321-4321-4321-210987654321",
+                    ],
+                },
+                {
+                    "catalogueId": "planet",
+                    "acquisitionId": "12345_67890_12345",
+                    "collectionId": "SkySatCollect",
+                },
+            ],
+        ),
+    ],
+):
+    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection.
+
+    * catalogueId: Name of catalogue. Currently `planet` and `airbus` are supported
+    * acquisitionId: ID of item to be acquisitioned
+    * collectionId: ID of collection containing item
+    * coordinates: (Airbus-only) Coordinates are in the same format used by STAC
+    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
+      consists of a list of ids corresponding to individual mono items that are part of the order
+
+    """
 
     catalogue_name = body.catalogueId.lower()
     collection_id = body.collectionId
@@ -397,7 +434,7 @@ def quote(request: Request, body: QuoteRequest):
             if collection_id == "airbus_pneo_data":
                 product_type = "PleiadesNeoArchiveMono"
                 contract_id = "CTR24005241"
-                item_uuids = body.item_uuids
+                item_uuids = body.itemUuids
                 item_id = None
                 if len(item_uuids) > 1:
                     product_type = "PleiadesNeoArchiveMulti"
@@ -497,7 +534,7 @@ def quote(request: Request, body: QuoteRequest):
             }
 
         if price_json:
-            return QuotesResponse(value=price_json["value"], units=price_json["units"])
+            return QuoteResponse(value=price_json["value"], units=price_json["units"])
 
         return JSONResponse(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
@@ -507,7 +544,7 @@ def quote(request: Request, body: QuoteRequest):
         request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
         response_body = planet_client.get_quote_from_planet(request_body)
 
-        return QuotesResponse(value=response_body["value"], units=response_body["units"])
+        return QuoteResponse(value=response_body["value"], units=response_body["units"])
 
     else:
         return JSONResponse(
