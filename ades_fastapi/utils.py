@@ -24,7 +24,7 @@ class QuoteRequest(BaseModel):
     acquisitionId: str = None
     collectionId: str = None
     coordinates: list = None
-    item_uuids: list = []
+    itemUuids: list = []
 
 
 class QuotesResponse(BaseModel):
