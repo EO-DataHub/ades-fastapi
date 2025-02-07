@@ -27,6 +27,13 @@ class QuoteRequest(BaseModel):
     item_uuids: list = []
 
 
+class QuotesResponse(BaseModel):
+    """Response body for quote endpoint"""
+
+    value: float
+    units: str
+
+
 class WorkflowType(Enum):
     DEFAULT = "default"
     WORKFLOW = "workflow"

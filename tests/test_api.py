@@ -1,4 +1,3 @@
-import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -513,5 +512,4 @@ def test_quote_from_planet(requests_mock):
 
     response = quote(None, body)
 
-    assert response.status_code == 200
-    assert json.loads(response.body.decode("utf-8")) == expected
+    assert response.__dict__ == expected

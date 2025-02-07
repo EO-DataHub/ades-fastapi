@@ -13,7 +13,7 @@ from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
 from .planet_client import PlanetClient
-from .utils import QuoteRequest, WorkflowType, get_user_details
+from .utils import QuoteRequest, QuotesResponse, WorkflowType, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -376,9 +376,9 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.post("/quotes")
+@app.post("/quotes", response_model=QuotesResponse)
 def quote(request: Request, body: QuoteRequest):
-    """Return a quote for a given acquisition ID"""
+    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection."""
 
     catalogue_name = body.catalogueId.lower()
     collection_id = body.collectionId
@@ -497,10 +497,8 @@ def quote(request: Request, body: QuoteRequest):
             }
 
         if price_json:
-            return JSONResponse(
-                content=price_json,
-                status_code=200,
-            )
+            return QuotesResponse(value=price_json["value"], units=price_json["units"])
+
         return JSONResponse(
             status_code=404, content={"detail": "Quote not found for given acquisition ID"}
         )
@@ -509,10 +507,7 @@ def quote(request: Request, body: QuoteRequest):
         request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
         response_body = planet_client.get_quote_from_planet(request_body)
 
-        return JSONResponse(
-            content=response_body,
-            status_code=200,
-        )
+        return QuotesResponse(value=response_body["value"], units=response_body["units"])
 
     else:
         return JSONResponse(
