@@ -545,6 +545,9 @@ def quote(
         try:
             area = planet_client.get_quote_from_planet(acquisition_id, collection_id, coordinates)
 
+            if collection_id.lower() == "skysatscene" and area < 3:  # SkySatScene has a minimum order size of 3 km2
+                area = 3
+
             return QuoteResponse(value=area, units="km2")
 
         except Exception as e:
