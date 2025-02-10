@@ -16,7 +16,7 @@ class PlanetClient:
     def __init__(self):
         pass
 
-    def get_quote_from_planet(self, acquisition_id: str, collection_id: str, aoi: list=[]) -> str:
+    def get_quote_from_planet(self, acquisition_id: str, collection_id: str, aoi: list = []) -> str:
         """Get a quote from Planet API"""
 
         try:
@@ -38,7 +38,9 @@ class PlanetClient:
 
             except GEOSException:
                 logging.error(traceback.format_exc())
-                raise Exception(f"Invalid input. Check that coordinates are not self-intersecting polygons")
+                raise Exception(
+                    "Invalid input. Check that coordinates are not self-intersecting polygons"
+                )
 
         else:
             area = self.calculate_area(coordinates)
@@ -56,4 +58,3 @@ class PlanetClient:
     def round_area(self, area: float) -> int:
         """Area is an estimate. Round up to the nearest integer."""
         return int(math.ceil(area))
-

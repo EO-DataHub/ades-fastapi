@@ -464,11 +464,7 @@ def test_quote__planet(mock_get_quote_from_planet):
         headers=headers,
         json={"acquisitionId": "12345", "catalogueId": "planet", "collectionId": "collection-id"},
     )
-    mock_get_quote_from_planet.assert_called_once_with(
-        "12345", "collection-id", None
-    )
-    print('xxxxxxxxxxxxxxxxx')
-    print(response.json())
+    mock_get_quote_from_planet.assert_called_once_with("12345", "collection-id", None)
     assert response.status_code == 200
     assert response.json() == {"value": 34, "units": "km2"}
 
