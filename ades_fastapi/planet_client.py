@@ -16,7 +16,9 @@ class PlanetClient:
     def __init__(self):
         pass
 
-    def get_quote_from_planet(self, acquisition_id: str, collection_id: str, aoi: list = ()) -> float:
+    def get_quote_from_planet(
+        self, acquisition_id: str, collection_id: str, aoi: list = ()
+    ) -> float:
         """Get a quote from Planet API"""
 
         try:
