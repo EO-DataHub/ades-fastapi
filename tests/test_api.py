@@ -15,7 +15,7 @@ client = TestClient(app)
 def setenvvar(monkeypatch):
     with patch.dict(os.environ, clear=True):
         envvars = {
-            "BASE_URL": "https://url.com",
+            "PLANET_BASE_URL": "https://url.com/planet",
         }
         for k, v in envvars.items():
             monkeypatch.setenv(k, v)
@@ -500,7 +500,7 @@ def test_quote_from_planet(requests_mock):
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 
     requests_mock.get(
-        "https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id",
+        "https://url.com/planet/collections/test_collection/items/test_id",
         json=mock_planet_response,
     )
 
