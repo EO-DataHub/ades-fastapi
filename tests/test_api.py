@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from ades_fastapi.api import app, quote
+from ades_fastapi.job_saver import JobSaver
 from ades_fastapi.utils import QuoteRequest, WorkflowType
 
 client = TestClient(app)
@@ -209,16 +210,18 @@ def test_execute_process_user_service(
     )
 
 
+@patch("asyncio.sleep")
 @patch("ades_fastapi.api.get_user_details")
 @patch("ades_fastapi.api.job_saver")
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.execute_workflow")
 def test_execute_process_workflow(
-    mock_execute_workflow, mock_check_access, mock_job_saver, mock_get_user_details
+    mock_execute_workflow, mock_check_access, mock_job_saver, mock_get_user_details, mock_sleep
 ):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
+    mock_sleep.return_value = None
     mock_get_user_details.return_value = "test_user", []
     mock_job_saver.record_owner.return_value = None
     mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
@@ -239,6 +242,8 @@ def test_execute_process_workflow(
     mock_job_saver.record_owner.assert_called_once_with(
         mock_response, workflow_id, deploy_workspace, "test_user", WorkflowType.WORKFLOW
     )
+    # Check rate limit was checked and waited
+    assert mock_sleep.call_count == 1
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
@@ -318,9 +323,10 @@ def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_ch
         },
     )
     calls = mock_get_deployed_workspaced_jobs.call_args
+    print(calls)
     assert isinstance(calls[0][0], Request)
     assert calls[0][1] == deploy_workspace
-    assert isinstance(calls[0][2], dict)
+    assert isinstance(calls[0][2], JobSaver)
     assert calls[1]["limit"] == 10
     assert calls[1]["skip"] == 2
     assert calls[1]["status"] == ["successful", "failed"]
