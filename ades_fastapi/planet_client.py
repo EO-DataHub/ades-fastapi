@@ -23,7 +23,7 @@ class PlanetClient:
 
         try:
             feature = requests.get(
-                f"{os.environ['BASE_URL']}/api/catalogue/stac/catalogs/supported-datasets/planet/collections/{collection_id}/items/{acquisition_id}"
+                f"{os.environ['PLANET_BASE_URL'].rstrip('/')}/collections/{collection_id}/items/{acquisition_id}"
             ).json()
         except requests.exceptions.JSONDecodeError as e:
             raise HTTPException(404) from e
@@ -31,7 +31,7 @@ class PlanetClient:
         coordinates = feature["geometry"]["coordinates"][0]  # double nested
 
         if aoi:
-            aoi_structure = Polygon(aoi)
+            aoi_structure = Polygon(aoi[0])  # also double nested
             coordinates_structure = Polygon(coordinates)
 
             try:
