@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import os
 from distutils.util import strtobool
 from typing import Annotated, List, Literal, Optional
 
+import boto3
 import requests
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -13,7 +15,7 @@ from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
 from .planet_client import PlanetClient
-from .utils import QuoteRequest, QuoteResponse, WorkflowType, get_user_details
+from .utils import QuoteRequest, QuoteResponse, WorkflowType, check_rate_limit, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -41,15 +43,14 @@ ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true")
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
 
-
 # ADES Policy bucket name
 ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 
 # ADES policy prefix
 ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
 
-# Job owner storage directory
-JOB_OWNER_STORAGE_DIR = os.getenv("JOB_OWNER_STORAGE_DIR", "/job-data")
+# ADES execution rate limit in seconds
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))
 
 # Environment used for calls to airbus API
 AIRBUS_ENV = os.getenv("AIRBUS_ENV", "dev")
@@ -72,7 +73,8 @@ app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 def configure_job_saver():
     """Configure the job saver"""
-    return JobSaver(JOB_OWNER_STORAGE_DIR)
+    s3_client = boto3.client("s3")
+    return JobSaver(s3_client)
 
 
 # Create clients used by the API
@@ -89,9 +91,12 @@ dependency_client = DependencyClient(
     OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX, ENABLE_OPA_POLICY_CHECK
 )
 
+# Create rate-limiting storage
+workspace_rates = {}
+
 
 def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
-    passed, wf_type = dependency_client.check_access(request, job_saver.job_owners)
+    passed, wf_type = dependency_client.check_access(request, job_saver)
 
     if not passed:
         if not get_user_details(request)[0]:
@@ -151,7 +156,9 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
 
 @app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
-def list_processes(deploy_workspace: str, request: Request, limit: int = 10, skip: int = 0):
+def list_processes(
+    deploy_workspace: str, request: Request, limit: Optional[int] = None, skip: int = 0
+):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
@@ -237,17 +244,35 @@ async def execute_process(
     logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
         case WorkflowType.USER_SERVICE:
-            response, content = await ades_client.execute_user_service(
-                request,
-                deploy_workspace,
-                workflow_id,
-            )
+            if check_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
+                response, content = await ades_client.execute_user_service(
+                    request,
+                    deploy_workspace,
+                    workflow_id,
+                )
+            else:
+                # Wait for rate limit to be reset
+                await asyncio.sleep(RATE_LIMIT)
+                response, content = await ades_client.execute_user_service(
+                    request,
+                    deploy_workspace,
+                    workflow_id,
+                )
         case WorkflowType.WORKFLOW:
-            response, content = await ades_client.execute_workflow(
-                request,
-                deploy_workspace,
-                workflow_id,
-            )
+            if check_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
+                response, content = await ades_client.execute_workflow(
+                    request,
+                    deploy_workspace,
+                    workflow_id,
+                )
+            else:
+                # Wait for rate limit to be reset
+                await asyncio.sleep(RATE_LIMIT)
+                response, content = await ades_client.execute_workflow(
+                    request,
+                    deploy_workspace,
+                    workflow_id,
+                )
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
@@ -318,7 +343,7 @@ def get_deployed_workspaced_jobs(
     response, content = ades_client.get_deployed_workspaced_jobs(
         request,
         deploy_workspace,
-        job_saver.job_owners,
+        job_saver,
         limit=limit,
         skip=skip,
         status=status,

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from enum import Enum
 
 import boto3
@@ -190,3 +191,21 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     )
 
     return response.json()
+
+
+def check_rate_limit(workspace: str, workspace_rates: dict, rate_limit: int) -> bool:
+    """Check if the workspace has exceeded its rate limit"""
+    time_now = int(time.time())
+    if workspace in workspace_rates:
+        last_execution = workspace_rates[workspace].get("last_execution")
+        if last_execution and last_execution - time_now < rate_limit:
+            # Workspace has exceeded its rate limit
+            logger.info("Workspace %s has exceeded its rate limit", workspace)
+            return False
+        # Update the last execution time
+        workspace_rates[workspace]["last_execution"] = time_now
+    else:
+        # This is the first run in the workspace
+        workspace_rates[workspace] = {"last_execution": time_now}
+    print("success")
+    return True
