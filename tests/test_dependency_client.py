@@ -66,18 +66,6 @@ def get_job_saver():
         job_saver = JobSaver(s3_client=s3)
 
         yield job_saver
-    # return {
-    #     "workspace-job_id": {"calling": "test_workspace", "deployed": None},
-    #     "test_workspace-job_1234": {"calling": "test_user", "deployed": None},
-    #     "test_workspace-e4eaaaf2-d142-11e1-b3e4-080027620cdd": {
-    #         "calling": "test_user",
-    #         "deployed": None,
-    #     },
-    #     "another_workspace-aaaaaaaa-bbbb-cccc-dddd-000000000000": {
-    #         "calling": "someother_workspace",
-    #         "deployed": "another_user",
-    #     },
-    # }
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
