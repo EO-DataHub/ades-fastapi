@@ -16,10 +16,10 @@ class PlanetClient:
     def __init__(self):
         pass
 
-    def get_quote_from_planet(
+    def get_area_estimate(
         self, acquisition_id: str, collection_id: str, aoi: list = ()
     ) -> float:
-        """Get a quote from Planet API"""
+        """Calculate the area intersection between an acquisition ID and an AOI (if provided), to be used as an estimate for the Planet area quote"""
 
         try:
             feature = requests.get(

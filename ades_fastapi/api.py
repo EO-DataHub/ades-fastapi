@@ -543,7 +543,7 @@ def quote(
 
     elif catalogue_name == "planet":
         try:
-            area = planet_client.get_quote_from_planet(acquisition_id, collection_id, coordinates)
+            area = planet_client.get_area_estimate(acquisition_id, collection_id, coordinates)
 
             if collection_id.lower() == "skysatscene" and area < 3:
                 # SkySatScene has a minimum order size of 3 km2
