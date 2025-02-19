@@ -16,9 +16,7 @@ class PlanetClient:
     def __init__(self):
         pass
 
-    def get_area_estimate(
-        self, acquisition_id: str, collection_id: str, aoi: list = ()
-    ) -> float:
+    def get_area_estimate(self, acquisition_id: str, collection_id: str, aoi: list = ()) -> float:
         """Calculate the area intersection between an acquisition ID and an AOI (if provided), to be used
         as an estimate for the Planet area quote"""
 

@@ -455,7 +455,7 @@ def test_quote__airbus_optical_multi_order(
     assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["dataSourceIds"]) == 2
 
 
-@patch("ades_fastapi.planet_client.PlanetClient.get_quote_from_planet")
+@patch("ades_fastapi.planet_client.PlanetClient.get_area_estimate")
 def test_quote__planet(mock_get_quote_from_planet):
     mock_get_quote_from_planet.return_value = 34
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
