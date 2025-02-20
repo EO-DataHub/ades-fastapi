@@ -323,7 +323,6 @@ def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_ch
         },
     )
     calls = mock_get_deployed_workspaced_jobs.call_args
-    print(calls)
     assert isinstance(calls[0][0], Request)
     assert calls[0][1] == deploy_workspace
     assert isinstance(calls[0][2], JobSaver)
