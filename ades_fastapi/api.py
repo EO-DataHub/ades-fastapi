@@ -411,7 +411,7 @@ def quote(
     * catalogueId: Name of catalogue. Currently `planet` and `airbus` are supported
     * acquisitionId: ID of item to be acquisitioned
     * collectionId: ID of collection containing item
-    * coordinates: Coordinates are in the same format used by STAC
+    * coordinates: Coordinates to limit the AOI of the item for purchase where possible. Given in the same nested format as STAC
     * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
       consists of a list of ids corresponding to individual mono items that are part of the order
 
