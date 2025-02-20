@@ -411,7 +411,8 @@ def quote(
     * catalogueId: Name of catalogue. Currently `planet` and `airbus` are supported
     * acquisitionId: ID of item to be acquisitioned
     * collectionId: ID of collection containing item
-    * coordinates: (Airbus-only) Coordinates are in the same format used by STAC
+    * coordinates: Coordinates to limit the AOI of the item for purchase where possible. Given in the
+      same nested format as STAC
     * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
       consists of a list of ids corresponding to individual mono items that are part of the order
 
@@ -420,6 +421,7 @@ def quote(
     catalogue_name = body.catalogueId.lower()
     collection_id = body.collectionId
     acquisition_id = body.acquisitionId
+    coordinates = body.coordinates
 
     if catalogue_name == "airbus":
         if collection_id == "airbus_sar_data":
@@ -459,7 +461,7 @@ def quote(
                     {
                         "id": 1,
                         "name": "Polygon 1",
-                        "geometry": {"type": "Polygon", "coordinates": body.coordinates},
+                        "geometry": {"type": "Polygon", "coordinates": coordinates},
                     }
                 ],
                 "programReference": "",
@@ -541,10 +543,17 @@ def quote(
         )
 
     elif catalogue_name == "planet":
-        request_body = {"acquisitions": [acquisition_id], "collection": collection_id}
-        response_body = planet_client.get_quote_from_planet(request_body)
+        try:
+            area = planet_client.get_area_estimate(acquisition_id, collection_id, coordinates)
 
-        return QuoteResponse(value=response_body["value"], units=response_body["units"])
+            if collection_id.lower() == "skysatscene" and area < 3:
+                # SkySatScene has a minimum order size of 3 km2
+                area = 3
+
+            return QuoteResponse(value=area, units="km2")
+
+        except Exception as e:
+            return JSONResponse(content={"message": str(e)}, status_code=400)
 
     else:
         return JSONResponse(

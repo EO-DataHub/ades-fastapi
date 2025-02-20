@@ -15,7 +15,7 @@ client = TestClient(app)
 def setenvvar(monkeypatch):
     with patch.dict(os.environ, clear=True):
         envvars = {
-            "BASE_URL": "https://url.com",
+            "PLANET_BASE_URL": "https://url.com/planet",
         }
         for k, v in envvars.items():
             monkeypatch.setenv(k, v)
@@ -455,18 +455,16 @@ def test_quote__airbus_optical_multi_order(
     assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["dataSourceIds"]) == 2
 
 
-@patch("ades_fastapi.planet_client.PlanetClient.get_quote_from_planet")
+@patch("ades_fastapi.planet_client.PlanetClient.get_area_estimate")
 def test_quote__planet(mock_get_quote_from_planet):
-    mock_get_quote_from_planet.return_value = {"value": 34, "units": "km2"}
+    mock_get_quote_from_planet.return_value = 34
     headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
     response = client.post(
         "/ades/quotes",
         headers=headers,
         json={"acquisitionId": "12345", "catalogueId": "planet", "collectionId": "collection-id"},
     )
-    mock_get_quote_from_planet.assert_called_once_with(
-        {"acquisitions": ["12345"], "collection": "collection-id"},
-    )
+    mock_get_quote_from_planet.assert_called_once_with("12345", "collection-id", None)
     assert response.status_code == 200
     assert response.json() == {"value": 34, "units": "km2"}
 
@@ -502,7 +500,7 @@ def test_quote_from_planet(requests_mock):
     mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
 
     requests_mock.get(
-        "https://url.com/api/catalogue/stac/catalogs/supported-datasets/planet/collections/test_collection/items/test_id",
+        "https://url.com/planet/collections/test_collection/items/test_id",
         json=mock_planet_response,
     )
 
