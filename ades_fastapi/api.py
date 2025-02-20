@@ -19,8 +19,8 @@ from .utils import (
     QuoteRequest,
     QuoteResponse,
     WorkflowType,
-    check_within_rate_limit,
     get_user_details,
+    is_within_rate_limit,
 )
 
 logging.basicConfig(
@@ -250,7 +250,7 @@ async def execute_process(
     logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
         case WorkflowType.USER_SERVICE:
-            if check_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
+            if is_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
                 response, content = await ades_client.execute_user_service(
                     request,
                     deploy_workspace,
@@ -265,7 +265,7 @@ async def execute_process(
                     workflow_id,
                 )
         case WorkflowType.WORKFLOW:
-            if check_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
+            if is_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
                 response, content = await ades_client.execute_workflow(
                     request,
                     deploy_workspace,

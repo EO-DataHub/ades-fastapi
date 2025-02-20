@@ -193,7 +193,7 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     return response.json()
 
 
-def check_within_rate_limit(workspace: str, workspace_rates: dict, rate_limit: int) -> bool:
+def is_within_rate_limit(workspace: str, workspace_rates: dict, rate_limit: int) -> bool:
     """Check if the workspace has exceeded its rate limit"""
     time_now = int(time.time())
     if workspace in workspace_rates:
