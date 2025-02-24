@@ -478,7 +478,9 @@ class ADESClient:
             request
         )  # check this is the correct way to extract calling workspace
         token = get_user_token(request)
-        aws_creds = generate_aws_credentials(token, calling_workspace, deployed_workspace)
+        aws_creds = generate_aws_credentials(
+            token, calling_workspace, deployed_workspace, workflow_id
+        )
         try:
             body = await request.json()
         except json.JSONDecodeError as err:
@@ -511,7 +513,9 @@ class ADESClient:
     ) -> requests.Response:
         calling_workspace, _ = get_user_details(request)
         token = get_user_token(request)
-        aws_creds = generate_aws_credentials(token, calling_workspace, deployed_workspace)
+        aws_creds = generate_aws_credentials(
+            token, calling_workspace, deployed_workspace, workflow_id
+        )
         try:
             body = await request.json()
         except json.JSONDecodeError as err:
