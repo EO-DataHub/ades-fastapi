@@ -3,6 +3,7 @@ import logging
 import requests
 from fastapi import Request
 
+from .job_saver import JobSaver
 from .utils import WorkflowType, get_access_policy, get_user_details
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
@@ -30,7 +31,7 @@ class DependencyClient:
     def _check_policy(
         self,
         request: Request,
-        job_owners: dict,
+        job_saver: JobSaver,
     ) -> tuple:
         """Check OPA policy to determine if the request is allowed"""
         username, roles = get_user_details(request)
@@ -101,19 +102,13 @@ class DependencyClient:
                 "Checking job access for job %s deployed to workspace %s", job_id, deploy_workspace
             )
 
-            # Get calling workspace for the given job
-            allowed_workspaces = job_owners.get(f"{deploy_workspace}-{job_id}", {})
+            job_details = job_saver.get_job_details(deploy_workspace, job_id)
 
-            if isinstance(allowed_workspaces, dict):
-                input_data["input"]["calling_workspace"] = allowed_workspaces.get("calling", None)
-                if allowed_workspaces.get("deployed", None):
-                    # If deployed workspace is not None, add this to the policy request body
-                    input_data["input"]["deployed_workspace"] = allowed_workspaces.get(
-                        "deployed", None
-                    )
-            else:
-                input_data["input"]["calling_workspace"] = allowed_workspaces
-                input_data["input"]["deployed_workspace"] = None
+            input_data["input"]["calling_workspace"] = job_details.get("calling_workspace")
+
+            if job_details.get("workflow_type") == "user-service":
+                # If job is for a user-service, allow deploying workspace to access
+                input_data["input"]["deployed_workspace"] = job_details.get("deploy_workspace")
 
         if deploy_workspace and workflow_job_id:
             # Checking access to job logs
@@ -126,13 +121,15 @@ class DependencyClient:
                 deploy_workspace,
             )
 
-            # Get calling workspace for the given job
-            allowed_workspaces = job_owners.get(f"{deploy_workspace}-{job_id}")
+            job_details = job_saver.get_job_details(deploy_workspace, job_id)
 
-            input_data["input"]["calling_workspace"] = allowed_workspaces["calling"]
-            if allowed_workspaces["deployed"]:
-                # If deployed workspace is not None, add this to the policy request body
-                input_data["input"]["deployed_workspace"] = allowed_workspaces["deployed"]
+            input_data["input"]["calling_workspace"] = job_details.get("calling_workspace")
+
+            if job_details.get("workflow_type") == "user-service":
+                # If job is for a user-service, allow deploying workspace to access
+                input_data["input"]["deployed_workspace"] = job_details.get(
+                    "deploy_workspace", None
+                )
 
         response = self._opa_request(input_data)
 
@@ -140,9 +137,9 @@ class DependencyClient:
             return False, wf_type
         return True, wf_type
 
-    def check_access(self, request, job_owners):
+    def check_access(self, request, job_saver):
         passed, workflow_type = self._check_policy(
             request,
-            job_owners,
+            job_saver,
         )
         return passed, workflow_type

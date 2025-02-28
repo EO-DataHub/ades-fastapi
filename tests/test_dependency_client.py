@@ -1,9 +1,12 @@
 from unittest.mock import MagicMock, patch
 
+import boto3
 import pytest
 from fastapi import Request
+from moto import mock_aws
 
 from ades_fastapi.dependency_client import DependencyClient, WorkflowType
+from ades_fastapi.job_saver import JobSaver
 
 
 @pytest.fixture
@@ -26,26 +29,54 @@ def mock_request():
 
 
 @pytest.fixture
-def job_owners():
-    return {
-        "workspace-job_id": {"calling": "test_workspace", "deployed": None},
-        "test_workspace-job_1234": {"calling": "test_user", "deployed": None},
-        "test_workspace-e4eaaaf2-d142-11e1-b3e4-080027620cdd": {
-            "calling": "test_user",
-            "deployed": None,
-        },
-        "another_workspace-aaaaaaaa-bbbb-cccc-dddd-000000000000": {
-            "calling": "someother_workspace",
-            "deployed": "another_user",
-        },
-    }
+def get_job_saver():
+    with mock_aws():
+        # Set up the mock S3 environment
+        s3 = boto3.client("s3", region_name="eu-west-2")
+        s3.create_bucket(
+            Bucket="workflows-bucket", CreateBucketConfiguration={"LocationConstraint": "eu-west-2"}
+        )
+
+        s3.put_object(
+            Bucket="workflows-bucket",
+            Key="workspace_1/job_1",
+            Body='{"jobID": "job_1", "calling_workspace": "workspace_1", "deploy_workspace": '
+            '"workspace_1", "workflow_type": "workflow"}',
+        )
+        s3.put_object(
+            Bucket="workflows-bucket",
+            Key="workspace_2/job_2",
+            Body='{"jobID": "job_2", "calling_workspace": "workspace_1", "deploy_workspace": '
+            '"workspace_2", "workflow_type": "user-service"}',
+        )
+        s3.put_object(
+            Bucket="workflows-bucket",
+            Key="workspace_2/job_3",
+            Body='{"jobID": "job_3", "calling_workspace": "workspace_2", "deploy_workspace": '
+            '"workspace_2", "workflow_type": "workflow"}',
+        )
+        s3.put_object(
+            Bucket="workflows-bucket",
+            Key="workspace_2/job4444-44444-4444-4444-444444444444",
+            Body='{"jobID": "job4444-44444-4444-4444-444444444444", "calling_workspace": "workspace_2", '
+            '"deploy_workspace": "workspace_2", "workflow_type": "workflow"}',
+        )
+
+        # Initialize JobSaver with the mocked boto3 client
+        job_saver = JobSaver(s3_client=s3)
+
+        yield job_saver
 
 
 @patch("ades_fastapi.dependency_client.get_user_details")
 @patch("ades_fastapi.dependency_client.get_access_policy")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_get_workflow(
-    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request,
+    mock_get_access_policy,
+    mock_get_user_details,
+    dependency_client,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {
@@ -64,7 +95,7 @@ def test_check_policy_get_workflow(
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -88,7 +119,11 @@ def test_check_policy_get_workflow(
 @patch("ades_fastapi.dependency_client.get_access_policy")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_execute_workflow(
-    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request,
+    mock_get_access_policy,
+    mock_get_user_details,
+    dependency_client,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {
@@ -107,7 +142,7 @@ def test_check_policy_execute_workflow(
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -130,27 +165,27 @@ def test_check_policy_execute_workflow(
 @patch("ades_fastapi.dependency_client.get_user_details")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_get_job(
-    mock_opa_request, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
-    mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = ("workspace_1", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
     mock_request = MagicMock(
         method="GET",
         url=MagicMock(path="/test/path"),
-        scope={"path_params": {"deploy_workspace": "test_workspace", "job_id": "job_1234"}},
+        scope={"path_params": {"deploy_workspace": "workspace_1", "job_id": "job_1"}},
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
             "roles": ["role1", "role2"],
             "path": "/test/path",
-            "workspace": "test_user",
+            "workspace": "workspace_1",
             "method": "GET",
-            "calling_workspace": "test_user",
+            "calling_workspace": "workspace_1",
         }
     }
 
@@ -163,7 +198,7 @@ def test_check_policy_get_job(
 @patch("ades_fastapi.dependency_client.get_user_details")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_deploy_workflow(
-    mock_opa_request, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
@@ -175,7 +210,7 @@ def test_check_policy_deploy_workflow(
         scope={"path_params": {"deploy_workspace": "test_workspace"}},
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -195,7 +230,7 @@ def test_check_policy_deploy_workflow(
 @patch("ades_fastapi.dependency_client.get_user_details")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_update_workflow(
-    mock_opa_request, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
@@ -209,7 +244,7 @@ def test_check_policy_update_workflow(
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -228,8 +263,10 @@ def test_check_policy_update_workflow(
 
 @patch("ades_fastapi.dependency_client.get_user_details")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
-def test_check_policy_logs(mock_opa_request, mock_get_user_details, dependency_client, job_owners):
-    mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
+def test_check_policy_logs(
+    mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
+):
+    mock_get_user_details.return_value = ("workspace_2", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -238,21 +275,21 @@ def test_check_policy_logs(mock_opa_request, mock_get_user_details, dependency_c
         url=MagicMock(path="/test/path"),
         scope={
             "path_params": {
-                "deploy_workspace": "test_workspace",
-                "workflow_job_id": "test_workflow-e4eaaaf2-d142-11e1-b3e4-080027620cdd",
+                "deploy_workspace": "workspace_2",
+                "workflow_job_id": "test_workflow-job4444-44444-4444-4444-444444444444",
             }
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
             "roles": ["role1", "role2"],
             "path": "/test/path",
-            "workspace": "test_user",
+            "workspace": "workspace_2",
             "method": "GET",
-            "calling_workspace": "test_user",
+            "calling_workspace": "workspace_2",
         }
     }
 
@@ -266,7 +303,11 @@ def test_check_policy_logs(mock_opa_request, mock_get_user_details, dependency_c
 @patch("ades_fastapi.dependency_client.get_access_policy")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_execute_workflow_no_policy(
-    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request,
+    mock_get_access_policy,
+    mock_get_user_details,
+    dependency_client,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {}
@@ -281,7 +322,7 @@ def test_check_policy_execute_workflow_no_policy(
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -302,7 +343,11 @@ def test_check_policy_execute_workflow_no_policy(
 @patch("ades_fastapi.dependency_client.get_access_policy")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_execute_workflow_user_service(
-    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request,
+    mock_get_access_policy,
+    mock_get_user_details,
+    dependency_client,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {"user_service": True}
@@ -317,7 +362,7 @@ def test_check_policy_execute_workflow_user_service(
         },
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -341,7 +386,11 @@ def test_check_policy_execute_workflow_user_service(
 @patch("ades_fastapi.dependency_client.get_access_policy")
 @patch("ades_fastapi.dependency_client.DependencyClient._opa_request")
 def test_check_policy_execute_workflow_user_service_workflow_owner(
-    mock_opa_request, mock_get_access_policy, mock_get_user_details, dependency_client, job_owners
+    mock_opa_request,
+    mock_get_access_policy,
+    mock_get_user_details,
+    dependency_client,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {"user_service": True}
@@ -354,7 +403,7 @@ def test_check_policy_execute_workflow_user_service_workflow_owner(
         scope={"path_params": {"deploy_workspace": "test_user", "workflow_id": "test_workflow"}},
     )
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
@@ -382,9 +431,9 @@ def test_check_access(mock_check_policy, mock_get_path_params, dependency_client
 
     mock_request = MagicMock(method="GET", scope={"deploy_workspace": "test-workspace"})
 
-    passed, workflow_type = dependency_client.check_access(mock_request, job_owners)
+    passed, workflow_type = dependency_client.check_access(mock_request, get_job_saver)
 
-    mock_check_policy.assert_called_once_with(mock_request, job_owners)
+    mock_check_policy.assert_called_once_with(mock_request, get_job_saver)
 
     assert passed is True
     assert workflow_type == WorkflowType.DEFAULT
@@ -399,7 +448,7 @@ def test_check_access_denied(
     mock_get_user_details,
     dependency_client,
     mock_request,
-    job_owners,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = {
@@ -409,7 +458,7 @@ def test_check_access_denied(
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": False}
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     assert passed is False
     assert workflow_type == WorkflowType.DEFAULT
@@ -424,14 +473,14 @@ def test_check_access_no_access_policy(
     mock_get_user_details,
     dependency_client,
     mock_request,
-    job_owners,
+    get_job_saver,
 ):
     mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
     mock_get_access_policy.return_value = None
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     assert passed is True
     assert workflow_type == WorkflowType.DEFAULT
@@ -446,22 +495,22 @@ def test_check_access_job_access(
     mock_get_user_details,
     dependency_client,
     mock_request,
-    job_owners,
+    get_job_saver,
 ):
-    mock_request.scope["path_params"] = {"deploy_workspace": "workspace", "job_id": "job_id"}
-    mock_get_user_details.return_value = ("test_user", ["role1", "role2"])
+    mock_request.scope["path_params"] = {"deploy_workspace": "workspace_2", "job_id": "job_3"}
+    mock_get_user_details.return_value = ("workspace_2", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
             "roles": ["role1", "role2"],
             "path": "/test/path",
-            "workspace": "test_user",
+            "workspace": "workspace_2",
             "method": "GET",
-            "calling_workspace": "test_workspace",
+            "calling_workspace": "workspace_2",
         }
     }
 
@@ -480,27 +529,27 @@ def test_check_access_job_access_user_service(
     mock_get_user_details,
     dependency_client,
     mock_request,
-    job_owners,
+    get_job_saver,
 ):
     mock_request.scope["path_params"] = {
-        "deploy_workspace": "another_workspace",
-        "job_id": "aaaaaaaa-bbbb-cccc-dddd-000000000000",
+        "deploy_workspace": "workspace_2",
+        "job_id": "job_2",
     }
     mock_request.method = "GET"
-    mock_get_user_details.return_value = ("another_user", ["role1", "role2"])
+    mock_get_user_details.return_value = ("workspace_2", ["role1", "role2"])
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
-    passed, workflow_type = dependency_client._check_policy(mock_request, job_owners)
+    passed, workflow_type = dependency_client._check_policy(mock_request, get_job_saver)
 
     expected_input_data = {
         "input": {
             "roles": ["role1", "role2"],
             "path": "/test/path",
-            "workspace": "another_user",
+            "workspace": "workspace_2",
             "method": "GET",
-            "calling_workspace": "someother_workspace",
-            "deployed_workspace": "another_user",
+            "calling_workspace": "workspace_1",
+            "deployed_workspace": "workspace_2",
         }
     }
 

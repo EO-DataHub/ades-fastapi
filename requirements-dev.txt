@@ -13,10 +13,13 @@ anyio==4.7.0
 black==24.10.0
     # via ades-fastapi (pyproject.toml)
 boto3==1.35.91
-    # via ades-fastapi (pyproject.toml)
+    # via
+    #   ades-fastapi (pyproject.toml)
+    #   moto
 botocore==1.35.91
     # via
     #   boto3
+    #   moto
     #   s3transfer
 build==1.2.2.post1
     # via pip-tools
@@ -29,6 +32,8 @@ certifi==2024.12.14
     #   kubernetes
     #   pyproj
     #   requests
+cffi==1.17.1
+    # via cryptography
 cfgv==3.4.0
     # via pre-commit
 charset-normalizer==3.4.1
@@ -38,6 +43,8 @@ click==8.1.8
     #   black
     #   pip-tools
     #   uvicorn
+cryptography==44.0.1
+    # via moto
 distlib==0.3.9
     # via virtualenv
 durationpy==0.9
@@ -69,11 +76,19 @@ iniconfig==2.0.0
     # via pytest
 isort==5.13.2
     # via ades-fastapi (pyproject.toml)
+jinja2==3.1.5
+    # via moto
 jmespath==1.0.1
     # via
     #   boto3
     #   botocore
 kubernetes==31.0.0
+    # via ades-fastapi (pyproject.toml)
+markupsafe==3.0.2
+    # via
+    #   jinja2
+    #   werkzeug
+moto==5.0.28
     # via ades-fastapi (pyproject.toml)
 mypy-extensions==1.0.0
     # via black
@@ -108,6 +123,8 @@ pyasn1==0.6.1
     #   rsa
 pyasn1-modules==0.4.1
     # via google-auth
+pycparser==2.22
+    # via cffi
 pydantic==2.10.4
     # via fastapi
 pydantic-core==2.27.2
@@ -138,21 +155,27 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   kubernetes
+    #   moto
 pyyaml==6.0.2
     # via
     #   ades-fastapi (pyproject.toml)
     #   kubernetes
     #   pre-commit
+    #   responses
 requests==2.32.3
     # via
     #   ades-fastapi (pyproject.toml)
     #   kubernetes
+    #   moto
     #   requests-mock
     #   requests-oauthlib
+    #   responses
 requests-mock==1.12.1
     # via ades-fastapi (pyproject.toml)
 requests-oauthlib==2.0.0
     # via kubernetes
+responses==0.25.6
+    # via moto
 rsa==4.9
     # via google-auth
 ruff==0.8.5
@@ -180,6 +203,7 @@ urllib3==2.3.0
     #   botocore
     #   kubernetes
     #   requests
+    #   responses
 uvicorn==0.34.0
     # via ades-fastapi (pyproject.toml)
 virtualenv==20.28.1
@@ -188,8 +212,12 @@ watchdog==6.0.0
     # via pytest-watcher
 websocket-client==1.8.0
     # via kubernetes
+werkzeug==3.1.3
+    # via moto
 wheel==0.45.1
     # via pip-tools
+xmltodict==0.14.2
+    # via moto
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

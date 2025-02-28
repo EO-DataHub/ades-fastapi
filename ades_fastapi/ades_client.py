@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .aws_client import generate_aws_credentials
+from .job_saver import JobSaver
 from .utils import (
     WorkflowType,
     get_user_details,
@@ -193,13 +194,17 @@ class ADESClient:
         return response, content
 
     def list_workflows(
-        self, request: requests.Request, deploy_workspace: str, limit: int, skip: int
+        self, request: requests.Request, deploy_workspace: str, limit: Optional[int], skip: int
     ):
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
         # Add limit to data params
-        params = {"limit": limit, "skip": skip}
+        params = {}
+        if limit:
+            params["limit"] = limit
+        if skip:
+            params["skip"] = skip
 
         response = self._send_request(
             "GET", f"{deploy_workspace}/ogc-api/processes", headers, data={"params": params}
@@ -211,7 +216,7 @@ class ADESClient:
             content_json = response.json()
             content_json = replace_href_links(content_json, self.base_url)
             final_content["links"] = content_json.get("links")
-            for process_json in content_json["processes"]:
+            for process_json in content_json.get("processes", []):
                 access, description = self._check_workflow_access(
                     request,
                     deploy_workspace,
@@ -562,7 +567,7 @@ class ADESClient:
         self,
         request,
         deploy_workspace: str,
-        job_owners: dict,
+        job_saver: JobSaver,
         limit: Optional[int] = None,
         skip: Optional[int] = None,
         status: Optional[List[str]] = None,
@@ -607,13 +612,12 @@ class ADESClient:
         )
         for job in jobs:
             job_id = job.get("jobID", "")
-            deploy_workspace_and_job_id = f"{deploy_workspace}-{job_id}"
-            allowed_workspaces = job_owners.get(deploy_workspace_and_job_id, {})
-            if isinstance(allowed_workspaces, dict):
-                if allowed_workspaces.get("calling", "") == username:
-                    filtered_jobs.append(job)
-            elif allowed_workspaces == username:
+            job_details = job_saver.get_job_details(job_id, {})
+            if job_details.get("calling_workspace") == username:
                 filtered_jobs.append(job)
+            elif job_details.get("workflow_type") == "user-service":
+                if job_details.get("deploy_workspace") == username:
+                    filtered_jobs.append(job)
 
         response_json["jobs"] = filtered_jobs
         response_json["numberTotal"] = len(filtered_jobs)

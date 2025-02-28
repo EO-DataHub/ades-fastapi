@@ -235,7 +235,26 @@ async def test_list_workflows(
         "GET",
         "test-deploy-workspace/ogc-api/processes",
         {},
-        data={"params": {"limit": 10, "skip": 0}},
+        data={"params": {"limit": 10}},
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {"processes": [], "links": []}
+
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"processes": [], "links": []},
+        headers={"Content-Type": "application/json"},
+    )
+    request = MagicMock()
+    request.headers = {"authorization": "Bearer token"}
+    response, content = ades_client.list_workflows(
+        request, "test-deploy-workspace", limit=10, skip=10
+    )
+    mock_send_request.assert_any_call(
+        "GET",
+        "test-deploy-workspace/ogc-api/processes",
+        {},
+        data={"params": {"limit": 10, "skip": 10}},
     )
     assert response.status_code == 200
     assert json.loads(content) == {"processes": [], "links": []}
@@ -642,15 +661,22 @@ async def test_get_job_results(mock_send_request, ades_client):
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.get_user_details", return_value=("username", []))
 async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_request, ades_client):
+    mock_job_saver = MagicMock()
+    mock_job_saver.get_job_details.return_value = {
+        "jobID": "job_1",
+        "workflow_id": "convert-url-test",
+        "workflow_type": "workflow",
+        "deploy_workspace": "username",
+        "calling_workspace": "username",
+    }
     mock_send_request.return_value = MagicMock(
         status_code=200, json=lambda: {"jobs": [{"jobID": "job-id"}]}
     )
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
-    job_owners = {"test-deploy-workspace-job-id": "username"}
     # Test limit
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test-deploy-workspace", job_owners, limit=10
+        request, "test-deploy-workspace", mock_job_saver, limit=10
     )
     mock_send_request.assert_any_call(
         "GET", "test-deploy-workspace/ogc-api/jobs", {}, data={"params": {"limit": 10}}
@@ -660,7 +686,7 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
 
     # Test limit and skip
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test-deploy-workspace", job_owners, limit=10, skip=10
+        request, "test-deploy-workspace", mock_job_saver, limit=10, skip=10
     )
     mock_send_request.assert_any_call(
         "GET", "test-deploy-workspace/ogc-api/jobs", {}, data={"params": {"limit": 10, "skip": 10}}
@@ -670,7 +696,7 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
 
     # Test status
     response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test-deploy-workspace", job_owners, status="running,failed"
+        request, "test-deploy-workspace", mock_job_saver, status="running,failed"
     )
     mock_send_request.assert_any_call(
         "GET",
@@ -685,7 +711,7 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     response, content = ades_client.get_deployed_workspaced_jobs(
         request,
         "test-deploy-workspace",
-        job_owners,
+        mock_job_saver,
         datetime="2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
     )
     mock_send_request.assert_any_call(
