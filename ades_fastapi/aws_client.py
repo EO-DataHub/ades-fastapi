@@ -60,6 +60,8 @@ def get_credentials(
     workspace: str,
     creds_dict: dict,
     key: str,
+    workflow_id: str,
+    username: str,
     service_scope: bool = False,
 ) -> dict:
 
@@ -70,10 +72,14 @@ def get_credentials(
     creds_dict = copy.deepcopy(creds_dict)
 
     if service_scope:
-        session_name = f"executing_{workspace}_session"
+        session_name = (
+            f"{workspace}-{username}-{workflow_id}"  # workspace will be different from username
+        )
         scope = f"user_services:{workspace}"
     else:
-        session_name = f"calling_{workspace}_session"
+        session_name = (
+            f"{workspace}-{username}-{workflow_id}"  # workspace will be the same as username
+        )
         scope = f"workspace:{workspace}"
     workspace_token = generate_token(token, workspace, scope)
 
@@ -85,6 +91,7 @@ def get_credentials(
             RoleArn=role_arn,
             RoleSessionName=session_name,
             WebIdentityToken=workspace_token,
+            DurationSeconds=43200,  # 12 hours in seconds
         )
         creds_dict[key] = role["Credentials"]
     except Exception as e:
@@ -100,17 +107,32 @@ def generate_aws_credentials(
     token: str,
     calling_workspace: str,
     executing_workspace: str,
+    workflow_id: str,
 ) -> dict:
 
     creds_dict = {"calling_workspace": {}, "executing_workspace": {}}
 
     creds_dict = get_credentials(
-        ROLE_ARN_WORKSPACE, token, calling_workspace, creds_dict, "calling_workspace", False
+        ROLE_ARN_WORKSPACE,
+        token,
+        calling_workspace,
+        creds_dict,
+        "calling_workspace",
+        workflow_id,
+        username=calling_workspace,
+        service_scope=False,
     )
 
     if calling_workspace != executing_workspace:
         creds_dict = get_credentials(
-            ROLE_ARN_SERVICE, token, executing_workspace, creds_dict, "executing_workspace", True
+            ROLE_ARN_SERVICE,
+            token,
+            executing_workspace,
+            creds_dict,
+            "executing_workspace",
+            workflow_id,
+            username=calling_workspace,
+            service_scope=True,
         )
 
     return creds_dict

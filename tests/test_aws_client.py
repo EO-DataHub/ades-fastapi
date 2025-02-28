@@ -8,14 +8,16 @@ import requests_mock
 from ades_fastapi.aws_client import (
     generate_aws_credentials,
     generate_token,
-    get_credentials,
+    get_credentials
 )
 
 
 @patch("ades_fastapi.aws_client.get_credentials")
 def test_generate_aws_credentials_user_service(mock_get_credentials):
     # Configure mocks
-    def side_effect(role_arn, token, workspace, creds_dict, key, service_scope):
+    def side_effect(
+        role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
+    ):
         creds_dict = copy.deepcopy(creds_dict)
         creds_dict[key] = {"key": "value"}
         return creds_dict
@@ -26,7 +28,7 @@ def test_generate_aws_credentials_user_service(mock_get_credentials):
     calling_workspace = "calling_workspace"
     executing_workspace = "executing_workspace"
 
-    result = generate_aws_credentials(token, calling_workspace, executing_workspace)
+    result = generate_aws_credentials(token, calling_workspace, executing_workspace, "workflow-id")
 
     assert result == {
         "calling_workspace": {"key": "value"},
@@ -41,7 +43,9 @@ def test_generate_aws_credentials_user_service(mock_get_credentials):
         calling_workspace,
         {"calling_workspace": {}, "executing_workspace": {}},
         "calling_workspace",
-        False,
+        "workflow-id",
+        username=calling_workspace,
+        service_scope=False,
     )
     mock_get_credentials.assert_any_call(
         "role-arn-service",
@@ -49,14 +53,18 @@ def test_generate_aws_credentials_user_service(mock_get_credentials):
         executing_workspace,
         {"calling_workspace": {"key": "value"}, "executing_workspace": {}},
         "executing_workspace",
-        True,
+        "workflow-id",
+        username=calling_workspace,
+        service_scope=True,
     )
 
 
 @patch("ades_fastapi.aws_client.get_credentials")
 def test_generate_aws_credentials_workflow(mock_get_credentials):
     # Configure mocks
-    def side_effect(role_arn, token, workspace, creds_dict, key, service_scope):
+    def side_effect(
+        role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
+    ):
         creds_dict = copy.deepcopy(creds_dict)
         creds_dict[key] = {"key": "value"}
         return creds_dict
@@ -67,7 +75,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials):
     calling_workspace = "calling_workspace"
     executing_workspace = "calling_workspace"
 
-    result = generate_aws_credentials(token, calling_workspace, executing_workspace)
+    result = generate_aws_credentials(token, calling_workspace, executing_workspace, "workflow-id")
 
     assert result == {"calling_workspace": {"key": "value"}, "executing_workspace": {}}
 
@@ -79,7 +87,9 @@ def test_generate_aws_credentials_workflow(mock_get_credentials):
         calling_workspace,
         {"calling_workspace": {}, "executing_workspace": {}},
         "calling_workspace",
-        False,
+        "workflow-id",
+        username=calling_workspace,
+        service_scope=False,
     )
 
 
@@ -99,6 +109,8 @@ def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
         workspace="workspace",
         creds_dict=creds_dict,
         key="calling_workspace",
+        workflow_id="workflow-id",
+        username="workspace",
         service_scope=False,
     )
 
@@ -106,8 +118,9 @@ def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
     mock_generate_token.assert_called_once_with("initial-token", "workspace", "workspace:workspace")
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
-        RoleSessionName="calling_workspace_session",
+        RoleSessionName="workspace-workspace-workflow-id",
         WebIdentityToken="valid-token",
+        DurationSeconds=43200,
     )
 
 
@@ -127,6 +140,8 @@ def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_
         workspace="workspace",
         creds_dict=creds_dict,
         key="calling_workspace",
+        workflow_id="workflow-id",
+        username="workspace",
         service_scope=False,
     )
 
@@ -134,8 +149,9 @@ def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_
     mock_generate_token.assert_called_once_with("initial-token", "workspace", "workspace:workspace")
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
-        RoleSessionName="calling_workspace_session",
+        RoleSessionName="workspace-workspace-workflow-id",
         WebIdentityToken="invalid-token",
+        DurationSeconds=43200,
     )
 
 
@@ -155,6 +171,8 @@ def test_get_credentials_user_service(mock_boto_client, mock_generate_token):
         workspace="workspace",
         creds_dict=creds_dict,
         key="executing_workspace",
+        workflow_id="workflow-id",
+        username="username",
         service_scope=True,
     )
 
@@ -164,8 +182,9 @@ def test_get_credentials_user_service(mock_boto_client, mock_generate_token):
     )
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
-        RoleSessionName="executing_workspace_session",
+        RoleSessionName="workspace-username-workflow-id",
         WebIdentityToken="valid-token",
+        DurationSeconds=43200,
     )
 
 
@@ -185,6 +204,8 @@ def test_get_credentials_user_service_invalid_token(mock_boto_client, mock_gener
         workspace="workspace",
         creds_dict=creds_dict,
         key="executing_workspace",
+        workflow_id="workflow-id",
+        username="username",
         service_scope=True,
     )
 
@@ -194,8 +215,9 @@ def test_get_credentials_user_service_invalid_token(mock_boto_client, mock_gener
     )
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
-        RoleSessionName="executing_workspace_session",
+        RoleSessionName="workspace-username-workflow-id",
         WebIdentityToken="invalid-token",
+        DurationSeconds=43200,
     )
 
 
