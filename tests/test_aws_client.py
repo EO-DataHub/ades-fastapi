@@ -5,11 +5,7 @@ from urllib.parse import parse_qs
 import pytest
 import requests_mock
 
-from ades_fastapi.aws_client import (
-    generate_aws_credentials,
-    generate_token,
-    get_credentials
-)
+from ades_fastapi.aws_client import generate_aws_credentials, generate_token, get_credentials
 
 
 @patch("ades_fastapi.aws_client.get_credentials")
