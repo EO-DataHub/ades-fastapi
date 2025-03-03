@@ -76,12 +76,14 @@ def get_credentials(
             f"{workspace}-{username}-{workflow_id}"  # workspace will be different from username
         )
         scope = f"user_services:{workspace}"
+        workspace_token = generate_token(token, workspace, scope)
     else:
+        # Input token is already scoped to workspace
         session_name = (
             f"{workspace}-{username}-{workflow_id}"  # workspace will be the same as username
         )
         scope = f"workspace:{workspace}"
-    workspace_token = generate_token(token, workspace, scope)
+        workspace_token = token
 
     logger.info("Assuming role %s with session name %s", role_arn, session_name)
     logger.info("Workspace token: %s", workspace_token)
@@ -97,7 +99,7 @@ def get_credentials(
     except Exception as e:
         logger.error("Failed to assume role: %s", e)
         workspace_type = "executing" if service_scope else "calling"
-        logger.error("Failed to get AWS credentils for %s workspace %s", workspace_type, workspace)
+        logger.error("Failed to get AWS credentials for %s workspace %s", workspace_type, workspace)
         creds_dict[key] = None
 
     return creds_dict

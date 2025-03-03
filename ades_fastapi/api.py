@@ -282,10 +282,8 @@ async def execute_process(
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
-        calling_workspace, _ = get_user_details(request)
-        job_saver.record_owner(
-            response, workflow_id, deploy_workspace, calling_workspace, workflow_type
-        )
+        username, workspace, _ = get_user_details(request)
+        job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
     # use streamingresponse to avoid content-length header being set automatically, causing issues
     # with Transfer-Encoding
     return StreamingResponse(

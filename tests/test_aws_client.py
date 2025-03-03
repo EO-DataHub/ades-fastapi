@@ -99,13 +99,12 @@ def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.return_value = {"Credentials": {"key": "value"}}
     mock_boto_client.return_value = mock_sts_instance
-    mock_generate_token.return_value = "valid-token"
 
     creds_dict = {"calling_workspace": {}, "executing_workspace": {}}
 
     result = get_credentials(
         role_arn="role_arn",
-        token="initial-token",
+        token="valid-token",
         workspace="workspace",
         creds_dict=creds_dict,
         key="calling_workspace",
@@ -115,7 +114,7 @@ def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
     )
 
     assert result == {"calling_workspace": {"key": "value"}, "executing_workspace": {}}
-    mock_generate_token.assert_called_once_with("initial-token", "workspace", "workspace:workspace")
+    mock_generate_token.assert_not_called()
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
         RoleSessionName="workspace-workspace-workflow-id",
@@ -130,13 +129,12 @@ def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.side_effect = Exception("Invalid token")
     mock_boto_client.return_value = mock_sts_instance
-    mock_generate_token.return_value = "invalid-token"
 
     creds_dict = {"calling_workspace": {}, "executing_workspace": {}}
 
     result = get_credentials(
         role_arn="role_arn",
-        token="initial-token",
+        token="invalid-token",
         workspace="workspace",
         creds_dict=creds_dict,
         key="calling_workspace",
@@ -146,7 +144,7 @@ def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_
     )
 
     assert result == {"calling_workspace": None, "executing_workspace": {}}
-    mock_generate_token.assert_called_once_with("initial-token", "workspace", "workspace:workspace")
+    mock_generate_token.assert_not_called()
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
         RoleSessionName="workspace-workspace-workflow-id",

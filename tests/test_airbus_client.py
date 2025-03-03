@@ -21,7 +21,7 @@ def mock_request():
 @pytest.fixture
 def mock_user_details():
     with mock.patch("ades_fastapi.airbus_client.get_user_details") as mock_get_user_details:
-        mock_get_user_details.return_value = ("test_user", "test_email")
+        mock_get_user_details.return_value = ("username", "test_user", "test_email")
         yield mock_get_user_details
 
 

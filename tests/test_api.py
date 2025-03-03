@@ -188,7 +188,7 @@ def test_execute_process_user_service(
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.USER_SERVICE
     # Configure mocks
-    mock_get_user_details.return_value = "test_user", []
+    mock_get_user_details.return_value = "username", "test_user", []
     mock_job_saver.record_owner.return_value = None
     mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_user_service.return_value = (
@@ -222,7 +222,7 @@ def test_execute_process_workflow(
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
     mock_sleep.return_value = None
-    mock_get_user_details.return_value = "test_user", []
+    mock_get_user_details.return_value = "username", "test_user", []
     mock_job_saver.record_owner.return_value = None
     mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_workflow.return_value = (
