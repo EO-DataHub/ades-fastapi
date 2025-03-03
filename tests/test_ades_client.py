@@ -938,7 +938,6 @@ def test_check_workflow_access_user_access(
         deploy_workspace,
         workflow_id=workflow_id,
     )
-    print(result)
     assert result[0] is True
     assert result[1] == "Workspace has access to this workflow (user)"
     mock_s3_client.get_object.assert_called_once_with(

@@ -40,9 +40,6 @@ class ADESClient:
         """Check if the workflow is accessible to the current user"""
         username, workspace, _ = get_user_details(request)
 
-        print(username)
-        print(workspace)
-
         if workspace == deploy_workspace:
             return True, "Workspace owns this workflow"
 
