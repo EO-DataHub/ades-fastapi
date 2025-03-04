@@ -38,8 +38,7 @@ class DependencyClient:
         path_params = self._get_path_params(request)
 
         # Add values for logs
-        logger.info("Logged in as user: %s", workspace)
-        logger.info("Roles: %s", roles)
+        logger.info("Scoped to workspace: %s", workspace)
 
         # Set default workflow type
         wf_type = WorkflowType.DEFAULT

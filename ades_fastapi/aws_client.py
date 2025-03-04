@@ -72,16 +72,12 @@ def get_credentials(
     creds_dict = copy.deepcopy(creds_dict)
 
     if service_scope:
-        session_name = (
-            f"{workspace}-{username}-{workflow_id}"  # workspace will be different from username
-        )
+        session_name = f"{workspace}-{username}-{workflow_id}"
         scope = f"user_services:{workspace}"
         workspace_token = generate_token(token, workspace, scope)
     else:
         # Input token is already scoped to workspace
-        session_name = (
-            f"{workspace}-{username}-{workflow_id}"  # workspace will be the same as username
-        )
+        session_name = f"{workspace}-{username}-{workflow_id}"
         scope = f"workspace:{workspace}"
         workspace_token = token
 
@@ -107,6 +103,7 @@ def get_credentials(
 
 def generate_aws_credentials(
     token: str,
+    username: str,
     calling_workspace: str,
     executing_workspace: str,
     workflow_id: str,
@@ -121,7 +118,7 @@ def generate_aws_credentials(
         creds_dict,
         "calling_workspace",
         workflow_id,
-        username=calling_workspace,
+        username=username,
         service_scope=False,
     )
 
@@ -133,7 +130,7 @@ def generate_aws_credentials(
             creds_dict,
             "executing_workspace",
             workflow_id,
-            username=calling_workspace,
+            username=username,
             service_scope=True,
         )
 
