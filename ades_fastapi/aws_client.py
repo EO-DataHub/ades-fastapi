@@ -84,12 +84,16 @@ def get_credentials(
     logger.info("Assuming role %s with session name %s", role_arn, session_name)
     logger.info("Workspace token: %s", workspace_token)
 
+    duration_seconds = 43200
+
+    logger.debug("Assuming role for %s duration seconds", duration_seconds)
+
     try:
         role = sts_client.assume_role_with_web_identity(
             RoleArn=role_arn,
             RoleSessionName=session_name,
             WebIdentityToken=workspace_token,
-            DurationSeconds=43200,  # 12 hours in seconds
+            DurationSeconds=duration_seconds,
         )
         creds_dict[key] = role["Credentials"]
     except Exception as e:
