@@ -2,26 +2,17 @@ import asyncio
 import logging
 import os
 from distutils.util import strtobool
-from typing import Annotated, List, Literal, Optional
+from typing import List, Literal, Optional
 
 import boto3
-import requests
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
-from .airbus_client import AirbusClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
-from .planet_client import PlanetClient
-from .utils import (
-    QuoteRequest,
-    QuoteResponse,
-    WorkflowType,
-    get_user_details,
-    is_within_rate_limit,
-)
+from .utils import WorkflowType, get_user_details, is_within_rate_limit
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -89,9 +80,6 @@ job_saver = configure_job_saver()
 ades_client = ADESClient(
     ADES_SERVICE_ENDPOINT, ADES_INGRESS_PATH, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX
 )
-
-airbus_client = AirbusClient(AIRBUS_ENV)
-planet_client = PlanetClient()
 
 dependency_client = DependencyClient(
     OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX, ENABLE_OPA_POLICY_CHECK
@@ -405,189 +393,3 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
         media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
-
-
-@app.post(
-    "/quotes",
-    response_model=QuoteResponse,
-    responses={200: {"content": {"application/json": {"example": {"value": 100, "units": "EUR"}}}}},
-)
-def quote(
-    request: Request,
-    body: Annotated[
-        QuoteRequest,
-        Body(
-            examples=[
-                {
-                    "catalogueId": "airbus",
-                    "acquisitionId": "12345_67890_12345",
-                    "collectionId": "airbus_sar_data",
-                    "coordinates": [[[8.1, 31.7], [8.1, 31.6], [8.2, 31.9], [8.0, 31.5]]],
-                    "itemUuids": [
-                        "12345678-1234-1234-1234-123456789012",
-                        "87654321-4321-4321-4321-210987654321",
-                    ],
-                },
-                {
-                    "catalogueId": "planet",
-                    "acquisitionId": "12345_67890_12345",
-                    "collectionId": "SkySatCollect",
-                },
-            ],
-        ),
-    ],
-):
-    """Return a quote for a Planet or Airbus acquisition ID within an EODH catalogue and collection.
-
-    * catalogueId: Name of catalogue. Currently `planet` and `airbus` are supported
-    * acquisitionId: ID of item to be acquisitioned
-    * collectionId: ID of collection containing item
-    * coordinates: Coordinates to limit the AOI of the item for purchase where possible. Given in the
-      same nested format as STAC
-    * itemUuids: (Airbus-only) This is required for stereo and multi Pléiades Neo orders only, and
-      consists of a list of ids corresponding to individual mono items that are part of the order
-
-    """
-
-    catalogue_name = body.catalogueId.lower()
-    collection_id = body.collectionId
-    acquisition_id = body.acquisitionId
-    coordinates = body.coordinates
-
-    if catalogue_name == "airbus":
-        if collection_id == "airbus_sar_data":
-            if AIRBUS_ENV == "prod":
-                url = "https://sar.api.oneatlas.airbus.com/v1/sar/prices"
-            else:
-                url = "https://dev.sar.api.oneatlas.airbus.com/v1/sar/prices"
-            request_body = {"acquisitions": [acquisition_id]}
-        else:
-            url = "https://order.api.oneatlas.airbus.com/api/v1/prices"
-            spectral_processing = "bundle"
-            if collection_id == "airbus_pneo_data":
-                product_type = "PleiadesNeoArchiveMono"
-                contract_id = "CTR24005241"
-                item_uuids = body.itemUuids
-                item_id = None
-                if len(item_uuids) > 1:
-                    product_type = "PleiadesNeoArchiveMulti"
-                    spectral_processing = "full_bundle"
-            elif collection_id == "airbus_phr_data":
-                product_type = "PleiadesArchiveMono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
-                item_uuids = None
-                item_id = body.acquisitionId
-            elif collection_id == "airbus_spot_data":
-                product_type = "SPOTArchive1.5Mono"
-                contract_id = "UNIVERSITY_OF_LEICESTER_Orders"
-                item_uuids = None
-                item_id = body.acquisitionId
-            else:
-                return JSONResponse(
-                    status_code=404,
-                    content={"detail": f"Collection {collection_id} not recognised"},
-                )
-            request_body = {
-                "aoi": [
-                    {
-                        "id": 1,
-                        "name": "Polygon 1",
-                        "geometry": {"type": "Polygon", "coordinates": coordinates},
-                    }
-                ],
-                "programReference": "",
-                "contractId": contract_id,
-                "items": [
-                    {
-                        "notifications": [],
-                        "stations": [],
-                        "productTypeId": product_type,
-                        "aoiId": 1,
-                        "properties": [],
-                    }
-                ],
-                "primaryMarket": "NQUAL",
-                "secondaryMarket": "",
-                "customerReference": "Polygon 1",
-                "optionsPerProductType": [
-                    {
-                        "productTypeId": product_type,
-                        "options": [
-                            {"key": "delivery_method", "value": "on_the_flow"},
-                            {"key": "fullStrip", "value": "false"},
-                            {"key": "image_format", "value": "dimap_geotiff"},
-                            {"key": "licence", "value": "standard"},
-                            {"key": "pixel_coding", "value": "12bits"},
-                            {"key": "priority", "value": "standard"},
-                            {"key": "processing_level", "value": "primary"},
-                            {"key": "radiometric_processing", "value": "reflectance"},
-                            {"key": "spectral_processing", "value": spectral_processing},
-                        ],
-                    }
-                ],
-                "orderGroup": "",
-                "delivery": {"type": "network"},
-            }
-
-            if item_uuids:
-                data_source_ids = []
-                for item_uuid in item_uuids:
-                    data_source_ids.append({"catalogId": "PublicMOC", "catalogItemId": item_uuid})
-                request_body["items"][0]["dataSourceIds"] = data_source_ids
-
-            if item_id:
-                request_body["items"][0]["datastripIds"] = [item_id]
-
-        access_token = airbus_client.generate_access_token(request)
-        if not access_token:
-            return JSONResponse(
-                status_code=500, content={"detail": "Failed to generate access token"}
-            )
-
-        headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-
-        try:
-            response_body = airbus_client.get_quote_from_airbus(url, request_body, headers)
-        except requests.RequestException as e:
-            return JSONResponse(status_code=500, content={"detail": str(e)})
-
-        price_json = {}
-        if collection_id == "airbus_sar_data":
-            for item in response_body:
-                if item.get("acquisitionId") == acquisition_id:
-                    price_json = {
-                        "units": item["price"]["currency"],
-                        "value": item["price"]["total"],
-                    }
-                    break
-        else:
-            price_json = {
-                "units": response_body["currency"],
-                "value": response_body["totalAmount"],
-            }
-
-        if price_json:
-            return QuoteResponse(value=price_json["value"], units=price_json["units"])
-
-        return JSONResponse(
-            status_code=404, content={"detail": "Quote not found for given acquisition ID"}
-        )
-
-    elif catalogue_name == "planet":
-        try:
-            area = planet_client.get_area_estimate(acquisition_id, collection_id, coordinates)
-
-            if collection_id.lower() == "skysatscene" and area < 3:
-                # SkySatScene has a minimum order size of 3 km2
-                area = 3
-
-            return QuoteResponse(value=area, units="km2")
-
-        except Exception as e:
-            return JSONResponse(content={"message": str(e)}, status_code=400)
-
-    else:
-        return JSONResponse(
-            content={"message:" f"{catalogue_name} not recognised"},
-            status_code=404,
-        )

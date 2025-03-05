@@ -10,29 +10,11 @@ import jwt
 import requests
 import yaml
 from fastapi import Request
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ILLEGAL_WORKFLOW_INPUTS_RAW = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
 ILLEGAL_WORKFLOW_INPUTS = [input.strip() for input in ILLEGAL_WORKFLOW_INPUTS_RAW]
-
-
-class QuoteRequest(BaseModel):
-    """Request body for quote endpoint"""
-
-    catalogueId: str
-    acquisitionId: str = None
-    collectionId: str = None
-    coordinates: list = None
-    itemUuids: list = []
-
-
-class QuoteResponse(BaseModel):
-    """Response body for quote endpoint"""
-
-    value: float
-    units: str
 
 
 class WorkflowType(Enum):
