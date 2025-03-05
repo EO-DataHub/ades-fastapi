@@ -47,7 +47,11 @@ ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-d
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true"))
 
 # Root path for FastAPI
-ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/wr")  # workflow runner
+
+# Root Catalogs for processes
+PUBLIC_CATALOG_ROOT = os.getenv("PUBLIC_CATALOG_ROOT", "public")
+USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
 
 # ADES Policy bucket name
 ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
@@ -128,7 +132,9 @@ def root():
         )
 
 
-@app.get("/{deploy_workspace}/ogc-api", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}", dependencies=[Depends(opa_dependency)]
+)
 def workspace_root(deploy_workspace: str):
     """Root endpoint for user's workspace"""
     logger.info("Getting root of workspace %s", deploy_workspace)
@@ -144,7 +150,8 @@ def workspace_root(deploy_workspace: str):
 
 
 @app.delete(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to undeploy a workflow"""
@@ -161,7 +168,10 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    dependencies=[Depends(opa_dependency)],
+)
 def list_processes(
     deploy_workspace: str, request: Request, limit: Optional[int] = None, skip: int = 0
 ):
@@ -179,13 +189,15 @@ def list_processes(
     )
 
 
-@app.post("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
+@app.post(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    dependencies=[Depends(opa_dependency)],
+)
 async def deploy_workflow(
     deploy_workspace: str,
     request: Request,
 ):
     """Endpoint to deploy a workflow to a workspace"""
-
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
 
     return Response(
@@ -197,7 +209,8 @@ async def deploy_workflow(
 
 
 @app.put(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to update a workflow in a workspace"""
@@ -213,7 +226,8 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
 
 
 @app.get(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def process_details(
     deploy_workspace: str,
@@ -236,7 +250,7 @@ def process_details(
 
 
 @app.post(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
+    f"{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
 )
 async def execute_process(
@@ -296,7 +310,10 @@ async def execute_process(
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    dependencies=[Depends(opa_dependency)],
+)
 def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
@@ -311,7 +328,8 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    "/{deploy_workspace}/ogc-api/jobs/{job_id}/results", dependencies=[Depends(opa_dependency)]
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
+    dependencies=[Depends(opa_dependency)],
 )
 def process_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
@@ -326,7 +344,10 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
+    dependencies=[Depends(opa_dependency)],
+)
 def get_deployed_workspaced_jobs(
     deploy_workspace: str,
     request: Request,
@@ -363,7 +384,7 @@ def get_deployed_workspaced_jobs(
     )
 
 
-# @app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+# @app.get(f"/{USER_CATALOG_ROOT}/jobs", dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
@@ -377,7 +398,8 @@ def get_all_jobs(request: Request):
 
 
 @app.get(
-    "/{deploy_workspace}/temp/{workflow_job_id}/{file_name}", dependencies=[Depends(opa_dependency)]
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/temp/{{workflow_job_id}}/{{file_name}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
@@ -393,7 +415,10 @@ def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str,
     )
 
 
-@app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
+@app.delete(
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    dependencies=[Depends(opa_dependency)],
+)
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
