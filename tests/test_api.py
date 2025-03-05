@@ -1,7 +1,5 @@
-import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -10,17 +8,6 @@ from ades_fastapi.job_saver import JobSaver
 from ades_fastapi.utils import WorkflowType
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def setenvvar(monkeypatch):
-    with patch.dict(os.environ, clear=True):
-        envvars = {
-            "PLANET_BASE_URL": "https://url.com/planet",
-        }
-        for k, v in envvars.items():
-            monkeypatch.setenv(k, v)
-        yield
 
 
 def override_opa_dependency_workflow():
