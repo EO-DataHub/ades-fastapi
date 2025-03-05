@@ -206,13 +206,14 @@ class ADESClient:
         if skip:
             params["skip"] = skip
 
+        final_content = {}
+        final_content["processes"] = []
+
         response = self._send_request(
             "GET", f"{deploy_workspace}/ogc-api/processes", headers, data={"params": params}
         )
 
         if "application/json" in response.headers["Content-Type"]:
-            final_content = {}
-            final_content["processes"] = []
             content_json = response.json()
             content_json = replace_href_links(content_json, self.base_url)
             final_content["links"] = content_json.get("links")
