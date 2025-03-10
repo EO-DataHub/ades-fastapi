@@ -56,3 +56,6 @@ venv:
 	curl -o .pre-commit-config.yaml https://raw.githubusercontent.com/EO-DataHub/github-actions/main/.pre-commit-config-python.yaml
 
 setup: venv requirements .make-venv-installed .git/hooks/pre-commit
+
+run-local: 
+	uvicorn ades_fastapi.api:app --host 0.0.0.0 --port 8000
