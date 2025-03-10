@@ -194,25 +194,28 @@ class ADESClient:
         return response, content
 
     def list_workflows(
-        self, request: requests.Request, deploy_workspace: str, limit: Optional[int], skip: int
+        self,
+        request: requests.Request,
+        deploy_workspace: str,
+        limit: Optional[int],
+        skip: Optional[int],
     ):
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        # Add limit to data params
-        params = {}
-        if limit:
-            params["limit"] = limit
-        if skip:
-            params["skip"] = skip
-
         final_content = {}
         final_content["processes"] = []
 
+        # For now, request all workflows and filter by access, using limit and skip after
+        # TODO: maybe add some limit value here for some configured maximum number of
+        # workflows and then loop
         response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/processes", headers, data={"params": params}
+            "GET",
+            f"{deploy_workspace}/ogc-api/processes",
+            headers,
         )
 
+        allowed_count = 0
         if "application/json" in response.headers["Content-Type"]:
             content_json = response.json()
             content_json = replace_href_links(content_json, self.base_url)
@@ -224,9 +227,14 @@ class ADESClient:
                     process_json["id"],
                 )
                 if access:
+                    allowed_count += 1
+                    if skip and allowed_count <= skip:
+                        continue
                     process_json = replace_href_links(process_json, self.base_url)
                     process_json.update({"AccessReasoning": description})
                     final_content["processes"].append(process_json)
+                    if len(final_content["processes"]) == limit:
+                        break
             content = json.dumps(final_content)
         else:
             content = response.text
@@ -585,10 +593,6 @@ class ADESClient:
 
         # Add limit to data params
         params = {}
-        if limit:
-            params.update({"limit": limit})
-        if skip:
-            params.update({"skip": skip})
         if status:
             params.update({"status": status})
         if datetime:
@@ -615,14 +619,25 @@ class ADESClient:
             username,
             deploy_workspace,
         )
+        allowed_count = 0
         for job in jobs:
             job_id = job.get("jobID", "")
             job_details = job_saver.get_job_details(job_id, {})
             if job_details.get("calling_workspace") == username:
+                allowed_count += 1
+                if skip and allowed_count <= skip:
+                    continue
                 filtered_jobs.append(job)
+                if limit and len(filtered_jobs) == limit:
+                    break
             elif job_details.get("workflow_type") == "user-service":
+                allowed_count += 1
+                if skip and allowed_count <= skip:
+                    continue
                 if job_details.get("deploy_workspace") == username:
                     filtered_jobs.append(job)
+                    if limit and len(filtered_jobs) == limit:
+                        break
 
         response_json["jobs"] = filtered_jobs
         response_json["numberTotal"] = len(filtered_jobs)
