@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,6 +7,8 @@ from fastapi.testclient import TestClient
 from ades_fastapi.api import app
 
 client = TestClient(app)
+
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/wr")
 
 
 def mock_jwt_decode(token, options, algorithms):
@@ -39,7 +42,7 @@ def test_check_policy_valid_token(mock_get_root):
         status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
     )
     headers = {"authorization": "Bearer valid_token"}
-    response = client.get("/ades", headers=headers)
+    response = client.get(f"{ADES_FASTAPI_ROOT_PATH}", headers=headers)
     assert response.status_code == 200
     assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: available</p>"
 
@@ -50,7 +53,7 @@ def test_check_policy_invalid_token(mock_get_root):
         status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
     )
     headers = {"authorization": "Bearer invalid_token"}
-    response = client.get("/ades", headers=headers)
+    response = client.get(f"{ADES_FASTAPI_ROOT_PATH}", headers=headers)
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Not Authenticated"}
@@ -61,7 +64,7 @@ def test_check_policy_no_token(mock_get_root):
     mock_get_root.return_value = MagicMock(
         status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
     )
-    response = client.get("/ades")
+    response = client.get(f"{ADES_FASTAPI_ROOT_PATH}")
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Not Authenticated"}
@@ -73,7 +76,7 @@ def test_check_policy_not_authorized(mock_get_root):
         status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
     )
     headers = {"authorization": "Bearer another_valid_token"}
-    response = client.get("/ades", headers=headers)
+    response = client.get(f"{ADES_FASTAPI_ROOT_PATH}", headers=headers)
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Not Authorized"}
