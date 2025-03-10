@@ -250,7 +250,7 @@ def process_details(
 
 
 @app.post(
-    f"{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
+    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
 )
 async def execute_process(
@@ -351,8 +351,8 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 def get_deployed_workspaced_jobs(
     deploy_workspace: str,
     request: Request,
-    limit: int = 10,
-    skip: int = 0,
+    limit: Optional[int] = None,
+    skip: Optional[int] = None,
     status: Optional[
         List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
     ] = Query(  # noqa: B008
