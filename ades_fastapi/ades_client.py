@@ -668,20 +668,29 @@ class ADESClient:
 
         return content
 
+    def _get_workflow_id_from_job_id(
+        self, deploy_workspace: str, job_id: str, headers: dict
+    ) -> str:
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
+        workflow_id = response.get("workflowID", "")
+        return workflow_id
+
     def get_log(
         self,
-        workflow_job_id: str,
+        job_id: str,
         file_name: str,
         deploy_workspace: str,
         headers: dict,
     ):
         # Extract workflow and job ids
-        workflow_id = workflow_job_id[:-37]
-        job_id = workflow_job_id[-36:]
+        # workflow_id = workflow_job_id[:-37]
+        # job_id = workflow_job_id[-36:]
 
-        logger.info(
-            "Accessing logs: %s for workflow: %s and job: %s", file_name, workflow_id, job_id
-        )
+        logger.info("Accessing logs: %s for job: %s", file_name, job_id)
+
+        workflow_id = self._get_workflow_id_from_job_id(deploy_workspace, job_id, headers)
+
+        workflow_job_id = f"{workflow_id}-{job_id}"
 
         headers.pop("authorization", None)
 
