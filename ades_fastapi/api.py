@@ -40,6 +40,9 @@ OPA_SERVICE_ENDPOINT = os.getenv(
     "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/ades/allow"
 )
 
+# Root path for FastAPI
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
+
 # ADES service endpoint
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
 
@@ -70,6 +73,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/workflow-runner/docs",
     openapi_url="/workflow-runner/openapi.json",
+    root_path=ADES_FASTAPI_ROOT_PATH,
 )
 
 # Define static file path
