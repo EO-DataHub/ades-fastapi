@@ -46,9 +46,6 @@ ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-d
 # Used for local testing where OPA is not available
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true"))
 
-# Root path for FastAPI
-ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")  # workflows
-
 # Root Catalogs for processes
 PUBLIC_CATALOG_ROOT = os.getenv("PUBLIC_CATALOG_ROOT", "public")
 USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
@@ -71,7 +68,6 @@ app = FastAPI(
     description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
     "The following endpoints are currently implemented.",
     version="0.1.0",
-    root_path=ADES_FASTAPI_ROOT_PATH,
 )
 
 # Define static file path
@@ -106,6 +102,7 @@ workspace_rates = {}
 
 
 def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
+
     passed, wf_type = dependency_client.check_access(request, job_saver)
 
     if not passed:
@@ -133,7 +130,8 @@ def root():
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}", dependencies=[Depends(opa_dependency)]
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def workspace_root(deploy_workspace: str):
     """Root endpoint for user's workspace"""
@@ -150,7 +148,7 @@ def workspace_root(deploy_workspace: str):
 
 
 @app.delete(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
@@ -169,7 +167,7 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
 )
 def list_processes(
@@ -190,7 +188,7 @@ def list_processes(
 
 
 @app.post(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
 )
 async def deploy_workflow(
@@ -209,7 +207,7 @@ async def deploy_workflow(
 
 
 @app.put(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
@@ -226,7 +224,7 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def process_details(
@@ -250,7 +248,7 @@ def process_details(
 
 
 @app.post(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
 )
 async def execute_process(
@@ -311,7 +309,7 @@ async def execute_process(
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def process_status(deploy_workspace: str, job_id: str, request: Request):
@@ -328,7 +326,7 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
     dependencies=[Depends(opa_dependency)],
 )
 def process_results(deploy_workspace: str, job_id: str, request: Request):
@@ -345,7 +343,7 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
     dependencies=[Depends(opa_dependency)],
 )
 def get_deployed_workspaced_jobs(
@@ -384,7 +382,7 @@ def get_deployed_workspaced_jobs(
     )
 
 
-# @app.get(f"/{USER_CATALOG_ROOT}/jobs", dependencies=[Depends(opa_dependency)])
+# @app.get(f"/catalogs/{USER_CATALOG_ROOT}/jobs", dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
@@ -398,7 +396,7 @@ def get_all_jobs(request: Request):
 
 
 @app.get(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/temp/{{workflow_job_id}}/{{file_name}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/temp/{{workflow_job_id}}/{{file_name}}",
     dependencies=[Depends(opa_dependency)],
 )
 def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
@@ -416,7 +414,7 @@ def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str,
 
 
 @app.delete(
-    f"/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
