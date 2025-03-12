@@ -68,6 +68,8 @@ app = FastAPI(
     description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
     "The following endpoints are currently implemented.",
     version="0.1.0",
+    docs_url="/workflow-runner/docs",
+    openapi_url="/workflow-runner/openapi.json",
 )
 
 # Define static file path
@@ -396,15 +398,13 @@ def get_all_jobs(request: Request):
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/temp/{{workflow_job_id}}/{{file_name}}",
+    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
     dependencies=[Depends(opa_dependency)],
 )
-def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
+def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
 
-    response = ades_client.get_log(
-        workflow_job_id, file_name, deploy_workspace, dict(request.headers)
-    )
+    response = ades_client.get_log(job_id, file_name, deploy_workspace, dict(request.headers))
 
     return Response(
         content=response.content,
