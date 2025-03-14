@@ -42,8 +42,8 @@ class AirbusClient:
         else:
             url = "https://authenticate-int.idp.private.geoapi-airbusds.com/auth/realms/IDP/protocol/openid-connect/token"
 
-        username, _ = get_user_details(request)
-        api_key = self.get_secret_airbus_api_key(username)
+        username, workspace, _ = get_user_details(request)
+        api_key = self.get_secret_airbus_api_key(workspace)
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",

@@ -34,12 +34,11 @@ class DependencyClient:
         job_saver: JobSaver,
     ) -> tuple:
         """Check OPA policy to determine if the request is allowed"""
-        username, roles = get_user_details(request)
+        username, workspace, roles = get_user_details(request)
         path_params = self._get_path_params(request)
 
         # Add values for logs
-        logger.info("Logged in as user: %s", username)
-        logger.info("Roles: %s", roles)
+        logger.info("Scoped to workspace: %s", workspace)
 
         # Set default workflow type
         wf_type = WorkflowType.DEFAULT
@@ -48,7 +47,7 @@ class DependencyClient:
             "input": {
                 "roles": roles,
                 "path": request.url.path,
-                "workspace": username,
+                "workspace": workspace,
                 "method": request.method,
             }
         }
@@ -89,7 +88,7 @@ class DependencyClient:
                 ).get("workspaces", [])
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
                 # TODO: determine ownership based on workspaces in user group
-                if deploy_workspace == username:
+                if deploy_workspace == workspace:
                     wf_type = WorkflowType.WORKFLOW
                 elif access_policy.get("user_service", False):
                     wf_type = WorkflowType.USER_SERVICE
