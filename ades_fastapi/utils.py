@@ -119,11 +119,17 @@ def convert_username_to_workspace(username: str) -> str:
     return username.replace("-", "_")
 
 
-def replace_href_links(content_dict: dict, ades_ingress_path: str) -> dict:
+def replace_href_links(
+    content_dict: dict, ades_ingress_path: str, catalog_root: str, workspace: str
+) -> dict:
     """Replace href links in the JSON response"""
+    replace_prefix = f"http://localhost:8080/{workspace}/ogc-api"
+    new_prefix = f"{ades_ingress_path}/catalogs/{catalog_root}/catalogs/{workspace}"
     if "links" in content_dict:
         for link in content_dict["links"]:
-            link["href"] = link["href"].replace("http://localhost:8080", ades_ingress_path)
+            old_link = link["href"]
+            new_link = old_link.replace(replace_prefix, new_prefix)
+            link["href"] = new_link
     return content_dict
 
 
