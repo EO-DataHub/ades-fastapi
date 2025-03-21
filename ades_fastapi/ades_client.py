@@ -38,14 +38,14 @@ class ADESClient:
         workflow_id: str,
     ) -> tuple:
         """Check if the workflow is accessible to the current user"""
-        username, _ = get_user_details(request)
+        username, workspace, _ = get_user_details(request)
 
-        if username == deploy_workspace:
+        if workspace == deploy_workspace:
             return True, "Workspace owns this workflow"
 
         logger.info(
-            "Checking user %s has access to workflow %s in workspace %s",
-            username,
+            "Checking workspace %s has access to workflow %s in workspace %s",
+            workspace,
             workflow_id,
             deploy_workspace,
         )
@@ -107,10 +107,10 @@ class ADESClient:
             return True, "Workflow is public"
         else:
             # Check if user is in the allowed list
-            if username in workflow_policy.get("allowed_access", {}).get("workspaces", {}):
+            if workspace in workflow_policy.get("allowed_access", {}).get("workspaces", {}):
                 logger.info(
-                    "User %s is in the allowed list for workflow %s in workspace %s",
-                    username,
+                    "Workspace %s is in the allowed list for workflow %s in workspace %s",
+                    workspace,
                     workflow_id,
                     deploy_workspace,
                 )
@@ -119,8 +119,8 @@ class ADESClient:
                 allowed_groups = set(workflow_policy.get("allowed_access", {}).get("groups", set()))
                 if user_groups & allowed_groups:
                     logger.info(
-                        "User %s is in the allowed groups for workflow %s in workspace %s",
-                        username,
+                        "Workspace %s is in the allowed groups for workflow %s in workspace %s",
+                        workspace,
                         workflow_id,
                         deploy_workspace,
                     )
@@ -479,12 +479,12 @@ class ADESClient:
         deployed_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
-        calling_workspace, _ = get_user_details(
+        username, workspace, _ = get_user_details(
             request
         )  # check this is the correct way to extract calling workspace
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(
-            token, calling_workspace, deployed_workspace, workflow_id
+            token, username, workspace, deployed_workspace, workflow_id
         )
         try:
             body = await request.json()
@@ -492,7 +492,7 @@ class ADESClient:
             raise HTTPException(
                 status_code=400, detail="Invalid input payload, not valid JSON"
             ) from err
-        self._configure_execute_request(body, aws_creds, calling_workspace, deployed_workspace)
+        self._configure_execute_request(body, aws_creds, workspace, deployed_workspace)
         response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
@@ -516,10 +516,10 @@ class ADESClient:
         deployed_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
-        calling_workspace, _ = get_user_details(request)
+        username, workspace, _ = get_user_details(request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(
-            token, calling_workspace, deployed_workspace, workflow_id
+            token, username, workspace, deployed_workspace, workflow_id
         )
         try:
             body = await request.json()
@@ -527,7 +527,7 @@ class ADESClient:
             raise HTTPException(
                 status_code=400, detail="Invalid input payload, not valid JSON"
             ) from err
-        self._configure_execute_request(body, aws_creds, calling_workspace)
+        self._configure_execute_request(body, aws_creds, workspace)
         response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
@@ -577,7 +577,7 @@ class ADESClient:
         status: Optional[List[str]] = None,
         datetime: Optional[str] = None,
     ):
-        username, _ = get_user_details(request)
+        username, workspace, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
@@ -610,17 +610,17 @@ class ADESClient:
         filtered_jobs = []
 
         logger.info(
-            "Filtering jobs to those that were called by user %s deployed in workspace %s",
-            username,
+            "Filtering jobs to those that were called by workspace %s deployed in workspace %s",
+            workspace,
             deploy_workspace,
         )
         for job in jobs:
             job_id = job.get("jobID", "")
             job_details = job_saver.get_job_details(job_id, {})
-            if job_details.get("calling_workspace") == username:
+            if job_details.get("calling_workspace") == workspace:
                 filtered_jobs.append(job)
             elif job_details.get("workflow_type") == "user-service":
-                if job_details.get("deploy_workspace") == username:
+                if job_details.get("deploy_workspace") == workspace:
                     filtered_jobs.append(job)
 
         response_json["jobs"] = filtered_jobs
@@ -631,14 +631,14 @@ class ADESClient:
         return response, content
 
     def get_all_jobs(self, request, workspace_jobs):
-        username, _ = get_user_details(request)
+        username, workspace, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
         job_details_list = []
 
-        for job in workspace_jobs.get(username, []):
+        for job in workspace_jobs.get(workspace, []):
             deploy_workspace = job["deploy_workspace"]
             job_id = job["jobID"]
             response = self._send_request(
@@ -646,7 +646,7 @@ class ADESClient:
             )
             job_details_list.append(response.json())
 
-        response_json = {"workspace": username, "jobs": job_details_list}
+        response_json = {"workspace": workspace, "jobs": job_details_list}
 
         content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
 

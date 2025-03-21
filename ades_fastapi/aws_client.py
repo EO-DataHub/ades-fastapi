@@ -72,32 +72,34 @@ def get_credentials(
     creds_dict = copy.deepcopy(creds_dict)
 
     if service_scope:
-        session_name = (
-            f"{workspace}-{username}-{workflow_id}"  # workspace will be different from username
-        )
+        session_name = f"{workspace}-{username}-{workflow_id}"
         scope = f"user_services:{workspace}"
+        workspace_token = generate_token(token, workspace, scope)
     else:
-        session_name = (
-            f"{workspace}-{username}-{workflow_id}"  # workspace will be the same as username
-        )
+        # Input token is already scoped to workspace
+        session_name = f"{workspace}-{username}-{workflow_id}"
         scope = f"workspace:{workspace}"
-    workspace_token = generate_token(token, workspace, scope)
+        workspace_token = token
 
     logger.info("Assuming role %s with session name %s", role_arn, session_name)
     logger.info("Workspace token: %s", workspace_token)
+
+    duration_seconds = 43200
+
+    logger.debug("Assuming role for %s duration seconds", duration_seconds)
 
     try:
         role = sts_client.assume_role_with_web_identity(
             RoleArn=role_arn,
             RoleSessionName=session_name,
             WebIdentityToken=workspace_token,
-            DurationSeconds=43200,  # 12 hours in seconds
+            DurationSeconds=duration_seconds,
         )
         creds_dict[key] = role["Credentials"]
     except Exception as e:
         logger.error("Failed to assume role: %s", e)
         workspace_type = "executing" if service_scope else "calling"
-        logger.error("Failed to get AWS credentils for %s workspace %s", workspace_type, workspace)
+        logger.error("Failed to get AWS credentials for %s workspace %s", workspace_type, workspace)
         creds_dict[key] = None
 
     return creds_dict
@@ -105,6 +107,7 @@ def get_credentials(
 
 def generate_aws_credentials(
     token: str,
+    username: str,
     calling_workspace: str,
     executing_workspace: str,
     workflow_id: str,
@@ -119,7 +122,7 @@ def generate_aws_credentials(
         creds_dict,
         "calling_workspace",
         workflow_id,
-        username=calling_workspace,
+        username=username,
         service_scope=False,
     )
 
@@ -131,7 +134,7 @@ def generate_aws_credentials(
             creds_dict,
             "executing_workspace",
             workflow_id,
-            username=calling_workspace,
+            username=username,
             service_scope=True,
         )
 

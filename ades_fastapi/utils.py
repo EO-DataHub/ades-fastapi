@@ -51,13 +51,15 @@ def get_user_details(request: Request) -> tuple:
             options={"verify_signature": False},
             algorithms=["HS256"],
         )
+        logger.debug("Credentials: ", credentials)
         username = credentials.get("preferred_username", "")
+        workspace = credentials.get("workspace", "")
         roles = credentials.get("realm_access", {}).get("roles", [])
-
     else:
         username = ""
+        workspace = ""
         roles = []
-    return username, roles
+    return username, workspace, roles
 
 
 def get_access_policy(
