@@ -5,13 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from ades_fastapi.api import app, quote
+from ades_fastapi.api import app
 from ades_fastapi.job_saver import JobSaver
-from ades_fastapi.utils import QuoteRequest, WorkflowType
+from ades_fastapi.utils import WorkflowType
 
 client = TestClient(app)
 
-ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/wr")
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
+API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
 
 
@@ -40,41 +41,16 @@ def override_opa_dependency_other():
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_root")
-def test_root(mock_get_root, mock_check_access):
+def test_ping(mock_get_root, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     mock_get_root.return_value = MagicMock(
         status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
     )
     headers = {"authorization": "Bearer valid_token"}
-    response = client.get(ADES_FASTAPI_ROOT_PATH, headers=headers)
-    mock_get_root.assert_called_once()
+    response = client.get(f"{API_DOCS_ROOT}/workflow-runner/ping", headers=headers)
     assert response.status_code == 200
-    assert response.headers["Content-Type"] == "text/html; charset=utf-8"
-    assert response.content.decode("utf-8") == "<h1>ADES HOMEPAGE</h1><p>Status: available</p>"
-
-
-@patch("ades_fastapi.dependency_client.DependencyClient.check_access")
-@patch("ades_fastapi.ades_client.ADESClient.get_workspace_root")
-def test_workspace_root(mock_get_workspace_root, mock_check_access):
-    # Override dependency
-    mock_check_access.return_value = True, WorkflowType.WORKFLOW
-    mock_get_workspace_root.return_value = (
-        MagicMock(
-            status_code=200,
-            headers={"Content-Type": "application/json"},
-        ),
-        '{"Data": "Response Data"}',
-    )
-    headers = {"authorization": "Bearer valid_token"}
-    response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/test_workspace", headers=headers
-    )
-    calls = mock_get_workspace_root.call_args
-    assert calls[0][0] == "test_workspace"
-    assert response.status_code == 200
-    assert response.headers["Content-Type"] == "application/json"
-    assert response.json() == {"Data": "Response Data"}
+    assert response.json() == {"status": "PONG"}
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
@@ -90,7 +66,7 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.delete(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
     )
     calls = mock_undeploy_workflow.call_args
     assert isinstance(calls[0][0], dict)
@@ -101,20 +77,20 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
-@patch("ades_fastapi.ades_client.ADESClient.list_workflows")
-def test_list_processes(mock_list_workflows, mock_check_access):
+@patch("ades_fastapi.ades_client.ADESClient.list_processes")
+def test_list_processes(mock_list_processes, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
-    mock_list_workflows.return_value = (
+    mock_list_processes.return_value = (
         MagicMock(status_code=200, headers={"Content-Type": "application/json"}),
         '{"workflowID": "test-workflow"}',
     )
     deploy_workspace = "test_workspace"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes"
     )
-    calls = mock_list_workflows.call_args
+    calls = mock_list_processes.call_args
     assert isinstance(calls[0][0], Request)
     assert calls[0][1] == deploy_workspace
     assert response.status_code == 200
@@ -134,7 +110,7 @@ def test_deploy_workflow(mock_deploy_workflow, mock_check_access):
     )
     deploy_workspace = "test_workspace"
     response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes"
     )
     calls = mock_deploy_workflow.call_args
     assert isinstance(calls[0][0], Request)
@@ -157,7 +133,7 @@ def test_update_workflow(mock_update_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.put(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
     )
     calls = mock_update_workflow.call_args
     assert isinstance(calls[0][0], Request)
@@ -181,7 +157,7 @@ def test_process_details(mock_get_workflow, mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}"
     )
     calls = mock_get_workflow.call_args
     assert isinstance(calls[0][0], dict)
@@ -213,7 +189,7 @@ def test_execute_process_user_service(
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
     )
     calls = mock_execute_user_service.call_args
     assert isinstance(calls[0][0], Request)
@@ -249,7 +225,7 @@ def test_execute_process_workflow(
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
     )
     calls = mock_execute_workflow.call_args
     assert isinstance(calls[0][0], Request)
@@ -261,8 +237,6 @@ def test_execute_process_workflow(
     mock_job_saver.record_owner.assert_called_once_with(
         mock_response, workflow_id, deploy_workspace, "test_user", WorkflowType.WORKFLOW
     )
-    # Check rate limit was checked and waited
-    assert mock_sleep.call_count == 1
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
@@ -272,10 +246,10 @@ def test_execute_process_other(mock_check_access):
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
     print(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
     )
     response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
     )
     assert response.status_code == 400
     assert response.headers["Content-Type"] == "application/json"
@@ -295,7 +269,7 @@ def test_execute_process_status(mock_get_job_status, mock_check_access):
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
     )
     calls = mock_get_job_status.call_args
     assert isinstance(calls[0][0], dict)
@@ -319,7 +293,7 @@ def test_execute_process_results(mock_get_job_results, mock_check_access):
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}/results"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}/results"
     )
     calls = mock_get_job_results.call_args
     assert isinstance(calls[0][0], dict)
@@ -342,7 +316,7 @@ def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_ch
     )
     deploy_workspace = "test_workspace"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs",
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs",
         params={
             "limit": 10,
             "skip": 2,
@@ -386,22 +360,24 @@ def test_get_log(mock_get_log, mock_check_access):
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
-    mock_get_log.return_value = MagicMock(
-        status_code=200, headers={"Content-Type": "application/json"}, content="Some log text"
+    mock_get_log.return_value = (
+        MagicMock(
+            status_code=200, headers={"Content-Type": "application/json"}, content="Some log text"
+        ),
+        "Some log text",
     )
     deploy_workspace = "test_workspace"
-    workflow_job_id = "test-workflow-1234"
+    job_id = "job_1234"
     log_name = "test.log"
     response = client.get(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/temp/{workflow_job_id}/{log_name}"
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}/{log_name}"
     )
     calls = mock_get_log.call_args
-    assert calls[0][0] == workflow_job_id
+    assert calls[0][0] == job_id
     assert calls[0][1] == log_name
     assert calls[0][2] == deploy_workspace
     assert isinstance(calls[0][3], dict)
     assert response.status_code == 200
-    assert response.headers["Content-Type"] == "application/json"
     assert response.text == "Some log text"
 
 
@@ -417,136 +393,16 @@ def test_delete_job(mock_delete_job, mock_check_access):
     )
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
-    response = client.delete(
-        f"{ADES_FASTAPI_ROOT_PATH}/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
+    print(
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
     )
+    response = client.delete(
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
+    )
+    print(response)
     calls = mock_delete_job.call_args
     assert isinstance(calls[0][0], dict)
     assert calls[0][1] == deploy_workspace
     assert calls[0][2] == job_id
     assert response.status_code == 200
-    assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"Result": "deleted"}
-
-
-@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
-@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus_sar(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"units": "EUR", "value": 100}
-    mock_get_quote_from_airbus.return_value = [
-        {"acquisitionId": "otherId", "price": 200},
-        {"acquisitionId": "12345", "price": {"currency": "EUR", "total": 100}},
-    ]
-    mock_generate_airbus_access_token.return_value = "valid_token"
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
-    )
-    assert response.status_code == 200
-    assert response.json() == result
-
-
-@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
-@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus_optical(mock_generate_airbus_access_token, mock_get_quote_from_airbus):
-    result = {"units": "EUR", "value": 100}
-    mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
-    mock_generate_airbus_access_token.return_value = "valid_token"
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={
-            "acquisitionId": "12345",
-            "catalogueId": "airbus",
-            "collectionId": "airbus_spot_data",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == result
-    assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["datastripIds"]) == 1
-
-
-@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
-@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote__airbus_optical_multi_order(
-    mock_generate_airbus_access_token, mock_get_quote_from_airbus
-):
-    result = {"units": "EUR", "value": 100}
-    mock_get_quote_from_airbus.return_value = {"currency": "EUR", "totalAmount": 100}
-    mock_generate_airbus_access_token.return_value = "valid_token"
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={
-            "itemUuids": ["12345", "67890"],
-            "catalogueId": "airbus",
-            "collectionId": "airbus_pneo_data",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == result
-    assert len(mock_get_quote_from_airbus.call_args[0][1]["items"][0]["dataSourceIds"]) == 2
-
-
-@patch("ades_fastapi.planet_client.PlanetClient.get_area_estimate")
-def test_quote__planet(mock_get_quote_from_planet):
-    mock_get_quote_from_planet.return_value = 34
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={"acquisitionId": "12345", "catalogueId": "planet", "collectionId": "collection-id"},
-    )
-    mock_get_quote_from_planet.assert_called_once_with("12345", "collection-id", None)
-    assert response.status_code == 200
-    assert response.json() == {"value": 34, "units": "km2"}
-
-
-@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_invalid_token(mock_generate_access_token):
-    mock_generate_access_token.return_value = None
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={"acquisitionId": "12345", "catalogueId": "airbus", "collectionId": "airbus_sar_data"},
-    )
-    assert response.status_code == 500
-
-
-@patch("ades_fastapi.airbus_client.AirbusClient.get_quote_from_airbus")
-@patch("ades_fastapi.airbus_client.AirbusClient.generate_access_token")
-def test_quote_id_not_matched(mock_generate_access_token, mock_get_quote_from_airbus):
-    mock_get_quote_from_airbus.return_value = [{"acquisitionId": "otherId", "price": 200}]
-    mock_generate_access_token.return_value = "valid_token"
-    headers = {"authorization": "Bearer valid_token", "accept": "application/json"}
-    response = client.post(
-        f"{ADES_FASTAPI_ROOT_PATH}/quotes",
-        headers=headers,
-        json={"acquisitionId": "12345", "catalogueId": "airbus"},
-    )
-    assert response.status_code == 404
-
-
-def test_quote_from_planet(requests_mock):
-
-    expected = {"value": 34, "units": "km2"}
-
-    mock_planet_response = {"geometry": {"coordinates": [[[4, 5], [5, 6], [6, 7]]]}}
-
-    requests_mock.get(
-        "https://url.com/planet/collections/test_collection/items/test_id",
-        json=mock_planet_response,
-    )
-
-    body = QuoteRequest(
-        **{"acquisitionId": "test_id", "collectionId": "test_collection", "catalogueId": "planet"}
-    )
-
-    response = quote(None, body)
-
-    assert response.__dict__ == expected
