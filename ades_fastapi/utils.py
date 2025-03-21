@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import time
 from enum import Enum
 
 import boto3
@@ -119,16 +118,21 @@ def convert_username_to_workspace(username: str) -> str:
     return username.replace("-", "_")
 
 
-def replace_href_links(
-    content_dict: dict, ades_ingress_path: str, catalog_root: str, workspace: str
-) -> dict:
+def replace_href_link(link: str, base_url: str, catalog_root: str, workspace: str) -> str:
     """Replace href links in the JSON response"""
     replace_prefix = f"http://localhost:8080/{workspace}/ogc-api"
-    new_prefix = f"{ades_ingress_path}/catalogs/{catalog_root}/catalogs/{workspace}"
+    new_prefix = f"{base_url}/catalogs/{catalog_root}/catalogs/{workspace}"
+    return link.replace(replace_prefix, new_prefix, 1)
+
+
+def replace_href_links(
+    content_dict: dict, base_url: str, catalog_root: str, workspace: str
+) -> dict:
+    """Replace href links in the JSON response"""
     if "links" in content_dict:
         for link in content_dict["links"]:
             old_link = link["href"]
-            new_link = old_link.replace(replace_prefix, new_prefix)
+            new_link = replace_href_link(old_link, base_url, catalog_root, workspace)
             link["href"] = new_link
     return content_dict
 
@@ -197,20 +201,3 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     )
 
     return response.json()
-
-
-def is_within_rate_limit(workspace: str, workspace_rates: dict, rate_limit: int) -> bool:
-    """Check if the workspace has exceeded its rate limit"""
-    time_now = int(time.time())
-    if workspace in workspace_rates:
-        last_execution = workspace_rates[workspace].get("last_execution")
-        if last_execution and last_execution - time_now < rate_limit:
-            # Workspace has exceeded its rate limit
-            logger.info("Workspace %s has exceeded its rate limit", workspace)
-            return False
-        # Update the last execution time
-        workspace_rates[workspace]["last_execution"] = time_now
-    else:
-        # This is the first run in the workspace
-        workspace_rates[workspace] = {"last_execution": time_now}
-    return True
