@@ -22,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 # Ingress path for ADES
-ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path/ades")
+ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path")
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
@@ -31,6 +31,7 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
+API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 
 # ADES service endpoint
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
@@ -48,18 +49,17 @@ ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 # ADES policy prefix
 ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
 
-# ADES execution rate limit in seconds
-RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))
-
-
 app = FastAPI(
     title="EODHP ADES",
     description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
     "The following endpoints are currently implemented.",
     version="0.1.0",
-    docs_url="/workflow-runner/docs",
-    openapi_url="/workflow-runner/openapi.json",
-    root_path=ADES_FASTAPI_ROOT_PATH,
+    docs_url=f"{API_DOCS_ROOT}/workflow-runner",
+    openapi_url=f"{API_DOCS_ROOT}/workflow-runner/openapi.json",
+)
+
+logger.info(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
 )
 
 # Define static file path
@@ -114,19 +114,19 @@ def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
     return wf_type
 
 
-@app.get("/workflow-runner/ping")
+@app.get(f"{API_DOCS_ROOT}/workflow-runner/ping")
 def ping():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     logger.info("Getting ADES root")
     response = ades_client.get_root()
     if response.status_code == 200:
-        return {"status": "pong"}
+        return {"status": "PONG"}
     else:
         return {"status": "Failed to connect to ADES"}
 
 
 @app.delete(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
@@ -146,7 +146,7 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
 )
 def list_processes(
@@ -155,7 +155,7 @@ def list_processes(
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
-    response, content = ades_client.list_workflows(
+    response, content = ades_client.list_processes(
         request, deploy_workspace, limit=limit, skip=skip
     )
 
@@ -168,7 +168,7 @@ def list_processes(
 
 
 @app.post(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
 )
 async def deploy_workflow(
@@ -187,7 +187,7 @@ async def deploy_workflow(
 
 
 @app.put(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
@@ -204,7 +204,7 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def process_details(
@@ -229,7 +229,7 @@ def process_details(
 
 
 @app.post(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
 )
 async def execute_process(
@@ -271,7 +271,7 @@ async def execute_process(
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def process_status(deploy_workspace: str, job_id: str, request: Request):
@@ -289,7 +289,7 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
     dependencies=[Depends(opa_dependency)],
 )
 def process_results(deploy_workspace: str, job_id: str, request: Request):
@@ -307,7 +307,7 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
     dependencies=[Depends(opa_dependency)],
 )
 def get_deployed_workspaced_jobs(
@@ -350,7 +350,8 @@ def get_deployed_workspaced_jobs(
 ##############
 ## NOT USED ##
 ##############
-# @app.get(f"/catalogs/{USER_CATALOG_ROOT}/jobs", dependencies=[Depends(opa_dependency)])
+# @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
+# dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
@@ -364,7 +365,7 @@ def get_all_jobs(request: Request):
 
 
 @app.get(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
     dependencies=[Depends(opa_dependency)],
 )
 def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request: Request):
@@ -378,12 +379,12 @@ def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request:
         content=content,
         # media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
+        # headers=response.headers,
     )
 
 
 @app.delete(
-    f"/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
 )
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
@@ -396,5 +397,5 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
         content=content,
         # media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
+        # headers=response.headers,
     )
