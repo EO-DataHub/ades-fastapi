@@ -551,7 +551,9 @@ def test_send_request_get_root(mock_request, ades_client):
     headers = {"Content-Type": "application/json"}
     response = ades_client._send_request("GET", headers=headers)
 
-    mock_request.assert_called_once_with("http://test-service-endpoint", headers=headers)
+    mock_request.assert_called_once_with(
+        "http://test-service-endpoint", headers=headers, timeout=10
+    )
     assert response == mock_response
 
 
@@ -561,7 +563,7 @@ def test_send_request_get_root_no_headers(mock_request, ades_client):
     mock_request.return_value = mock_response
     response = ades_client._send_request("GET")
 
-    mock_request.assert_called_once_with("http://test-service-endpoint", headers=None)
+    mock_request.assert_called_once_with("http://test-service-endpoint", headers=None, timeout=10)
     assert response == mock_response
 
 
@@ -575,7 +577,7 @@ def test_send_request_get_workflow(mock_request, ades_client):
     response = ades_client._send_request("GET", url_path, headers, data)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/test/path", headers=headers, **data
+        "http://test-service-endpoint/test/path", headers=headers, **data, timeout=10
     )
     assert response == mock_response
 
@@ -590,7 +592,10 @@ def test_send_request_execute_workflow(mock_request, ades_client):
     response = ades_client._send_request("POST", url_path, headers, data)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
+        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id",
+        headers=headers,
+        **data,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -605,7 +610,10 @@ def test_send_request_update_workflow(mock_request, ades_client):
     response = ades_client._send_request("PUT", url_path, headers, data)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
+        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id",
+        headers=headers,
+        **data,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -620,7 +628,10 @@ def test_send_request_deploy_workflow(mock_request, ades_client):
     response = ades_client._send_request("POST", url_path, headers, data)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers, **data
+        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id",
+        headers=headers,
+        **data,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -634,7 +645,9 @@ def test_send_request_delete_workflow(mock_request, ades_client):
     response = ades_client._send_request("DELETE", url_path, headers)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id", headers=headers
+        "http://test-service-endpoint/deploy_workspace/ogc-api/workflow-id",
+        headers=headers,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -648,7 +661,9 @@ def test_send_request_delete_job(mock_request, ades_client):
     response = ades_client._send_request("DELETE", url_path, headers)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/ogc-api/jobs/job_id", headers=headers
+        "http://test-service-endpoint/deploy_workspace/ogc-api/jobs/job_id",
+        headers=headers,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -662,7 +677,9 @@ def test_send_request_view_log(mock_request, ades_client):
     response = ades_client._send_request("GET", url_path, headers)
 
     mock_request.assert_called_once_with(
-        "http://test-service-endpoint/deploy_workspace/temp/workflow-id-12345", headers=headers
+        "http://test-service-endpoint/deploy_workspace/temp/workflow-id-12345",
+        headers=headers,
+        timeout=10,
     )
     assert response == mock_response
 
@@ -737,7 +754,9 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     response, content = ades_client.get_deployed_workspaced_jobs(
         request, "test_workspace", mock_job_saver
     )
-    mock_send_request.assert_any_call("GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}})
+    mock_send_request.assert_any_call(
+        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
+    )
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [
@@ -755,7 +774,9 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     response, content = ades_client.get_deployed_workspaced_jobs(
         request, "test_workspace", mock_job_saver, limit=3, skip=4
     )
-    mock_send_request.assert_any_call("GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}})
+    mock_send_request.assert_any_call(
+        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
+    )
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [{"jobID": "job-5"}, {"jobID": "job-6"}],
@@ -770,7 +791,8 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
         "GET",
         "test_workspace/ogc-api/jobs",
         {},
-        data={"params": {"status": "running,failed"}},
+        data={"params": {"limit": 2, "status": "running,failed"}},
+        timeout=60,
     )
     assert response.status_code == 200
     assert json.loads(content) == {
@@ -790,7 +812,8 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
         "GET",
         "test_workspace/ogc-api/jobs",
         {},
-        data={"params": {"datetime": "2021-01-01T00:00:00Z/2021-01-02T00:00:00Z"}},
+        data={"params": {"limit": 3, "datetime": "2021-01-01T00:00:00Z/2021-01-02T00:00:00Z"}},
+        timeout=60,
     )
     assert response.status_code == 200
     assert json.loads(content) == {

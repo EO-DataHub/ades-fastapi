@@ -30,7 +30,7 @@ def mock_requests_post(url, json):
     return MagicMock(status_code=403, json=lambda: {"result": False})
 
 
-def mock_requests_get(url, headers):
+def mock_requests_get(url, headers, timeout=10):
     return MagicMock(status_code=200, text="Reponse content", headers={"Content-Type": "text/html"})
 
 
