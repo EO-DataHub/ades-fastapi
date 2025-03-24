@@ -12,6 +12,7 @@ from ades_fastapi.job_saver import JobSaver
 @pytest.fixture
 def dependency_client():
     return DependencyClient(
+        fastapi_root="/api/catalogue/stac",
         opa_service_endpoint="http://opa-service",
         ades_policy_bucket="test-bucket",
         ades_policy_prefix="test-prefix",

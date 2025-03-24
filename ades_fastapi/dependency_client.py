@@ -11,8 +11,14 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 class DependencyClient:
     def __init__(
-        self, opa_service_endpoint, ades_policy_bucket, ades_policy_prefix, enable_opa_policy_check
+        self,
+        fastapi_root,
+        opa_service_endpoint,
+        ades_policy_bucket,
+        ades_policy_prefix,
+        enable_opa_policy_check,
     ):
+        self.fastapi_root = fastapi_root
         self.opa_service_endpoint = opa_service_endpoint
         self.ades_policy_bucket = ades_policy_bucket
         self.ades_policy_prefix = ades_policy_prefix
@@ -46,7 +52,7 @@ class DependencyClient:
         input_data = {
             "input": {
                 "roles": roles,
-                "path": request.url.path,
+                "path": request.url.path.replace(self.fastapi_root, "", 1),  # remove starting path
                 "workspace": workspace,
                 "method": request.method,
             }

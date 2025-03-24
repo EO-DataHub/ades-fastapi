@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 from distutils.util import strtobool
@@ -6,13 +5,12 @@ from typing import List, Literal, Optional
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
-from .utils import WorkflowType, get_user_details, is_within_rate_limit
+from .utils import WorkflowType, get_user_details
 
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
@@ -24,12 +22,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 # Ingress path for ADES
-ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path/ades")
+ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path")
 
 # OPA service endpoint
 OPA_SERVICE_ENDPOINT = os.getenv(
     "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/ades/allow"
 )
+
+# Root path for FastAPI
+ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
+API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 
 # ADES service endpoint
 ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-dru-service:80")
@@ -37,8 +39,9 @@ ADES_SERVICE_ENDPOINT = os.getenv("ADES_SERVICE_ENDPOINT", "http://zoo-project-d
 # Used for local testing where OPA is not available
 ENABLE_OPA_POLICY_CHECK = strtobool(os.getenv("ENABLE_OPA_POLICY_CHECK", "true"))
 
-# Root path for FastAPI
-ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/ades")
+# Root Catalogs for processes
+PUBLIC_CATALOG_ROOT = os.getenv("PUBLIC_CATALOG_ROOT", "public")
+USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
 
 # ADES Policy bucket name
 ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
@@ -46,19 +49,17 @@ ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 # ADES policy prefix
 ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
 
-# ADES execution rate limit in seconds
-RATE_LIMIT = int(os.getenv("RATE_LIMIT", 5))
-
-# Environment used for calls to airbus API
-AIRBUS_ENV = os.getenv("AIRBUS_ENV", "dev")
-
-
 app = FastAPI(
     title="EODHP ADES",
     description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
     "The following endpoints are currently implemented.",
     version="0.1.0",
-    root_path=ADES_FASTAPI_ROOT_PATH,
+    docs_url=f"{API_DOCS_ROOT}/workflow-runner",
+    openapi_url=f"{API_DOCS_ROOT}/workflow-runner/openapi.json",
+)
+
+logger.info(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
 )
 
 # Define static file path
@@ -78,11 +79,19 @@ def configure_job_saver():
 job_saver = configure_job_saver()
 
 ades_client = ADESClient(
-    ADES_SERVICE_ENDPOINT, ADES_INGRESS_PATH, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX
+    ADES_SERVICE_ENDPOINT,
+    ADES_INGRESS_PATH,
+    ADES_POLICY_BUCKET,
+    ADES_POLICY_PREFIX,
+    USER_CATALOG_ROOT,
 )
 
 dependency_client = DependencyClient(
-    OPA_SERVICE_ENDPOINT, ADES_POLICY_BUCKET, ADES_POLICY_PREFIX, ENABLE_OPA_POLICY_CHECK
+    ADES_FASTAPI_ROOT_PATH,
+    OPA_SERVICE_ENDPOINT,
+    ADES_POLICY_BUCKET,
+    ADES_POLICY_PREFIX,
+    ENABLE_OPA_POLICY_CHECK,
 )
 
 # Create rate-limiting storage
@@ -90,6 +99,7 @@ workspace_rates = {}
 
 
 def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
+    """Dependency to check if the user is authorized to access the endpoint"""
     passed, wf_type = dependency_client.check_access(request, job_saver)
 
     if not passed:
@@ -103,36 +113,20 @@ def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
     return wf_type
 
 
-@app.get("", dependencies=[Depends(opa_dependency)])
-def root():
+@app.get(f"{API_DOCS_ROOT}/workflow-runner/ping")
+def ping():
     """Root endpoint for ADES API Docs, used by Swagger UI"""
     logger.info("Getting ADES root")
     response = ades_client.get_root()
     if response.status_code == 200:
-        return HTMLResponse(content="<h1>ADES HOMEPAGE</h1><p>Status: available</p>")
+        return {"status": "PONG"}
     else:
-        return HTMLResponse(
-            content="<h1>ADES HOMEPAGE</h1><p>Status: Unavailable</p>", status_code=503
-        )
-
-
-@app.get("/{deploy_workspace}/ogc-api", dependencies=[Depends(opa_dependency)])
-def workspace_root(deploy_workspace: str):
-    """Root endpoint for user's workspace"""
-    logger.info("Getting root of workspace %s", deploy_workspace)
-
-    response, content = ades_client.get_workspace_root(deploy_workspace)
-
-    return StreamingResponse(
-        content=content,
-        status_code=response.status_code,
-        headers=response.headers,
-        media_type=response.headers.get("Content-Type"),
-    )
+        return {"status": "Failed to connect to ADES"}
 
 
 @app.delete(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to undeploy a workflow"""
@@ -144,19 +138,22 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
     return Response(
         content=content,
-        status_code=response.status_code,
         media_type=response.headers.get("Content-Type"),
+        status_code=response.status_code,
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    dependencies=[Depends(opa_dependency)],
+)
 def list_processes(
     deploy_workspace: str, request: Request, limit: Optional[int] = None, skip: int = 0
 ):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
-    response, content = ades_client.list_workflows(
+    response, content = ades_client.list_processes(
         request, deploy_workspace, limit=limit, skip=skip
     )
 
@@ -167,25 +164,27 @@ def list_processes(
     )
 
 
-@app.post("/{deploy_workspace}/ogc-api/processes", dependencies=[Depends(opa_dependency)])
+@app.post(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
+    dependencies=[Depends(opa_dependency)],
+)
 async def deploy_workflow(
     deploy_workspace: str,
     request: Request,
 ):
     """Endpoint to deploy a workflow to a workspace"""
-
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
 
     return Response(
         content=content,
         status_code=response.status_code,
         headers=response.headers,
-        media_type=response.headers.get("Content-Type"),
     )
 
 
 @app.put(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to update a workflow in a workspace"""
@@ -201,7 +200,8 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
 
 
 @app.get(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}", dependencies=[Depends(opa_dependency)]
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
+    dependencies=[Depends(opa_dependency)],
 )
 def process_details(
     deploy_workspace: str,
@@ -224,7 +224,7 @@ def process_details(
 
 
 @app.post(
-    "/{deploy_workspace}/ogc-api/processes/{workflow_id}/execution",
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
 )
 async def execute_process(
@@ -238,51 +238,34 @@ async def execute_process(
     logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
         case WorkflowType.USER_SERVICE:
-            if is_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
-                response, content = await ades_client.execute_user_service(
-                    request,
-                    deploy_workspace,
-                    workflow_id,
-                )
-            else:
-                # Wait for rate limit to be reset
-                await asyncio.sleep(RATE_LIMIT)
-                response, content = await ades_client.execute_user_service(
-                    request,
-                    deploy_workspace,
-                    workflow_id,
-                )
+            response, content = await ades_client.execute_user_service(
+                request,
+                deploy_workspace,
+                workflow_id,
+            )
         case WorkflowType.WORKFLOW:
-            if is_within_rate_limit(deploy_workspace, workspace_rates, RATE_LIMIT):
-                response, content = await ades_client.execute_workflow(
-                    request,
-                    deploy_workspace,
-                    workflow_id,
-                )
-            else:
-                # Wait for rate limit to be reset
-                await asyncio.sleep(RATE_LIMIT)
-                response, content = await ades_client.execute_workflow(
-                    request,
-                    deploy_workspace,
-                    workflow_id,
-                )
+            response, content = await ades_client.execute_workflow(
+                request,
+                deploy_workspace,
+                workflow_id,
+            )
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
         username, workspace, _ = get_user_details(request)
         job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
-    # use streamingresponse to avoid content-length header being set automatically, causing issues
-    # with Transfer-Encoding
-    return StreamingResponse(
+
+    return Response(
         content=content,
-        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
         headers=response.headers,
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    dependencies=[Depends(opa_dependency)],
+)
 def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
@@ -297,7 +280,8 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
 
 @app.get(
-    "/{deploy_workspace}/ogc-api/jobs/{job_id}/results", dependencies=[Depends(opa_dependency)]
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
+    dependencies=[Depends(opa_dependency)],
 )
 def process_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
@@ -312,12 +296,15 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
     )
 
 
-@app.get("/{deploy_workspace}/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+@app.get(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
+    dependencies=[Depends(opa_dependency)],
+)
 def get_deployed_workspaced_jobs(
     deploy_workspace: str,
     request: Request,
-    limit: int = 10,
-    skip: int = 0,
+    limit: Optional[int] = None,
+    skip: Optional[int] = None,
     status: Optional[
         List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
     ] = Query(  # noqa: B008
@@ -349,7 +336,11 @@ def get_deployed_workspaced_jobs(
     )
 
 
-# @app.get("/ogc-api/jobs", dependencies=[Depends(opa_dependency)])
+##############
+## NOT USED ##
+##############
+# @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
+# dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
     """Endpoint to list all jobs called by the given user"""
 
@@ -363,23 +354,27 @@ def get_all_jobs(request: Request):
 
 
 @app.get(
-    "/{deploy_workspace}/temp/{workflow_job_id}/{file_name}", dependencies=[Depends(opa_dependency)]
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
+    dependencies=[Depends(opa_dependency)],
 )
-def get_process_log(deploy_workspace: str, workflow_job_id: str, file_name: str, request: Request):
+def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
-
-    response = ades_client.get_log(
-        workflow_job_id, file_name, deploy_workspace, dict(request.headers)
+    logger.info("Getting log %s for job %s in workspace %s", file_name, job_id, deploy_workspace)
+    response, content = ades_client.get_log(
+        job_id, file_name, deploy_workspace, dict(request.headers)
     )
 
     return Response(
-        content=response.content,
+        content=content,
         media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
     )
 
 
-@app.delete("/{deploy_workspace}/ogc-api/jobs/{job_id}", dependencies=[Depends(opa_dependency)])
+@app.delete(
+    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
+    dependencies=[Depends(opa_dependency)],
+)
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)

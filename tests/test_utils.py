@@ -138,12 +138,21 @@ def test_convert_username_to_workspace():
 
 def test_replace_href_links():
     content_dict = {
-        "links": [{"href": "http://localhost:8080/test1"}, {"href": "http://localhost:8080/test2"}]
+        "links": [
+            {"href": "http://localhost:8080/test-workspace/ogc-api/extra/path/test1"},
+            {"href": "http://localhost:8080/test-workspace/ogc-api/extra/path/test2"},
+        ]
     }
-    ades_ingress_path = "http://ades-ingress"
-    result = replace_href_links(content_dict, ades_ingress_path)
-    assert result["links"][0]["href"] == "http://ades-ingress/test1"
-    assert result["links"][1]["href"] == "http://ades-ingress/test2"
+    ades_ingress_path = "http://ades-ingress/path"
+    result = replace_href_links(content_dict, ades_ingress_path, "user", "test-workspace")
+    assert (
+        result["links"][0]["href"]
+        == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test1"
+    )
+    assert (
+        result["links"][1]["href"]
+        == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test2"
+    )
 
 
 @mock.patch("ades_fastapi.utils.requests.get")

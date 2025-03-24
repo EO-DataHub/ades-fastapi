@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import List, Optional
 
 import boto3
@@ -16,20 +17,29 @@ from .utils import (
     get_user_token,
     get_workflow_id_from_file,
     get_workflow_id_from_url,
+    replace_href_link,
     replace_href_links,
 )
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
+JOBS_TIMEOUT = int(os.getenv("JOBS_TIMEOUT", "60"))
+
 
 class ADESClient:
     def __init__(
-        self, service_endpoint: str, base_url: str, policy_bucket: str, policy_prefix: str
+        self,
+        service_endpoint: str,
+        base_url: str,
+        policy_bucket: str,
+        policy_prefix: str,
+        catalog_root: str,
     ):
         self.service_endpoint = service_endpoint
         self.base_url = base_url
         self.policy_bucket = policy_bucket
         self.policy_prefix = policy_prefix
+        self.catalog_root = catalog_root
 
     def _check_workflow_access(
         self,
@@ -133,6 +143,7 @@ class ADESClient:
         url_path: str = "",
         headers: Optional[dict] = None,
         data: Optional[dict] = None,
+        timeout: int = 10,
     ):
         # Construct requests function
         if verb == "GET":
@@ -152,10 +163,10 @@ class ADESClient:
         try:
             if data:
                 logger.info("Sending %s request to %s with data %s", verb, url, data)
-                response = func(url, headers=headers, **data)
+                response = func(url, headers=headers, timeout=timeout, **data)
             else:
                 logger.info("Sending %s request to %s", verb, url)
-                response = func(url, headers=headers)
+                response = func(url, headers=headers, timeout=timeout)
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
@@ -173,7 +184,9 @@ class ADESClient:
             url = f"{deploy_workspace}/ogc-api/"
             response = self._send_request("GET", url)
             content_json = response.json()
-            content = json.dumps(replace_href_links(content_json, self.base_url))
+            content = json.dumps(
+                replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace)
+            )
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
         except json.JSONDecodeError:
@@ -193,28 +206,34 @@ class ADESClient:
 
         return response, content
 
-    def list_workflows(
-        self, request: requests.Request, deploy_workspace: str, limit: Optional[int], skip: int
+    def list_processes(
+        self,
+        request: requests.Request,
+        deploy_workspace: str,
+        limit: Optional[int],
+        skip: Optional[int],
     ):
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        # Add limit to data params
-        params = {}
-        if limit:
-            params["limit"] = limit
-        if skip:
-            params["skip"] = skip
+        final_content = {}
+        final_content["processes"] = []
 
+        # For now, request all workflows and filter by access, using limit and skip after
+        # TODO: maybe add some limit value here for some configured maximum number of
+        # workflows and then loop
         response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/processes", headers, data={"params": params}
+            "GET",
+            f"{deploy_workspace}/ogc-api/processes",
+            headers,
         )
 
+        allowed_count = 0
         if "application/json" in response.headers["Content-Type"]:
-            final_content = {}
-            final_content["processes"] = []
             content_json = response.json()
-            content_json = replace_href_links(content_json, self.base_url)
+            content_json = replace_href_links(
+                content_json, self.base_url, self.catalog_root, deploy_workspace
+            )
             final_content["links"] = content_json.get("links")
             for process_json in content_json.get("processes", []):
                 access, description = self._check_workflow_access(
@@ -223,9 +242,16 @@ class ADESClient:
                     process_json["id"],
                 )
                 if access:
-                    process_json = replace_href_links(process_json, self.base_url)
+                    allowed_count += 1
+                    if skip and allowed_count <= skip:
+                        continue
+                    process_json = replace_href_links(
+                        process_json, self.base_url, self.catalog_root, deploy_workspace
+                    )
                     process_json.update({"AccessReasoning": description})
                     final_content["processes"].append(process_json)
+                    if len(final_content["processes"]) == limit:
+                        break
             content = json.dumps(final_content)
         else:
             content = response.text
@@ -271,15 +297,20 @@ class ADESClient:
 
         if "application/json" in response.headers["Content-Type"]:
             content_json = response.json()
-            content_json = replace_href_links(content_json, self.base_url)
+            content_json = replace_href_links(
+                content_json, self.base_url, self.catalog_root, deploy_workspace
+            )
             content = json.dumps(content_json, indent=2)
         else:
             content = response.text
 
         # Need to include Location header from ADES to support deploy status endpoint
         response.headers = {
-            "Location": response.headers.get("Location", "").replace(
-                "http://localhost:8080", self.base_url
+            "Location": replace_href_link(
+                response.headers.get("Location", ""),
+                self.base_url,
+                self.catalog_root,
+                deploy_workspace,
             ),
             "Content-Type": response.headers["Content-Type"],
         }
@@ -330,8 +361,11 @@ class ADESClient:
         # Need to include Location header from ADES to support deploy status endpoint
         response.headers.update(
             {
-                "Location": response.headers.get("Location", "").replace(
-                    "http://localhost:8080", self.base_url
+                "Location": replace_href_link(
+                    response.headers.get("Location", ""),
+                    self.base_url,
+                    self.catalog_root,
+                    deploy_workspace,
                 ),
             }
         )
@@ -347,7 +381,9 @@ class ADESClient:
         )
         try:
             content_json = response.json()
-            content_json = replace_href_links(content_json, self.base_url)
+            content_json = replace_href_links(
+                content_json, self.base_url, self.catalog_root, deploy_workspace
+            )
             if wf_type is WorkflowType.USER_SERVICE:
                 content_json.update({"AccessReasoning": "Workflow is a user-service"})
             content = json.dumps(content_json, indent=2)
@@ -476,7 +512,7 @@ class ADESClient:
     async def execute_user_service(
         self,
         request: requests.Request,
-        deployed_workspace: str,
+        deploy_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
         username, workspace, _ = get_user_details(
@@ -484,7 +520,7 @@ class ADESClient:
         )  # check this is the correct way to extract calling workspace
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(
-            token, username, workspace, deployed_workspace, workflow_id
+            token, username, workspace, deploy_workspace, workflow_id
         )
         try:
             body = await request.json()
@@ -492,20 +528,23 @@ class ADESClient:
             raise HTTPException(
                 status_code=400, detail="Invalid input payload, not valid JSON"
             ) from err
-        self._configure_execute_request(body, aws_creds, workspace, deployed_workspace)
-        response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
+        self._configure_execute_request(body, aws_creds, workspace, deploy_workspace)
+        response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
             try:
-                content_json = replace_href_links(response.json(), self.base_url)
+                content_json = replace_href_links(
+                    response.json(), self.base_url, self.catalog_root, deploy_workspace
+                )
                 content = json.dumps(content_json, indent=2)
             except json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
-                response.headers["Location"] = response.headers["Location"].replace(
-                    "http://localhost:8080", self.base_url
+                response.headers["Location"] = replace_href_link(
+                    response.headers["Location"], self.base_url, self.catalog_root, deploy_workspace
                 )
+
         else:
             content = response.text
         return response, content
@@ -513,13 +552,13 @@ class ADESClient:
     async def execute_workflow(
         self,
         request: requests.Request,
-        deployed_workspace: str,
+        deploy_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
         username, workspace, _ = get_user_details(request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(
-            token, username, workspace, deployed_workspace, workflow_id
+            token, username, workspace, deploy_workspace, workflow_id
         )
         try:
             body = await request.json()
@@ -528,30 +567,67 @@ class ADESClient:
                 status_code=400, detail="Invalid input payload, not valid JSON"
             ) from err
         self._configure_execute_request(body, aws_creds, workspace)
-        response = self._send_execute_to_ades(deployed_workspace, workflow_id, body)
+        response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
             try:
-                content_json = replace_href_links(response.json(), self.base_url)
+                content_json = replace_href_links(
+                    response.json(), self.base_url, self.catalog_root, deploy_workspace
+                )
                 content = json.dumps(content_json, indent=2)
             except json.json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
-                response.headers["Location"] = response.headers["Location"].replace(
-                    "http://localhost:8080", self.base_url
+                response.headers["Location"] = replace_href_link(
+                    response.headers["Location"], self.base_url, self.catalog_root, deploy_workspace
                 )
         else:
             content = response.text
         return response, content
 
+    def _format_execution_link(self, links: list, workspace: str, workflow_id: str) -> list:
+        """Format the status link to include the base URL"""
+        for link in links:
+            if link["rel"] == "monitor":
+                link["href"] = (
+                    f"{self.base_url}/catalogs/user/catalogs/{workspace}/processes/{workflow_id}/execution"
+                )
+        return links
+
+    def _format_status_link(self, links: list, workspace: str, job_id: str) -> list:
+        """Format the status link to include the base URL"""
+        for link in links:
+            if link["rel"] == "monitor":
+                link["href"] = f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}"
+        return links
+
+    def _format_log_links(self, links: list, workspace: str, job_id: str) -> list:
+        """Format the status link to include the base URL"""
+        for link in links:
+            if link["rel"] == "related":
+                log_name = link["href"].rsplit("/", 1)[1]
+                link["href"] = (
+                    f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}/{log_name}"
+                )
+        return links
+
     def get_job_status(self, headers: dict, deploy_workspace: str, job_id: str):
         headers.pop("authorization", None)
         response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
 
-        content = replace_href_links(response.json(), self.base_url)
+        content_json = replace_href_links(
+            response.json(), self.base_url, self.catalog_root, deploy_workspace
+        )
 
-        content = json.dumps(content).replace("http://localhost:8080", self.base_url)
+        # content_json["links"] = self._format_status_link(
+        #     content_json["links"], deploy_workspace, job_id
+        # )
+        content_json["links"] = self._format_log_links(
+            content_json["links"], deploy_workspace, job_id
+        )
+
+        content = json.dumps(content_json, indent=2)
 
         return response, content
 
@@ -561,7 +637,7 @@ class ADESClient:
             "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}/results", headers
         )
         try:
-            content = json.dumps(response.json()).replace("http://localhost:8080", self.base_url)
+            content = json.dumps(response.json())
         except json.JSONDecodeError:
             content = response.text
 
@@ -593,10 +669,17 @@ class ADESClient:
         if datetime:
             params.update({"datetime": datetime})
 
+        filtered_jobs = []
+
         # Get all jobs in the deployed workspace
         response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/jobs", headers, data={"params": params}
+            "GET",
+            f"{deploy_workspace}/ogc-api/jobs",
+            headers,
+            data={"params": params},
+            timeout=JOBS_TIMEOUT,
         )
+
         try:
             response_json = response.json()
             jobs = response_json["jobs"]
@@ -606,8 +689,7 @@ class ADESClient:
         except KeyError:
             logger.error("No jobs found in workspace %s", deploy_workspace)
             jobs = []
-
-        filtered_jobs = []
+            return response, json.dumps({"jobs": jobs, "numberTotal": 0})
 
         logger.info(
             "Filtering jobs to those that were called by workspace %s deployed in workspace %s",
@@ -616,17 +698,25 @@ class ADESClient:
         )
         for job in jobs:
             job_id = job.get("jobID", "")
-            job_details = job_saver.get_job_details(job_id, {})
+            job_details = job_saver.get_job_details(deploy_workspace, job_id)
             if job_details.get("calling_workspace") == workspace:
+                job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
                 filtered_jobs.append(job)
+                if limit and len(filtered_jobs) == limit:
+                    break
             elif job_details.get("workflow_type") == "user-service":
                 if job_details.get("deploy_workspace") == workspace:
+                    job = replace_href_links(
+                        job, self.base_url, self.catalog_root, deploy_workspace
+                    )
                     filtered_jobs.append(job)
+                    if limit and len(filtered_jobs) == limit:
+                        break
 
         response_json["jobs"] = filtered_jobs
         response_json["numberTotal"] = len(filtered_jobs)
 
-        content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
+        content = json.dumps(response_json)
 
         return response, content
 
@@ -644,28 +734,42 @@ class ADESClient:
             response = self._send_request(
                 "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers
             )
-            job_details_list.append(response.json())
+            job_details = response.json()
+            job_details = replace_href_links(
+                job_details, self.base_url, self.catalog_root, deploy_workspace
+            )
+            job_details_list.append(job_details)
 
         response_json = {"workspace": workspace, "jobs": job_details_list}
 
-        content = json.dumps(response_json).replace("http://localhost:8080", self.base_url)
+        content = json.dumps(response_json)
 
         return content
 
+    def _get_workflow_id_from_job_id(
+        self, deploy_workspace: str, job_id: str, headers: dict
+    ) -> str:
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
+        workflow_id = response.json().get("processID", "")
+        return workflow_id
+
     def get_log(
         self,
-        workflow_job_id: str,
+        job_id: str,
         file_name: str,
         deploy_workspace: str,
         headers: dict,
-    ):
-        # Extract workflow and job ids
-        workflow_id = workflow_job_id[:-37]
-        job_id = workflow_job_id[-36:]
+    ) -> tuple:
+        workflow_id = self._get_workflow_id_from_job_id(deploy_workspace, job_id, headers)
+
+        if not workflow_id:
+            raise HTTPException(status_code=404, detail="Workflow ID for given jobID not found")
 
         logger.info(
-            "Accessing logs: %s for workflow: %s and job: %s", file_name, workflow_id, job_id
+            "Accessing logs: %s for job: %s and workflow: %s", file_name, job_id, workflow_id
         )
+
+        workflow_job_id = f"{workflow_id}-{job_id}"
 
         headers.pop("authorization", None)
 
@@ -673,7 +777,7 @@ class ADESClient:
             "GET", f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}", headers
         )
 
-        return response
+        return response, response.content
 
     def delete_job(self, headers: dict, deploy_workspace: str, job_id: str):
         headers.pop("authorization", None)
@@ -682,7 +786,7 @@ class ADESClient:
         )
 
         try:
-            content = json.dumps(response.json()).replace("http://localhost:8080", self.base_url)
+            content = json.dumps(response.json())
         except json.JSONDecodeError:
             content = response.text
 
