@@ -100,7 +100,7 @@ workspace_rates = {}
 
 
 def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
-
+    """Dependency to check if the user is authorized to access the endpoint"""
     passed, wf_type = dependency_client.check_access(request, job_saver)
 
     if not passed:
@@ -139,9 +139,8 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 
     return Response(
         content=content,
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
-        # media_type=response.headers.get("Content-Type"),
     )
 
 
@@ -161,9 +160,8 @@ def list_processes(
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
     )
 
 
@@ -182,7 +180,6 @@ async def deploy_workflow(
         content=content,
         status_code=response.status_code,
         headers=response.headers,
-        # media_type=response.headers.get("Content-Type"),
     )
 
 
@@ -222,9 +219,8 @@ def process_details(
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
     )
 
 
@@ -264,7 +260,6 @@ async def execute_process(
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
         headers=response.headers,
     )
@@ -282,9 +277,8 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
     )
 
 
@@ -300,9 +294,8 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
     )
 
 
@@ -341,9 +334,8 @@ def get_deployed_workspaced_jobs(
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        headers=response.headers,
     )
 
 
@@ -377,9 +369,8 @@ def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request:
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        # headers=response.headers,
     )
 
 
@@ -395,7 +386,6 @@ def delete_job(deploy_workspace: str, job_id: str, request: Request):
 
     return Response(
         content=content,
-        # media_type=response.headers.get("Content-Type"),
+        media_type=response.headers.get("Content-Type"),
         status_code=response.status_code,
-        # headers=response.headers,
     )
