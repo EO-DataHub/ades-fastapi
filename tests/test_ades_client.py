@@ -771,11 +771,25 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     }
 
     # Test limit and skip
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "jobs": [
+                {"jobID": "job-5"},
+                {"jobID": "job-6"},
+            ]
+        },
+    )
+
     response, content = ades_client.get_deployed_workspaced_jobs(
         request, "test_workspace", mock_job_saver, limit=3, skip=4
     )
     mock_send_request.assert_any_call(
-        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
+        "GET",
+        "test_workspace/ogc-api/jobs",
+        {},
+        data={"params": {"limit": 3, "skip": 4}},
+        timeout=60,
     )
     assert response.status_code == 200
     assert json.loads(content) == {
@@ -784,6 +798,11 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     }
 
     # Test status
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}]},
+    )
+
     response, content = ades_client.get_deployed_workspaced_jobs(
         request, "test_workspace", mock_job_saver, status="running,failed", limit=2
     )
@@ -801,6 +820,11 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     }
 
     # Test datetime
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}, {"jobID": "job-3"}]},
+    )
+
     response, content = ades_client.get_deployed_workspaced_jobs(
         request,
         "test_workspace",
