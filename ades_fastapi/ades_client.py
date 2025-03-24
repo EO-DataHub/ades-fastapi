@@ -143,6 +143,7 @@ class ADESClient:
         url_path: str = "",
         headers: Optional[dict] = None,
         data: Optional[dict] = None,
+        timeout: int = 10,
     ):
         # Construct requests function
         if verb == "GET":
@@ -162,10 +163,10 @@ class ADESClient:
         try:
             if data:
                 logger.info("Sending %s request to %s with data %s", verb, url, data)
-                response = func(url, headers=headers, **data)
+                response = func(url, headers=headers, timeout=timeout, **data)
             else:
                 logger.info("Sending %s request to %s", verb, url)
-                response = func(url, headers=headers)
+                response = func(url, headers=headers, timeout=timeout)
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
 
@@ -249,6 +250,8 @@ class ADESClient:
                     )
                     process_json.update({"AccessReasoning": description})
                     final_content["processes"].append(process_json)
+                    if len(final_content["processes"]) == limit:
+                        break
             content = json.dumps(final_content)
         else:
             content = response.text
@@ -657,6 +660,10 @@ class ADESClient:
 
         # Add limit to data params
         params = {}
+        if limit:
+            params.update({"limit": limit})
+        if skip:
+            params.update({"skip": skip})
         if status:
             params.update({"status": status})
         if datetime:
@@ -666,7 +673,7 @@ class ADESClient:
 
         # Get all jobs in the deployed workspace
         response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/jobs", headers, data={"params": params}
+            "GET", f"{deploy_workspace}/ogc-api/jobs", headers, data={"params": params}, timeout=60
         )
 
         try:
