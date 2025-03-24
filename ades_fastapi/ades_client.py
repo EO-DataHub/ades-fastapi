@@ -23,7 +23,7 @@ from .utils import (
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
-JOB_LOAD_LIMIT = int(os.getenv("JOB_LOAD_LIMIT", "20"))
+JOBS_TIMEOUT = int(os.getenv("JOBS_TIMEOUT", "60"))
 
 
 class ADESClient:
@@ -673,7 +673,11 @@ class ADESClient:
 
         # Get all jobs in the deployed workspace
         response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/jobs", headers, data={"params": params}, timeout=60
+            "GET",
+            f"{deploy_workspace}/ogc-api/jobs",
+            headers,
+            data={"params": params},
+            timeout=JOBS_TIMEOUT,
         )
 
         try:
@@ -692,25 +696,16 @@ class ADESClient:
             username,
             deploy_workspace,
         )
-        logger.info(len(jobs))
-        logger.info(response_json)
-        allowed_count = 0
         for job in jobs:
             job_id = job.get("jobID", "")
             job_details = job_saver.get_job_details(deploy_workspace, job_id)
             logger.info(job_details)
             if job_details.get("calling_workspace") == username:
-                allowed_count += 1
-                if skip and allowed_count <= skip:
-                    continue
                 job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
                 filtered_jobs.append(job)
                 if limit and len(filtered_jobs) == limit:
                     break
             elif job_details.get("workflow_type") == "user-service":
-                allowed_count += 1
-                if skip and allowed_count <= skip:
-                    continue
                 if job_details.get("deploy_workspace") == username:
                     job = replace_href_links(
                         job, self.base_url, self.catalog_root, deploy_workspace
