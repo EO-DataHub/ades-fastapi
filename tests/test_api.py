@@ -1,7 +1,5 @@
-import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -14,17 +12,6 @@ client = TestClient(app)
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
 API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
-
-
-@pytest.fixture(autouse=True)
-def setenvvar(monkeypatch):
-    with patch.dict(os.environ, clear=True):
-        envvars = {
-            "PLANET_BASE_URL": "https://url.com/planet",
-        }
-        for k, v in envvars.items():
-            monkeypatch.setenv(k, v)
-        yield
 
 
 def override_opa_dependency_workflow():
@@ -179,7 +166,7 @@ def test_execute_process_user_service(
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.USER_SERVICE
     # Configure mocks
-    mock_get_user_details.return_value = "test_user", []
+    mock_get_user_details.return_value = "username", "test_user", []
     mock_job_saver.record_owner.return_value = None
     mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_user_service.return_value = (
@@ -215,7 +202,7 @@ def test_execute_process_workflow(
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
     mock_sleep.return_value = None
-    mock_get_user_details.return_value = "test_user", []
+    mock_get_user_details.return_value = "username", "test_user", []
     mock_job_saver.record_owner.return_value = None
     mock_response = MagicMock(status_code=201, headers={"Content-Type": "application/json"})
     mock_execute_workflow.return_value = (

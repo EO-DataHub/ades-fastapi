@@ -18,10 +18,14 @@ ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/sta
 
 def mock_jwt_decode(token, options, algorithms):
     if token == "valid_token":
-        return {"preferred_username": "test_user", "roles": ["hub_user"]}
+        return {"preferred_username": "username", "workspace": "test_user", "roles": ["hub_user"]}
     elif token == "another_valid_token":
-        return {"preferred_username": "another_test_user", "roles": ["hub_user"]}
-    return {"preferred_username": "", "roles": []}
+        return {
+            "preferred_username": "username",
+            "workspace": ["another_test_user"],
+            "roles": ["hub_user"],
+        }
+    return {"preferred_username": "", "workspace": [], "roles": []}
 
 
 def mock_requests_post(url, json):

@@ -70,10 +70,7 @@ dependencies = [
   "pyjwt",
   "pyyaml",
   "boto3",
-  "kubernetes",
   "httpx",
-  "pyproj",
-  "shapely",
 ]
 
 # List additional groups of dependencies here (e.g. development
