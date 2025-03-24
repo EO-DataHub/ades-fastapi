@@ -247,13 +247,8 @@ class ADESClient:
                     process_json = replace_href_links(
                         process_json, self.base_url, self.catalog_root, deploy_workspace
                     )
-                    # process_json["links"] = self._format_execution_link(
-                    #     process_json["links"], deploy_workspace, process_json["id"]
-                    # )
                     process_json.update({"AccessReasoning": description})
                     final_content["processes"].append(process_json)
-                    if len(final_content["processes"]) == limit:
-                        break
             content = json.dumps(final_content)
         else:
             content = response.text
@@ -386,9 +381,6 @@ class ADESClient:
             content_json = replace_href_links(
                 content_json, self.base_url, self.catalog_root, deploy_workspace
             )
-            # content_json["links"] = self._format_execution_link(
-            #             content_json["links"], deploy_workspace, workflow_id
-            #         )
             if wf_type is WorkflowType.USER_SERVICE:
                 content_json.update({"AccessReasoning": "Workflow is a user-service"})
             content = json.dumps(content_json, indent=2)
@@ -546,9 +538,6 @@ class ADESClient:
                 content = response.text
 
             if "Location" in response.headers:
-                print("replacing hrefs")
-                print(self.base_url)
-                print(response.headers["Location"])
                 response.headers["Location"] = replace_href_link(
                     response.headers["Location"], self.base_url, self.catalog_root, deploy_workspace
                 )
@@ -605,7 +594,6 @@ class ADESClient:
 
     def _format_status_link(self, links: list, workspace: str, job_id: str) -> list:
         """Format the status link to include the base URL"""
-        print(job_id)
         for link in links:
             if link["rel"] == "monitor":
                 link["href"] = f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}"

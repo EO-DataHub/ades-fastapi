@@ -245,9 +245,6 @@ def test_execute_process_other(mock_check_access):
     mock_check_access.return_value = True, WorkflowType.OTHER
     deploy_workspace = "test_workspace"
     workflow_id = "test_workflow"
-    print(
-        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
-    )
     response = client.post(
         f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/processes/{workflow_id}/execution"
     )
@@ -393,13 +390,9 @@ def test_delete_job(mock_delete_job, mock_check_access):
     )
     deploy_workspace = "test_workspace"
     job_id = "job_1234"
-    print(
-        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
-    )
     response = client.delete(
         f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{deploy_workspace}/jobs/{job_id}"
     )
-    print(response)
     calls = mock_delete_job.call_args
     assert isinstance(calls[0][0], dict)
     assert calls[0][1] == deploy_workspace
