@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
@@ -98,7 +99,13 @@ dependency_client = DependencyClient(
 workspace_rates = {}
 
 
-def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008
+bearer_scheme = HTTPBearer()
+
+
+def opa_dependency(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),  # noqa: B008
+) -> WorkflowType:
     """Dependency to check if the user is authorized to access the endpoint"""
     passed, wf_type = dependency_client.check_access(request, job_saver)
 

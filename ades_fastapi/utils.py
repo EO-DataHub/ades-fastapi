@@ -44,6 +44,7 @@ def get_user_details(request: Request) -> tuple:
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
+    logger.debug("Token: %s", stripped_token)
     if stripped_token:
         credentials = jwt.decode(
             stripped_token,
