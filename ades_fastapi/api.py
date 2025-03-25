@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.openapi.models import OAuth2PasswordBearer
 from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
@@ -31,6 +32,7 @@ OPA_SERVICE_ENDPOINT = os.getenv(
 
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
+ADES_ADDITIONAL_PATH_PREFIX = os.getenv("ADES_ADDITIONAL_PATH_PREFIX", "")
 API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 
 # ADES service endpoint
@@ -56,10 +58,6 @@ app = FastAPI(
     version="0.1.0",
     docs_url=f"{API_DOCS_ROOT}/workflow-runner",
     openapi_url=f"{API_DOCS_ROOT}/workflow-runner/openapi.json",
-)
-
-logger.info(
-    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
 )
 
 # Define static file path
@@ -88,6 +86,7 @@ ades_client = ADESClient(
 
 dependency_client = DependencyClient(
     ADES_FASTAPI_ROOT_PATH,
+    ADES_ADDITIONAL_PATH_PREFIX,
     OPA_SERVICE_ENDPOINT,
     ADES_POLICY_BUCKET,
     ADES_POLICY_PREFIX,
@@ -96,6 +95,8 @@ dependency_client = DependencyClient(
 
 # Create rate-limiting storage
 workspace_rates = {}
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 def opa_dependency(request: Request) -> WorkflowType:  # noqa: B008

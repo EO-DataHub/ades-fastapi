@@ -13,12 +13,14 @@ class DependencyClient:
     def __init__(
         self,
         fastapi_root,
+        additional_path_prefix,
         opa_service_endpoint,
         ades_policy_bucket,
         ades_policy_prefix,
         enable_opa_policy_check,
     ):
         self.fastapi_root = fastapi_root
+        self.additional_path_prefix = additional_path_prefix
         self.opa_service_endpoint = opa_service_endpoint
         self.ades_policy_bucket = ades_policy_bucket
         self.ades_policy_prefix = ades_policy_prefix
@@ -49,10 +51,15 @@ class DependencyClient:
         # Set default workflow type
         wf_type = WorkflowType.DEFAULT
 
+        # Need to remove root and any additional prefix from the path
+        trimmed_path = request.url.path.replace(self.fastapi_root, "", 1)
+        if self.additional_path_prefix:
+            trimmed_path = trimmed_path.replace(f"{self.additional_path_prefix}/", "", 1)
+
         input_data = {
             "input": {
                 "roles": roles,
-                "path": request.url.path.replace(self.fastapi_root, "", 1),  # remove starting path
+                "path": trimmed_path,  # remove starting path
                 "workspace": workspace,
                 "method": request.method,
             }
