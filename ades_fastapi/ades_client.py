@@ -440,50 +440,74 @@ class ADESClient:
             )
             # Add service credentials only when required
             if executing_workspace and creds.get("executing_workspace"):
-                body["inputs"].update(
-                    {
-                        "AWS_ACCESS_KEY_ID": creds.get("executing_workspace", {}).get(
-                            "AccessKeyId", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SECRET_ACCESS_KEY": creds.get("executing_workspace", {}).get(
-                            "SecretAccessKey", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SESSION_TOKEN": creds.get("executing_workspace", {}).get(
-                            "SessionToken", "null"
-                        )
-                    }
-                )
+                if not (
+                    body["inputs"].get("AWS_ACCESS_KEY_ID")
+                    and body["inputs"].get("aws_access_key_id")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_ACCESS_KEY_ID": creds.get("executing_workspace", {}).get(
+                                "AccessKeyId", "null"
+                            )
+                        }
+                    )
+                if not (
+                    body["inputs"].get("AWS_SECRET_ACCESS_KEY")
+                    and body["inputs"].get("aws_secret_access_key")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_SECRET_ACCESS_KEY": creds.get("executing_workspace", {}).get(
+                                "SecretAccessKey", "null"
+                            )
+                        }
+                    )
+                if not (
+                    body["inputs"].get("AWS_SESSION_TOKEN")
+                    and body["inputs"].get("aws_session_token")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_SESSION_TOKEN": creds.get("executing_workspace", {}).get(
+                                "SessionToken", "null"
+                            )
+                        }
+                    )
             # If not a user service set AWS credentials to that of the calling workspace again
             elif not executing_workspace:
-                body["inputs"].update(
-                    {
-                        "AWS_ACCESS_KEY_ID": creds.get("calling_workspace", {}).get(
-                            "AccessKeyId", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SECRET_ACCESS_KEY": creds.get("calling_workspace", {}).get(
-                            "SecretAccessKey", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SESSION_TOKEN": creds.get("calling_workspace", {}).get(
-                            "SessionToken", "null"
-                        )
-                    }
-                )
+                if not (
+                    body["inputs"].get("AWS_ACCESS_KEY_ID")
+                    and body["inputs"].get("aws_access_key_id")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_ACCESS_KEY_ID": creds.get("calling_workspace", {}).get(
+                                "AccessKeyId", "null"
+                            )
+                        }
+                    )
+                if not (
+                    body["inputs"].get("AWS_SECRET_ACCESS_KEY")
+                    and body["inputs"].get("aws_secret_access_key")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_SECRET_ACCESS_KEY": creds.get("calling_workspace", {}).get(
+                                "SecretAccessKey", "null"
+                            )
+                        }
+                    )
+                if not (
+                    body["inputs"].get("AWS_SESSION_TOKEN")
+                    and body["inputs"].get("aws_session_token")
+                ):
+                    body["inputs"].update(
+                        {
+                            "AWS_SESSION_TOKEN": creds.get("calling_workspace", {}).get(
+                                "SessionToken", "null"
+                            )
+                        }
+                    )
             else:
                 logger.warning("No AWS credentials provided for executing workspace")
                 logger.warning(
