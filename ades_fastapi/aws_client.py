@@ -9,12 +9,11 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ROLE_ARN_WORKSPACE = os.environ.get("AWS_ROLE_ARN_WORKSPACE", "role-arn-workspace")
 ROLE_ARN_SERVICE = os.environ.get("AWS_ROLE_ARN_USER_SERVICE", "role-arn-service")
-KEYCLOAK_BASE_URL = os.environ.get("KEYCLOAK_BASE_URL", "keycloak-base-url")
-REALM = os.environ.get("KEYCLOAK_REALM", "realm")
+KEYCLOAK_BASE_URL = os.environ.get("KEYCLOAK_BASE_URL", "example/keycloak/realms/test")
 CLIENT_ID = os.environ.get("CLIENT_ID", "client-id")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "client-secret")
 
-KEYCLOAK_URL = f"https://{KEYCLOAK_BASE_URL}/realms/{REALM}/protocol/openid-connect/token"
+KEYCLOAK_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/token"
 
 
 def generate_token(token: str, workspace: str, scope: str) -> str:
@@ -54,6 +53,45 @@ def generate_token(token: str, workspace: str, scope: str) -> str:
     return access_token
 
 
+def generate_token_ades_client(token: str, workspace: str, scope: str) -> str:
+
+    logger.info("Generating long-lasting token for workspace %s", workspace)
+
+    payload = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token": token,
+        "scope": scope,
+    }
+
+    response = requests.post(
+        KEYCLOAK_URL,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    logger.info("Access token %s", response.json().get("access_token"))
+
+    if response.status_code != 200:
+        logger.error("Failed to generate calling workspace token: %s", response.text)
+        raise ValueError(f"Failed to generate workspace token: {response.text}")
+
+    try:
+        access_token = response.json().get("access_token")
+        logger.info("Access token generated successfully")
+    except Exception as e:
+        logger.error("Failed to generate workspace token: %s", e)
+        logger.error("Response was %s with status code: %s", response.text, response.status_code)
+        raise ValueError(f"Failed to generate workspace token: {response.text}") from e
+
+    if not access_token:
+        logger.error("Failed to generate calling workspace token, token is None: %s", response.text)
+        raise ValueError(f"Failed to generate workspace token: {response.text}")
+
+    return access_token
+
+
 def get_credentials(
     role_arn: str,
     token: str,
@@ -78,7 +116,6 @@ def get_credentials(
     else:
         # Input token is already scoped to workspace
         session_name = f"{workspace}-{username}-{workflow_id}"
-        scope = f"workspace:{workspace}"
         workspace_token = token
 
     logger.info("Assuming role %s with session name %s", role_arn, session_name)
@@ -95,12 +132,12 @@ def get_credentials(
             WebIdentityToken=workspace_token,
             DurationSeconds=duration_seconds,
         )
-        creds_dict[key] = role["Credentials"]
+        creds_dict[key]["aws_creds"] = role["Credentials"]
     except Exception as e:
         logger.error("Failed to assume role: %s", e)
         workspace_type = "executing" if service_scope else "calling"
         logger.error("Failed to get AWS credentials for %s workspace %s", workspace_type, workspace)
-        creds_dict[key] = None
+        creds_dict[key]["aws_creds"] = {}
 
     return creds_dict
 
@@ -113,8 +150,30 @@ def generate_aws_credentials(
     workflow_id: str,
 ) -> dict:
 
-    creds_dict = {"calling_workspace": {}, "executing_workspace": {}}
+    creds_dict = {
+        "calling_workspace": {
+            "aws_creds": {},
+            "api_token": generate_token_ades_client(
+                token, calling_workspace, f"workspaces:{calling_workspace}"
+            ),
+        },
+        "executing_workspace": {
+            "aws_creds": {},
+            "api_token": generate_token_ades_client(
+                token,
+                executing_workspace,
+                (
+                    f"user_services:{executing_workspace}"
+                    if calling_workspace != executing_workspace
+                    else f"workspaces:{executing_workspace}"
+                ),
+            ),
+        },
+    }
 
+    logger.info(f"Incoming token is {token}")
+
+    # Generate credentials for calling workspace
     creds_dict = get_credentials(
         ROLE_ARN_WORKSPACE,
         token,
@@ -126,16 +185,16 @@ def generate_aws_credentials(
         service_scope=False,
     )
 
-    if calling_workspace != executing_workspace:
-        creds_dict = get_credentials(
-            ROLE_ARN_SERVICE,
-            token,
-            executing_workspace,
-            creds_dict,
-            "executing_workspace",
-            workflow_id,
-            username=username,
-            service_scope=True,
-        )
+    # Generate credentials for executing workspace
+    creds_dict = get_credentials(
+        ROLE_ARN_SERVICE,
+        token,
+        executing_workspace,
+        creds_dict,
+        "executing_workspace",
+        workflow_id,
+        username=username,
+        service_scope=True,
+    )
 
     return creds_dict
