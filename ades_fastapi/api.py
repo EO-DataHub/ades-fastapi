@@ -99,7 +99,7 @@ dependency_client = DependencyClient(
 workspace_rates = {}
 
 
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def opa_dependency(
