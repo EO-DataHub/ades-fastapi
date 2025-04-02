@@ -40,7 +40,7 @@ class DependencyClient:
         job_saver: JobSaver,
     ) -> tuple:
         """Check OPA policy to determine if the request is allowed"""
-        username, workspace, roles = get_user_details(request)
+        _, workspace, roles = get_user_details(request)
         path_params = self._get_path_params(request)
 
         # Add values for logs
