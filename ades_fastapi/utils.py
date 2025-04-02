@@ -13,7 +13,7 @@ from fastapi import Request
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ILLEGAL_WORKFLOW_INPUTS_RAW = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
-ILLEGAL_WORKFLOW_INPUTS = [input.strip() for input in ILLEGAL_WORKFLOW_INPUTS_RAW]
+ILLEGAL_WORKFLOW_INPUTS = [input.strip().lower() for input in ILLEGAL_WORKFLOW_INPUTS_RAW]
 
 
 class WorkflowType(Enum):
@@ -126,11 +126,11 @@ def check_workflow_inputs(data: dict) -> tuple:
     inputs = data.get("inputs", {})
     if isinstance(inputs, list):
         for input in inputs:
-            if input["id"] in ILLEGAL_WORKFLOW_INPUTS:
+            if input["id"].lower() in ILLEGAL_WORKFLOW_INPUTS:
                 return False, f"Input {input['id']} is not allowed in workflow"
     elif isinstance(inputs, dict):
         for key, _ in inputs.items():
-            if key in ILLEGAL_WORKFLOW_INPUTS:
+            if key.lower() in ILLEGAL_WORKFLOW_INPUTS:
                 return False, f"Input {key} is not allowed in workflow"
     return True, data["id"]
 
