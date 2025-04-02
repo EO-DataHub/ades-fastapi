@@ -20,10 +20,8 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "client-secret")
 
 
 @patch("ades_fastapi.aws_client.get_credentials")
-@patch("ades_fastapi.aws_client.generate_token_ades_client")
-def test_generate_aws_credentials_user_service(
-    mock_generate_token_ades_client, mock_get_credentials
-):
+@patch("ades_fastapi.aws_client.generate_token")
+def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_credentials):
     # Configure mocks
     def side_effect(
         role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
@@ -41,7 +39,7 @@ def test_generate_aws_credentials_user_service(
         return "longer-lasting-token-calling"
 
     mock_get_credentials.side_effect = side_effect
-    mock_generate_token_ades_client.side_effect = get_ades_token
+    mock_generate_token.side_effect = get_ades_token
 
     token = "valid-token"
     username = "username"
@@ -96,9 +94,9 @@ def test_generate_aws_credentials_user_service(
     )
 
 
-@patch("ades_fastapi.aws_client.generate_token_ades_client")
+@patch("ades_fastapi.aws_client.generate_token")
 @patch("ades_fastapi.aws_client.get_credentials")
-def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_token_ades_client):
+def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_token):
     # Configure mocks
     def side_effect(
         role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
@@ -116,7 +114,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
         return "longer-lasting-token-calling"
 
     mock_get_credentials.side_effect = side_effect
-    mock_generate_token_ades_client.side_effect = get_ades_token
+    mock_generate_token.side_effect = get_ades_token
 
     token = "valid-token"
     username = "username"
@@ -327,7 +325,7 @@ def test_generate_token_workflow():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspace:workspace"
+    scope = "workspaces:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -381,7 +379,7 @@ def test_generate_token_error():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspace:workspace"
+    scope = "workspaces:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -407,7 +405,7 @@ def test_generate_token_blank_token():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspace:workspace"
+    scope = "workspaces:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -433,7 +431,7 @@ def test_generate_token_missing_token():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspace:workspace"
+    scope = "workspaces:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],

@@ -19,6 +19,7 @@ KEYCLOAK_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/token"
 def generate_token(token: str, workspace: str, scope: str) -> str:
 
     logger.info("Generating token for workspace %s and scope %s", workspace, scope)
+    logger.debug("Using Keycloak client: %s", CLIENT_ID)
 
     payload = {
         "client_id": CLIENT_ID,
@@ -35,7 +36,7 @@ def generate_token(token: str, workspace: str, scope: str) -> str:
     )
 
     if response.status_code != 200:
-        logger.error("Failed to generate calling workspace token: %s", response.text)
+        logger.error("Failed to generate workspace token: %s", response.text)
         raise ValueError(f"Failed to generate workspace token: {response.text}")
 
     try:
@@ -47,46 +48,7 @@ def generate_token(token: str, workspace: str, scope: str) -> str:
         raise ValueError(f"Failed to generate workspace token: {response.text}") from e
 
     if not access_token:
-        logger.error("Failed to generate calling workspace token, token is None: %s", response.text)
-        raise ValueError(f"Failed to generate workspace token: {response.text}")
-
-    return access_token
-
-
-def generate_token_ades_client(token: str, workspace: str, scope: str) -> str:
-
-    logger.info("Generating long-lasting token for workspace %s", workspace)
-
-    payload = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": token,
-        "scope": scope,
-    }
-
-    response = requests.post(
-        KEYCLOAK_URL,
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-
-    logger.info("Access token %s", response.json().get("access_token"))
-
-    if response.status_code != 200:
-        logger.error("Failed to generate calling workspace token: %s", response.text)
-        raise ValueError(f"Failed to generate workspace token: {response.text}")
-
-    try:
-        access_token = response.json().get("access_token")
-        logger.info("Access token generated successfully")
-    except Exception as e:
-        logger.error("Failed to generate workspace token: %s", e)
-        logger.error("Response was %s with status code: %s", response.text, response.status_code)
-        raise ValueError(f"Failed to generate workspace token: {response.text}") from e
-
-    if not access_token:
-        logger.error("Failed to generate calling workspace token, token is None: %s", response.text)
+        logger.error("Failed to generate workspace token, token is None: %s", response.text)
         raise ValueError(f"Failed to generate workspace token: {response.text}")
 
     return access_token
@@ -153,13 +115,13 @@ def generate_aws_credentials(
     creds_dict = {
         "calling_workspace": {
             "aws_creds": {},
-            "api_token": generate_token_ades_client(
+            "api_token": generate_token(
                 token, calling_workspace, f"workspaces:{calling_workspace}"
             ),
         },
         "executing_workspace": {
             "aws_creds": {},
-            "api_token": generate_token_ades_client(
+            "api_token": generate_token(
                 token,
                 executing_workspace,
                 (
