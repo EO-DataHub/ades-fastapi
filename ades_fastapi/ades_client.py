@@ -422,7 +422,7 @@ class ADESClient:
             body["inputs"].update(
                 {"STAGE_AWS_SESSION_TOKEN": aws_creds_calling.get("SessionToken", "null")}
             )
-            body["inputs"].update({"CALLING_WORKSPACE_TOKEN": api_token_calling})
+            body["inputs"].update({"CALLING_WORKSPACE_ACCESS_TOKEN": api_token_calling})
             # Add executing credentials
             if not (
                 body["inputs"].get("AWS_ACCESS_KEY_ID") and body["inputs"].get("aws_access_key_id")
@@ -444,7 +444,7 @@ class ADESClient:
                     {"AWS_SESSION_TOKEN": aws_creds_executing.get("SessionToken", "null")}
                 )
             # TODO: Allow user service tokens to be generate when needed
-            body["inputs"].update({"EXECUTING_WORKSPACE_TOKEN": api_token_executing})
+            body["inputs"].update({"WORKSPACE_ACCESS_TOKEN": api_token_executing})
         except KeyError as e:
             logger.error("KeyError: %s", e)
             raise HTTPException(status_code=400, detail="Invalid input payload") from e

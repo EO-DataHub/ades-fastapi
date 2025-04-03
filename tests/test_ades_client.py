@@ -329,11 +329,11 @@ def test_configure_execute_request_user_service(ades_client):
             "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
             "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
             "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-            "CALLING_WORKSPACE_TOKEN": "valid-calling-token",
+            "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
             "AWS_ACCESS_KEY_ID": "valid-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
             "AWS_SESSION_TOKEN": "valid-session-token",
-            "EXECUTING_WORKSPACE_TOKEN": "valid-executing-token",
+            "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
         }
     }
 
@@ -371,11 +371,11 @@ def test_configure_execute_request_workflow(ades_client):
             "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
             "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
             "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-            "CALLING_WORKSPACE_TOKEN": "valid-calling-token",
+            "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
             "AWS_ACCESS_KEY_ID": "valid-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
             "AWS_SESSION_TOKEN": "valid-session-token",
-            "EXECUTING_WORKSPACE_TOKEN": "valid-executing-token",
+            "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
         }
     }
 
@@ -431,11 +431,11 @@ async def test_execute_workflow(
                 "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
                 "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
                 "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-                "CALLING_WORKSPACE_TOKEN": "valid-calling-token",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "valid-access-key-id",
                 "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
                 "AWS_SESSION_TOKEN": "valid-session-token",
-                "EXECUTING_WORKSPACE_TOKEN": "valid-executing-token",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )
@@ -498,11 +498,11 @@ async def test_execute_user_service(
                 "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
                 "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
                 "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-                "CALLING_WORKSPACE_TOKEN": "valid-calling-token",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "valid-access-key-id",
                 "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
                 "AWS_SESSION_TOKEN": "valid-session-token",
-                "EXECUTING_WORKSPACE_TOKEN": "valid-executing-token",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )
@@ -558,11 +558,11 @@ async def test_execute_user_service_missing_executing_creds(
                 "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
                 "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
                 "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-                "CALLING_WORKSPACE_TOKEN": "valid-calling-token",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "null",
                 "AWS_SECRET_ACCESS_KEY": "null",
                 "AWS_SESSION_TOKEN": "null",
-                "EXECUTING_WORKSPACE_TOKEN": "valid-executing-token",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )
