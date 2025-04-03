@@ -414,17 +414,13 @@ class ADESClient:
             # Add calling credentials
             logger.info("Setting user token in execution call")
             body["inputs"].update(
-                {"WORKSPACE_AWS_ACCESS_KEY_ID": aws_creds_calling.get("AccessKeyId", "null")}
+                {"STAGE_AWS_ACCESS_KEY_ID": aws_creds_calling.get("AccessKeyId", "null")}
             )
             body["inputs"].update(
-                {
-                    "WORKSPACE_AWS_SECRET_ACCESS_KEY": aws_creds_calling.get(
-                        "SecretAccessKey", "null"
-                    )
-                }
+                {"STAGE_AWS_SECRET_ACCESS_KEY": aws_creds_calling.get("SecretAccessKey", "null")}
             )
             body["inputs"].update(
-                {"WORKSPACE_AWS_SESSION_TOKEN": aws_creds_calling.get("SessionToken", "null")}
+                {"STAGE_AWS_SESSION_TOKEN": aws_creds_calling.get("SessionToken", "null")}
             )
             body["inputs"].update({"CALLING_WORKSPACE_TOKEN": api_token_calling})
             # Add executing credentials
