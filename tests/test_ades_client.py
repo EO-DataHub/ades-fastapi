@@ -300,14 +300,20 @@ def test_configure_execute_request_user_service(ades_client):
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
-            "AccessKeyId": "valid-access-key-id-workspace",
-            "SecretAccessKey": "valid-secret-access-key-workspace",
-            "SessionToken": "valid-session-token-workspace",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id-workspace",
+                "SecretAccessKey": "valid-secret-access-key-workspace",
+                "SessionToken": "valid-session-token-workspace",
+            },
+            "api_token": "valid-calling-token",
         },
         "executing_workspace": {
-            "AccessKeyId": "valid-access-key-id",
-            "SecretAccessKey": "valid-secret-access-key",
-            "SessionToken": "valid-session-token",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id",
+                "SecretAccessKey": "valid-secret-access-key",
+                "SessionToken": "valid-session-token",
+            },
+            "api_token": "valid-executing-token",
         },
     }
     calling_workspace = "calling-workspace"
@@ -320,12 +326,14 @@ def test_configure_execute_request_user_service(ades_client):
             "input": "value",
             "calling_workspace": calling_workspace,
             "executing_workspace": executing_workspace,
-            "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-            "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-            "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+            "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+            "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
             "AWS_ACCESS_KEY_ID": "valid-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
             "AWS_SESSION_TOKEN": "valid-session-token",
+            "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
         }
     }
 
@@ -334,28 +342,40 @@ def test_configure_execute_request_workflow(ades_client):
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
-            "AccessKeyId": "valid-access-key-id-workspace",
-            "SecretAccessKey": "valid-secret-access-key-workspace",
-            "SessionToken": "valid-session-token-workspace",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id-workspace",
+                "SecretAccessKey": "valid-secret-access-key-workspace",
+                "SessionToken": "valid-session-token-workspace",
+            },
+            "api_token": "valid-calling-token",
         },
-        "executing_workspace": {},
+        "executing_workspace": {
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id",
+                "SecretAccessKey": "valid-secret-access-key",
+                "SessionToken": "valid-session-token",
+            },
+            "api_token": "valid-executing-token",
+        },
     }
 
     calling_workspace = "calling-workspace"
 
-    ades_client._configure_execute_request(body, creds, calling_workspace)
+    ades_client._configure_execute_request(body, creds, calling_workspace, calling_workspace)
 
     assert body == {
         "inputs": {
             "input": "value",
             "calling_workspace": calling_workspace,
             "executing_workspace": calling_workspace,
-            "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-            "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-            "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-            "AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-            "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-            "AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+            "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+            "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+            "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
+            "AWS_ACCESS_KEY_ID": "valid-access-key-id",
+            "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
+            "AWS_SESSION_TOKEN": "valid-session-token",
+            "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
         }
     }
 
@@ -370,11 +390,21 @@ async def test_execute_workflow(
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "AccessKeyId": "valid-access-key-id-workspace",
-            "SecretAccessKey": "valid-secret-access-key-workspace",
-            "SessionToken": "valid-session-token-workspace",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id-workspace",
+                "SecretAccessKey": "valid-secret-access-key-workspace",
+                "SessionToken": "valid-session-token-workspace",
+            },
+            "api_token": "valid-calling-token",
         },
-        "executing_workspace": {},
+        "executing_workspace": {
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id",
+                "SecretAccessKey": "valid-secret-access-key",
+                "SessionToken": "valid-session-token",
+            },
+            "api_token": "valid-executing-token",
+        },
     }
     mock_response = MagicMock(
         status_code=201,
@@ -398,12 +428,14 @@ async def test_execute_workflow(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "test-workspace",
-                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
-                "AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
+                "AWS_ACCESS_KEY_ID": "valid-access-key-id",
+                "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
+                "AWS_SESSION_TOKEN": "valid-session-token",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )
@@ -425,14 +457,20 @@ async def test_execute_user_service(
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "AccessKeyId": "valid-access-key-id-workspace",
-            "SecretAccessKey": "valid-secret-access-key-workspace",
-            "SessionToken": "valid-session-token-workspace",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id-workspace",
+                "SecretAccessKey": "valid-secret-access-key-workspace",
+                "SessionToken": "valid-session-token-workspace",
+            },
+            "api_token": "valid-calling-token",
         },
         "executing_workspace": {
-            "AccessKeyId": "valid-access-key-id",
-            "SecretAccessKey": "valid-secret-access-key",
-            "SessionToken": "valid-session-token",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id",
+                "SecretAccessKey": "valid-secret-access-key",
+                "SessionToken": "valid-session-token",
+            },
+            "api_token": "valid-executing-token",
         },
     }
     mock_response = MagicMock(
@@ -457,12 +495,14 @@ async def test_execute_user_service(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "deploy_workspace",
-                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "valid-access-key-id",
                 "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
                 "AWS_SESSION_TOKEN": "valid-session-token",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )
@@ -484,11 +524,14 @@ async def test_execute_user_service_missing_executing_creds(
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "AccessKeyId": "valid-access-key-id-workspace",
-            "SecretAccessKey": "valid-secret-access-key-workspace",
-            "SessionToken": "valid-session-token-workspace",
+            "aws_creds": {
+                "AccessKeyId": "valid-access-key-id-workspace",
+                "SecretAccessKey": "valid-secret-access-key-workspace",
+                "SessionToken": "valid-session-token-workspace",
+            },
+            "api_token": "valid-calling-token",
         },
-        "executing_workspace": None,
+        "executing_workspace": {"aws_creds": {}, "api_token": "valid-executing-token"},
     }
     mock_response = MagicMock(
         status_code=201,
@@ -512,9 +555,14 @@ async def test_execute_user_service_missing_executing_creds(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "deploy_workspace",
-                "WORKSPACE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "WORKSPACE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "WORKSPACE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
+                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
+                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
+                "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
+                "AWS_ACCESS_KEY_ID": "null",
+                "AWS_SECRET_ACCESS_KEY": "null",
+                "AWS_SESSION_TOKEN": "null",
+                "WORKSPACE_ACCESS_TOKEN": "valid-executing-token",
             }
         },
     )

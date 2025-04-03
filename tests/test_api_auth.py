@@ -22,10 +22,10 @@ def mock_jwt_decode(token, options, algorithms):
     elif token == "another_valid_token":
         return {
             "preferred_username": "username",
-            "workspace": ["another_test_user"],
+            "workspace": "another_test_user",
             "roles": ["hub_user"],
         }
-    return {"preferred_username": "", "workspace": [], "roles": []}
+    return {"preferred_username": "", "workspace": "", "roles": []}
 
 
 def mock_requests_post(url, json):
@@ -45,10 +45,11 @@ def mock_dependencies(monkeypatch):
     monkeypatch.setattr("requests.get", mock_requests_get)
 
 
-@patch("ades_fastapi.ades_client.ADESClient.get_root")
-def test_check_policy_valid_token(mock_get_root):
-    mock_get_root.return_value = MagicMock(
-        status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
+@patch("ades_fastapi.ades_client.ADESClient.list_processes")
+def test_check_policy_valid_token(mock_list_processes):
+    mock_list_processes.return_value = (
+        MagicMock(status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}),
+        "Reponse content",
     )
     headers = {"authorization": "Bearer valid_token"}
     response = client.get(
@@ -59,10 +60,11 @@ def test_check_policy_valid_token(mock_get_root):
     assert response.content.decode("utf-8") == "Reponse content"
 
 
-@patch("ades_fastapi.ades_client.ADESClient.get_root")
-def test_check_policy_invalid_token(mock_get_root):
-    mock_get_root.return_value = MagicMock(
-        status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
+@patch("ades_fastapi.ades_client.ADESClient.list_processes")
+def test_check_policy_invalid_token(mock_list_processes):
+    mock_list_processes.return_value = (
+        MagicMock(status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}),
+        "Reponse content",
     )
     headers = {"authorization": "Bearer invalid_token"}
     response = client.get(
@@ -74,10 +76,11 @@ def test_check_policy_invalid_token(mock_get_root):
     assert response.json() == {"detail": "Not Authenticated"}
 
 
-@patch("ades_fastapi.ades_client.ADESClient.get_root")
-def test_check_policy_no_token(mock_get_root):
-    mock_get_root.return_value = MagicMock(
-        status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
+@patch("ades_fastapi.ades_client.ADESClient.list_processes")
+def test_check_policy_no_token(mock_list_processes):
+    mock_list_processes.return_value = (
+        MagicMock(status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}),
+        "Reponse content",
     )
     response = client.get(
         f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/workspace/processes"
@@ -89,8 +92,9 @@ def test_check_policy_no_token(mock_get_root):
 
 @patch("ades_fastapi.ades_client.ADESClient.list_processes")
 def test_check_policy_not_authorized(mock_list_processes):
-    mock_list_processes.return_value = MagicMock(
-        status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}
+    mock_list_processes.return_value = (
+        MagicMock(status_code=200, text="Reponse content", headers={"Content-Type": "text/html"}),
+        "Reponse content",
     )
     headers = {"authorization": "Bearer another_valid_token"}
     response = client.get(

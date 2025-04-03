@@ -399,97 +399,52 @@ class ADESClient:
         body: dict, creds: dict, calling_workspace: str, executing_workspace: str = None
     ):
 
+        aws_creds_calling = creds.get("calling_workspace", {}).get("aws_creds", {})
+        api_token_calling = creds.get("calling_workspace", {}).get("api_token", {})
+        aws_creds_executing = creds.get("executing_workspace", {}).get("aws_creds", {})
+        api_token_executing = creds.get("executing_workspace", {}).get("api_token", {})
+
         try:
             # Add calling workspace to body
             logger.info("Setting calling workspace to %s", calling_workspace)
             body["inputs"].update({"calling_workspace": calling_workspace})
             # Add executing workspace to body
-            logger.info(
-                "Setting executing workspace to %s",
-                executing_workspace if executing_workspace else calling_workspace,
-            )
-            body["inputs"].update(
-                {
-                    "executing_workspace": (
-                        executing_workspace if executing_workspace else calling_workspace
-                    )
-                }
-            )
-            # Add AWS credentials to body
+            logger.info("Setting executing workspace to %s", executing_workspace)
+            body["inputs"].update({"executing_workspace": executing_workspace})
+            # Add calling credentials
             logger.info("Setting user token in execution call")
             body["inputs"].update(
-                {
-                    "WORKSPACE_AWS_ACCESS_KEY_ID": creds.get("calling_workspace", {}).get(
-                        "AccessKeyId", "null"
-                    )
-                }
+                {"STAGE_AWS_ACCESS_KEY_ID": aws_creds_calling.get("AccessKeyId", "null")}
             )
             body["inputs"].update(
-                {
-                    "WORKSPACE_AWS_SECRET_ACCESS_KEY": creds.get("calling_workspace", {}).get(
-                        "SecretAccessKey", "null"
-                    )
-                }
+                {"STAGE_AWS_SECRET_ACCESS_KEY": aws_creds_calling.get("SecretAccessKey", "null")}
             )
             body["inputs"].update(
-                {
-                    "WORKSPACE_AWS_SESSION_TOKEN": creds.get("calling_workspace", {}).get(
-                        "SessionToken", "null"
-                    )
-                }
+                {"STAGE_AWS_SESSION_TOKEN": aws_creds_calling.get("SessionToken", "null")}
             )
-            # Add service credentials only when required
-            if executing_workspace and creds.get("executing_workspace"):
+            body["inputs"].update({"CALLING_WORKSPACE_ACCESS_TOKEN": api_token_calling})
+            # Add executing credentials
+            if not (
+                body["inputs"].get("AWS_ACCESS_KEY_ID") and body["inputs"].get("aws_access_key_id")
+            ):
                 body["inputs"].update(
-                    {
-                        "AWS_ACCESS_KEY_ID": creds.get("executing_workspace", {}).get(
-                            "AccessKeyId", "null"
-                        )
-                    }
+                    {"AWS_ACCESS_KEY_ID": aws_creds_executing.get("AccessKeyId", "null")}
                 )
+            if not (
+                body["inputs"].get("AWS_SECRET_ACCESS_KEY")
+                and body["inputs"].get("aws_secret_access_key")
+            ):
                 body["inputs"].update(
-                    {
-                        "AWS_SECRET_ACCESS_KEY": creds.get("executing_workspace", {}).get(
-                            "SecretAccessKey", "null"
-                        )
-                    }
+                    {"AWS_SECRET_ACCESS_KEY": aws_creds_executing.get("SecretAccessKey", "null")}
                 )
+            if not (
+                body["inputs"].get("AWS_SESSION_TOKEN") and body["inputs"].get("aws_session_token")
+            ):
                 body["inputs"].update(
-                    {
-                        "AWS_SESSION_TOKEN": creds.get("executing_workspace", {}).get(
-                            "SessionToken", "null"
-                        )
-                    }
+                    {"AWS_SESSION_TOKEN": aws_creds_executing.get("SessionToken", "null")}
                 )
-            # If not a user service set AWS credentials to that of the calling workspace again
-            elif not executing_workspace:
-                body["inputs"].update(
-                    {
-                        "AWS_ACCESS_KEY_ID": creds.get("calling_workspace", {}).get(
-                            "AccessKeyId", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SECRET_ACCESS_KEY": creds.get("calling_workspace", {}).get(
-                            "SecretAccessKey", "null"
-                        )
-                    }
-                )
-                body["inputs"].update(
-                    {
-                        "AWS_SESSION_TOKEN": creds.get("calling_workspace", {}).get(
-                            "SessionToken", "null"
-                        )
-                    }
-                )
-            else:
-                logger.warning("No AWS credentials provided for executing workspace")
-                logger.warning(
-                    "Continuing, but this may prevent the workflow from executing correctly, "
-                    "if AWS creds are required in workflow steps"
-                )
+            # TODO: Allow user service tokens to be generate when needed
+            body["inputs"].update({"WORKSPACE_ACCESS_TOKEN": api_token_executing})
         except KeyError as e:
             logger.error("KeyError: %s", e)
             raise HTTPException(status_code=400, detail="Invalid input payload") from e
@@ -566,7 +521,7 @@ class ADESClient:
             raise HTTPException(
                 status_code=400, detail="Invalid input payload, not valid JSON"
             ) from err
-        self._configure_execute_request(body, aws_creds, workspace)
+        self._configure_execute_request(body, aws_creds, workspace, workspace)
         response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
