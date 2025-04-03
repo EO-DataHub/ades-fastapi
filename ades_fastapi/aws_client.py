@@ -19,7 +19,6 @@ KEYCLOAK_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/token"
 def generate_token(token: str, workspace: str, scope: str) -> str:
 
     logger.info("Generating token for workspace %s and scope %s", workspace, scope)
-    logger.debug("Using Keycloak client: %s", CLIENT_ID)
 
     payload = {
         "client_id": CLIENT_ID,
@@ -115,9 +114,7 @@ def generate_aws_credentials(
     creds_dict = {
         "calling_workspace": {
             "aws_creds": {},
-            "api_token": generate_token(
-                token, calling_workspace, f"workspaces:{calling_workspace}"
-            ),
+            "api_token": generate_token(token, calling_workspace, f"workspace:{calling_workspace}"),
         },
         "executing_workspace": {
             "aws_creds": {},
@@ -127,7 +124,7 @@ def generate_aws_credentials(
                 (
                     f"user_services:{executing_workspace}"
                     if calling_workspace != executing_workspace
-                    else f"workspaces:{executing_workspace}"
+                    else f"workspace:{executing_workspace}"
                 ),
             ),
         },
