@@ -325,7 +325,7 @@ def test_generate_token_workflow():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspaces:workspace"
+    scope = "workspace:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -379,7 +379,7 @@ def test_generate_token_error():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspaces:workspace"
+    scope = "workspace:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -405,7 +405,7 @@ def test_generate_token_blank_token():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspaces:workspace"
+    scope = "workspace:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
@@ -431,7 +431,7 @@ def test_generate_token_missing_token():
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
     workspace = "workspace"
-    scope = "workspaces:workspace"
+    scope = "workspace:workspace"
 
     expected_payload = {
         "client_id": ["client-id"],
