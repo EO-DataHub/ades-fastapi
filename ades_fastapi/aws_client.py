@@ -79,6 +79,10 @@ def get_credentials(
         session_name = f"{workspace}-{username}-{workflow_id}"
         workspace_token = token
 
+    # Limit session name to 64 characters
+    if len(session_name) > 64:
+        session_name = session_name[:64]
+
     logger.info("Assuming role %s with session name %s", role_arn, session_name)
     logger.info("Workspace token: %s", workspace_token)
 
