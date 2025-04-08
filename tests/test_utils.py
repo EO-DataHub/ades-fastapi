@@ -105,7 +105,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
     )
     assert result is None
-    mock_logger.info.assert_any_call(
+    mock_logger.warning.assert_any_call(
         "No access policy found for workflow %s in workspace %s",
         workflow_id,
         deploy_workspace,
@@ -120,7 +120,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
     )
     assert result is None
-    mock_logger.info.assert_any_call(
+    mock_logger.error.assert_any_call(
         "Error getting access policy for workflow %s in workspace %s",
         workflow_id,
         deploy_workspace,
