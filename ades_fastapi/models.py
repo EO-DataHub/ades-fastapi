@@ -455,7 +455,7 @@ class GetAllJobStatusResponse(BaseModel):
 class ExtentSpatial(BaseModel):
     bbox: list[list[float, float, float, float]] = Field(
         ...,
-        description="A list of coordinates defining the surrounding bbox for the collection",
+        description="A list of coordinates defining the surrounding bbox for the Collection",
         example=[[-170, -89, 179, 89]],
     )
 
