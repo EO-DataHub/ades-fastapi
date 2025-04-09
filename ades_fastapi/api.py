@@ -4,9 +4,9 @@ from distutils.util import strtobool
 from typing import List, Literal, Optional
 
 import boto3
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
+from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.staticfiles import StaticFiles
 
 from .ades_client import ADESClient
 from .dependency_client import DependencyClient
@@ -64,7 +64,7 @@ ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
 
 app = FastAPI(
     title="EODHP ADES",
-    description="This is the Application, Deployment and Execution Service (ADES) for the EODHP project.\n"
+    description="This is the Workflow Runner API for the EODHP project.\n"
     "The following endpoints are currently implemented.",
     version="0.1.0",
     docs_url=f"{API_DOCS_ROOT}/workflow-runner",
@@ -74,12 +74,6 @@ app = FastAPI(
 logger.info(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
 )
-
-# Define static file path
-static_filepath = os.getenv("STATIC_FILE_PATH", "static")
-
-# Mount static files with STAC FastApi
-app.mount("/static", StaticFiles(directory=static_filepath), name="static")
 
 
 def configure_job_saver():
@@ -169,7 +163,17 @@ def ping():
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
+def undeploy_process(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace from which the workflow will be undeployed",
+    ),
+    workflow_id: str = Path(
+        ...,
+        description="The ID of the workflow to be undeployed",
+    ),
+):
     """An endpoint to undeploy a workflow from the specified workspace"""
     logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
@@ -197,7 +201,17 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
     },
 )
 def list_processes(
-    deploy_workspace: str, request: Request, limit: Optional[int] = None, skip: int = 0
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace to list workflows from",
+    ),
+    limit: Optional[int] = Query(
+        None,
+        description="Maximum number of workflows to return, leaving this blank returns all",
+        example=10,
+    ),
+    skip: int = Query(0, description="Number of workflows to skip", example=0),
 ):
     """Endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
@@ -227,8 +241,11 @@ def list_processes(
     },
 )
 async def deploy_workflow(
-    deploy_workspace: str,
     request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace to deploy the workflow to",
+    ),
 ):
     """Endpoint to deploy a workflow to a workspace"""
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
@@ -252,7 +269,17 @@ async def deploy_workflow(
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
+async def update_workflow(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace to update the workflow in",
+    ),
+    workflow_id: str = Path(
+        ...,
+        description="The workflow ID of the workflow to update",
+    ),
+):
     """Endpoint to update a workflow in a workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
 
@@ -278,9 +305,15 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
     },
 )
 def process_details(
-    deploy_workspace: str,
-    workflow_id: str,
     request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace containing the workflow to view",
+    ),
+    workflow_id: str = Path(
+        ...,
+        description="The workflow ID of the workflow to view details for",
+    ),
     wf_type: WorkflowType = Depends(opa_dependency),  # noqa: B008
 ):
     """Endpoint to get details of a workflow in a workspace"""
@@ -310,9 +343,15 @@ def process_details(
     },
 )
 async def execute_process(
-    deploy_workspace: str,
-    workflow_id: str,
     request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace that contains the workflow to execute",
+    ),
+    workflow_id: str = Path(
+        ...,
+        description="The workflow ID of the workflow to execute",
+    ),
     workflow_type: tuple = Depends(opa_dependency),
 ):
     """Endpoint to execute a workflow in a workspace"""
@@ -356,7 +395,17 @@ async def execute_process(
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-def process_status(deploy_workspace: str, job_id: str, request: Request):
+def process_status(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace in which the workflow was deployed",
+    ),
+    job_id: str = Path(
+        ...,
+        description="The ID of the job to get the status for",
+    ),
+):
     """Endpoint to get the status of an executing workflow or job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
 
@@ -381,7 +430,17 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-def process_results(deploy_workspace: str, job_id: str, request: Request):
+def process_results(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace in which the workflow was deployed",
+    ),
+    job_id: str = Path(
+        ...,
+        description="The ID of the job to get the results for",
+    ),
+):
     """Endpoint to get the results of an executed workflow or job"""
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
 
@@ -404,14 +463,21 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
     },
 )
 def get_deployed_workspaced_jobs(
-    deploy_workspace: str,
     request: Request,
-    limit: Optional[int] = None,
-    skip: Optional[int] = None,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace to get the jobs in",
+    ),
+    limit: Optional[int] = Query(
+        None, description="Maximum number of jobs to return, leaving this blank returns all"
+    ),
+    skip: Optional[int] = Query(0, description="Number of jobs to skip"),
     status: Optional[
         List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
     ] = Query(  # noqa: B008
-        None
+        None,
+        description="A list of job statuses to filter for",
+        example=["accepted", "running"],
     ),
     datetime: Optional[str] = Query(
         None,
@@ -460,15 +526,27 @@ def get_all_jobs(request: Request):
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
     dependencies=[Depends(opa_dependency)],
     summary="Get job log file",
+    response_class=PlainTextResponse,
     responses={
-        200: {"description": "Job log file returned successfully"},
+        200: {"description": "Job log file returned successfully", "content": {"text/plain": {}}},
         500: {"description": "Error occurred while retrieving the log file"},
         404: {"description": "Job ID or log filename not found"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request: Request):
+def get_process_log(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace in which the running workflow was deployed",
+    ),
+    job_id: str = Path(
+        ...,
+        description="The ID of the job to get the results for",
+    ),
+    file_name: str = Path(..., description="The name of the log file to retrieve"),
+):
     """Endpoint to get the logs of a job"""
     logger.info("Getting log %s for job %s in workspace %s", file_name, job_id, deploy_workspace)
     response, content = ades_client.get_log(
@@ -494,7 +572,17 @@ def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request:
         403: {"description": "User not authorized to make changes in this workspace"},
     },
 )
-def delete_job(deploy_workspace: str, job_id: str, request: Request):
+def delete_job(
+    request: Request,
+    deploy_workspace: str = Path(
+        ...,
+        description="The name of the workspace in which the running workflow was deployed",
+    ),
+    job_id: str = Path(
+        ...,
+        description="The ID of the job to delete",
+    ),
+):
     """Endpoint to delete a job"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
