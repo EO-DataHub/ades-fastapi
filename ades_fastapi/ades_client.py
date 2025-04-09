@@ -741,7 +741,11 @@ class ADESClient:
         )
 
         try:
-            content = json.dumps(response.json())
+            response_json = response.json()
+            response_json = replace_href_links(
+                response_json, self.base_url, self.catalog_root, deploy_workspace
+            )
+            content = json.dumps(response_json)
         except json.JSONDecodeError:
             content = response.text
 
