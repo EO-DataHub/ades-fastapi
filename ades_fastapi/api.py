@@ -213,7 +213,7 @@ def list_processes(
     ),
     skip: int = Query(0, description="Number of workflows to skip", example=0),
 ):
-    """Endpoint to list all workflows deployed in a workspace"""
+    """An endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
     response, content = ades_client.list_processes(
@@ -247,7 +247,7 @@ async def deploy_workflow(
         description="The name of the workspace to deploy the workflow to",
     ),
 ):
-    """Endpoint to deploy a workflow to a workspace"""
+    """An endpoint to deploy a workflow to a given workspace"""
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
 
     return Response(
@@ -280,7 +280,7 @@ async def update_workflow(
         description="The workflow ID of the workflow to update",
     ),
 ):
-    """Endpoint to update a workflow in a workspace"""
+    """An endpoint to update a workflow in a given workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = await ades_client.update_workflow(request, deploy_workspace, workflow_id)
@@ -316,7 +316,7 @@ def process_details(
     ),
     wf_type: WorkflowType = Depends(opa_dependency),  # noqa: B008
 ):
-    """Endpoint to get details of a workflow in a workspace"""
+    """An endpoint to get details of a workflow in a given workspace"""
     logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = ades_client.get_workflow(
@@ -354,7 +354,7 @@ async def execute_process(
     ),
     workflow_type: tuple = Depends(opa_dependency),
 ):
-    """Endpoint to execute a workflow in a workspace"""
+    """An endpoint to execute a workflow in a given workspace"""
     log_text = workflow_type.value
     logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
@@ -406,7 +406,7 @@ def process_status(
         description="The ID of the job to get the status for",
     ),
 ):
-    """Endpoint to get the status of an executing workflow or job"""
+    """An endpoint to get the status of a job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
 
     response, content = ades_client.get_job_status(dict(request.headers), deploy_workspace, job_id)
@@ -441,7 +441,7 @@ def process_results(
         description="The ID of the job to get the results for",
     ),
 ):
-    """Endpoint to get the results of an executed workflow or job"""
+    """An endpoint to get the results of a completed job"""
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
 
     response, content = ades_client.get_job_results(dict(request.headers), deploy_workspace, job_id)
@@ -485,7 +485,7 @@ def get_deployed_workspaced_jobs(
         example="2023-01-01T00:00:00Z/2023-01-02T00:00:00Z",
     ),  # noqa: B008
 ):
-    """Endpoint to list all jobs in a workspace"""
+    """An endpoint to list all jobs in a given workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
@@ -547,7 +547,7 @@ def get_process_log(
     ),
     file_name: str = Path(..., description="The name of the log file to retrieve"),
 ):
-    """Endpoint to get the logs of a job"""
+    """An endpoint to get the logs of a job"""
     logger.info("Getting log %s for job %s in workspace %s", file_name, job_id, deploy_workspace)
     response, content = ades_client.get_log(
         job_id, file_name, deploy_workspace, dict(request.headers)
@@ -583,7 +583,7 @@ def delete_job(
         description="The ID of the job to delete",
     ),
 ):
-    """Endpoint to delete a job"""
+    """An endpoint to delete a job from the given workspace"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
     response, content = ades_client.delete_job(dict(request.headers), deploy_workspace, job_id)
