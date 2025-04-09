@@ -154,11 +154,11 @@ def ping():
 @app.delete(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
-    summary="Undeploy a workflow from the given workspace",
+    summary="Undeploy a workflow from the specified workspace",
     response_model=EmptyResponse,
     responses={
         204: {"description": "Workflow removed from the workspace successfully"},
-        404: {"description": "Workflow not deployed to the given workspace"},
+        404: {"description": "Workflow not deployed to the specified workspace"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
@@ -191,7 +191,7 @@ def undeploy_process(
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
-    summary="List all available workflows in the given workspace",
+    summary="List all available workflows in the specified workspace",
     response_model=ListProcessesResponse,
     responses={
         200: {
@@ -247,7 +247,7 @@ async def deploy_workflow(
         description="The name of the workspace to deploy the workflow to",
     ),
 ):
-    """An endpoint to deploy a workflow to a given workspace"""
+    """An endpoint to deploy a workflow to a specified workspace"""
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
 
     return Response(
@@ -260,11 +260,11 @@ async def deploy_workflow(
 @app.put(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
-    summary="Update a workflow in the given workspace",
+    summary="Update a workflow in the specified workspace",
     response_model=EmptyResponse,
     responses={
         204: {"description": "Workflow updated in the workspace successfully"},
-        404: {"description": "Workflow has not been deployed to the given workspace"},
+        404: {"description": "Workflow has not been deployed to the specified workspace"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
@@ -280,7 +280,7 @@ async def update_workflow(
         description="The workflow ID of the workflow to update",
     ),
 ):
-    """An endpoint to update a workflow in a given workspace"""
+    """An endpoint to update a workflow in a specified workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = await ades_client.update_workflow(request, deploy_workspace, workflow_id)
@@ -295,11 +295,11 @@ async def update_workflow(
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
-    summary="Get workflow details in the given workspace",
+    summary="Get workflow details in the specified workspace",
     response_model=GetProcessResponse,
     responses={
         200: {"description": "Workflow details returned successfully"},
-        404: {"description": "Workflow not deployed to the given workspace"},
+        404: {"description": "Workflow not deployed to the specified workspace"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
@@ -316,7 +316,7 @@ def process_details(
     ),
     wf_type: WorkflowType = Depends(opa_dependency),  # noqa: B008
 ):
-    """An endpoint to get details of a workflow in a given workspace"""
+    """An endpoint to get details of a workflow in a specified workspace"""
     logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = ades_client.get_workflow(
@@ -337,7 +337,7 @@ def process_details(
     response_model=ExecuteProcessResponse,
     responses={
         201: {"description": "Workflow execution started and job created successfully"},
-        404: {"description": "Workflow not deployed to the given workspace"},
+        404: {"description": "Workflow not deployed to the specified workspace"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
@@ -354,7 +354,7 @@ async def execute_process(
     ),
     workflow_type: tuple = Depends(opa_dependency),
 ):
-    """An endpoint to execute a workflow in a given workspace"""
+    """An endpoint to execute a workflow in a specified workspace"""
     log_text = workflow_type.value
     logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
@@ -390,7 +390,7 @@ async def execute_process(
     response_model=GetJobStatusResponse,
     responses={
         204: {"description": "job status information returned"},
-        404: {"description": "Job ID does not exist in given workspace"},
+        404: {"description": "Job ID does not exist in specified workspace"},
         401: {"description": "User not authenticated"},
         403: {"description": "User not authorized to make changes in this workspace"},
     },
@@ -485,7 +485,7 @@ def get_deployed_workspaced_jobs(
         example="2023-01-01T00:00:00Z/2023-01-02T00:00:00Z",
     ),  # noqa: B008
 ):
-    """An endpoint to list all jobs in a given workspace"""
+    """An endpoint to list all jobs in a specified workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
     response, content = ades_client.get_deployed_workspaced_jobs(
@@ -511,7 +511,7 @@ def get_deployed_workspaced_jobs(
 # @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
 # dependencies=[Depends(opa_dependency)])
 def get_all_jobs(request: Request):
-    """Endpoint to list all jobs called by the given user"""
+    """Endpoint to list all jobs called by the specified user"""
 
     content = ades_client.get_all_jobs(dict(request.headers), job_saver.workspace_jobs)
 
@@ -583,7 +583,7 @@ def delete_job(
         description="The ID of the job to delete",
     ),
 ):
-    """An endpoint to delete a job from the given workspace"""
+    """An endpoint to delete a job from the specified workspace"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 
     response, content = ades_client.delete_job(dict(request.headers), deploy_workspace, job_id)
