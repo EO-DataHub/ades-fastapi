@@ -11,6 +11,18 @@ from fastapi.staticfiles import StaticFiles
 from .ades_client import ADESClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
+from .models import (
+    DeleteJobResponse,
+    DeployProcessResponse,
+    EmptyResponse,
+    ExecuteProcessResponse,
+    GetAllJobStatusResponse,
+    GetJobResultsResponse,
+    GetJobStatusResponse,
+    GetProcessResponse,
+    ListProcessesResponse,
+    PingResponse,
+)
 from .utils import WorkflowType, get_user_details
 
 logging.basicConfig(
@@ -120,23 +132,45 @@ def opa_dependency(
     return wf_type
 
 
-@app.get(f"{API_DOCS_ROOT}/workflow-runner/ping")
+@app.get(
+    f"{API_DOCS_ROOT}/workflow-runner/ping",
+    summary="Ping the Workflow Runner API",
+    description="A status endpoint for the Workflow Runner API to check the availability of the service",
+    response_model=PingResponse,
+    responses={
+        200: {
+            "description": "Service is reachable and returned 'PONG'",
+        },
+        502: {"description": "Service is not reachable"},
+    },
+)
 def ping():
-    """Root endpoint for ADES API Docs, used by Swagger UI"""
-    logger.info("Getting ADES root")
+    """A status endpoint for the Workflow Runner API to check the availability of the service"""
+    logger.info("Getting Workflow Runner PING endpoint")
     response = ades_client.get_root()
     if response.status_code == 200:
         return {"status": "PONG"}
     else:
-        return {"status": "Failed to connect to ADES"}
+        return Response(
+            content={"status": "Failed to connect to ADES"},
+            status_code=502,
+        )
 
 
 @app.delete(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
+    summary="Undeploy a workflow from the given workspace",
+    response_model=EmptyResponse,
+    responses={
+        204: {"description": "Workflow removed from the workspace successfully"},
+        404: {"description": "Workflow not deployed to the given workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
-    """Endpoint to undeploy a workflow"""
+    """An endpoint to undeploy a workflow from the specified workspace"""
     logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
     response, content = ades_client.undeploy_workflow(
@@ -153,6 +187,14 @@ def undeploy_process(deploy_workspace: str, workflow_id: str, request: Request):
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
+    summary="List all available workflows in the given workspace",
+    response_model=ListProcessesResponse,
+    responses={
+        200: {
+            "description": "Workflows available in the specified workspace are returned in a list"
+        },
+        401: {"description": "User not authenticated"},
+    },
 )
 def list_processes(
     deploy_workspace: str, request: Request, limit: Optional[int] = None, skip: int = 0
@@ -174,6 +216,15 @@ def list_processes(
 @app.post(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
     dependencies=[Depends(opa_dependency)],
+    summary="Deploy a workflow to the specified workspace",
+    response_model=DeployProcessResponse,
+    responses={
+        201: {"description": "Workflow created in the workspace successfully"},
+        400: {"description": "Invalid request"},
+        409: {"description": "Workflow with the same ID already deployed to the workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 async def deploy_workflow(
     deploy_workspace: str,
@@ -192,6 +243,14 @@ async def deploy_workflow(
 @app.put(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
+    summary="Update a workflow in the given workspace",
+    response_model=EmptyResponse,
+    responses={
+        204: {"description": "Workflow updated in the workspace successfully"},
+        404: {"description": "Workflow has not been deployed to the given workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 async def update_workflow(deploy_workspace: str, workflow_id: str, request: Request):
     """Endpoint to update a workflow in a workspace"""
@@ -209,6 +268,14 @@ async def update_workflow(deploy_workspace: str, workflow_id: str, request: Requ
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
     dependencies=[Depends(opa_dependency)],
+    summary="Get workflow details in the given workspace",
+    response_model=GetProcessResponse,
+    responses={
+        200: {"description": "Workflow details returned successfully"},
+        404: {"description": "Workflow not deployed to the given workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def process_details(
     deploy_workspace: str,
@@ -233,6 +300,14 @@ def process_details(
 @app.post(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
     dependencies=[Depends(opa_dependency)],
+    summary="Execute a workflow from the specified workspace",
+    response_model=ExecuteProcessResponse,
+    responses={
+        201: {"description": "Workflow execution started and job created successfully"},
+        404: {"description": "Workflow not deployed to the given workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 async def execute_process(
     deploy_workspace: str,
@@ -272,6 +347,14 @@ async def execute_process(
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
+    summary="Get job status",
+    response_model=GetJobStatusResponse,
+    responses={
+        204: {"description": "job status information returned"},
+        404: {"description": "Job ID does not exist in given workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def process_status(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the status of an executing workflow or job"""
@@ -289,6 +372,14 @@ def process_status(deploy_workspace: str, job_id: str, request: Request):
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
     dependencies=[Depends(opa_dependency)],
+    summary="Get job results",
+    response_model=GetJobResultsResponse,
+    responses={
+        200: {"description": "Job results returned as a Collection"},
+        404: {"description": "Job with this ID does not exist in the workspace"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def process_results(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to get the results of an executed workflow or job"""
@@ -306,6 +397,11 @@ def process_results(deploy_workspace: str, job_id: str, request: Request):
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
     dependencies=[Depends(opa_dependency)],
+    response_model=GetAllJobStatusResponse,
+    summary="Get details for all available jobs in a workspace",
+    responses={
+        204: {"description": "Job details returned successfully"},
+    },
 )
 def get_deployed_workspaced_jobs(
     deploy_workspace: str,
@@ -363,6 +459,14 @@ def get_all_jobs(request: Request):
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
     dependencies=[Depends(opa_dependency)],
+    summary="Get job log file",
+    responses={
+        200: {"description": "Job log file returned successfully"},
+        500: {"description": "Error occurred while retrieving the log file"},
+        404: {"description": "Job ID or log filename not found"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request: Request):
     """Endpoint to get the logs of a job"""
@@ -373,7 +477,7 @@ def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request:
 
     return Response(
         content=content,
-        media_type=response.headers.get("Content-Type"),
+        media_type="text/plain",
         status_code=response.status_code,
     )
 
@@ -381,6 +485,14 @@ def get_process_log(deploy_workspace: str, job_id: str, file_name: str, request:
 @app.delete(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
     dependencies=[Depends(opa_dependency)],
+    response_model=DeleteJobResponse,
+    summary="Delete job from workspace",
+    responses={
+        200: {"description": "Job deleted successfully"},
+        404: {"description": "Job ID not found"},
+        401: {"description": "User not authenticated"},
+        403: {"description": "User not authorized to make changes in this workspace"},
+    },
 )
 def delete_job(deploy_workspace: str, job_id: str, request: Request):
     """Endpoint to delete a job"""
