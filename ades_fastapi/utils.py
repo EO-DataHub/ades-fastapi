@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from enum import Enum
+from json import JSONDecodeError
 
 import boto3
 import botocore
@@ -75,22 +76,26 @@ def get_access_policy(
 
     try:
         s3_data = s3_client.get_object(Bucket=ades_policy_bucket, Key=key)
+        access_policy = json.loads(s3_data.get("Body").read().decode("utf-8"))
     except botocore.exceptions.ClientError as err:
         if err.response["Error"]["Code"] == "NoSuchKey":
-            logger.info(
+            logger.warning(
                 "No access policy found for workflow %s in workspace %s",
                 workflow_id,
                 deploy_workspace,
             )
             return None
         else:
-            logger.info(
+            logger.error(
                 "Error getting access policy for workflow %s in workspace %s",
                 workflow_id,
                 deploy_workspace,
             )
             return None
-    return json.loads(s3_data.get("Body").read().decode("utf-8"))
+    except JSONDecodeError as err:
+        logger.error("Error decoding access policy JSON: %s", err)
+        return None
+    return access_policy
 
 
 def convert_workspace_to_username(workspace: str) -> str:

@@ -105,7 +105,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
     )
     assert result is None
-    mock_logger.info.assert_any_call(
+    mock_logger.warning.assert_any_call(
         "No access policy found for workflow %s in workspace %s",
         workflow_id,
         deploy_workspace,
@@ -120,10 +120,36 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
     )
     assert result is None
-    mock_logger.info.assert_any_call(
+    mock_logger.error.assert_any_call(
         "Error getting access policy for workflow %s in workspace %s",
         workflow_id,
         deploy_workspace,
+    )
+
+
+@mock.patch("ades_fastapi.utils.boto3.client")
+@mock.patch("ades_fastapi.utils.logger")
+def test_get_access_policy_json_decode_error(mock_logger, mock_boto3_client):
+    mock_s3_client = mock.Mock()
+    mock_boto3_client.return_value = mock_s3_client
+
+    mock_s3_client.get_object.return_value = {
+        "Body": mock.Mock(read=mock.Mock(return_value="invalid json".encode("utf-8")))
+    }
+
+    ades_policy_bucket = "test-bucket"
+    ades_policy_prefix = "test-prefix"
+    deploy_workspace = "test-workspace"
+    workflow_id = "test_workflow"
+
+    result = get_access_policy(
+        deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
+    )
+
+    assert result is None
+    mock_logger.error.assert_any_call(
+        "Error decoding access policy JSON: %s",
+        mock.ANY,
     )
 
 
