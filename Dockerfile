@@ -13,7 +13,6 @@ ADD LICENSE requirements.txt ./
 ADD pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install -r requirements.txt .
 
-ADD static ./static/
 ADD ades_fastapi ./ades_fastapi/
 
 CMD ["uvicorn", "ades_fastapi.api:app", "--host", "0.0.0.0", "--port", "8000"]
