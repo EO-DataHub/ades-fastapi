@@ -497,23 +497,23 @@ class GetJobResultsResponse(BaseModel):
                 "links": [
                     {
                         "rel": "root",
-                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp/processing-results/workflow.json",
                         "type": "application/json",
                         "title": "workflow Outputs Catalog",
                     },
                     {
                         "rel": "item",
-                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52/output-item.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52/output-item.json",
                         "type": "application/json",
                     },
                     {
                         "rel": "self",
-                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52.json",
                         "type": "application/json",
                     },
                     {
                         "rel": "parent",
-                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp/processing-results/workflow/output-catalog.json",
                         "type": "application/json",
                     },
                 ],
