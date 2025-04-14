@@ -80,7 +80,7 @@ class ListProcessesResponse(BaseModel):
                                 "rel": "self",
                                 "type": "application/json",
                                 "title": "Process Description",
-                                "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/echo",
+                                "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/echo",
                             }
                         ],
                         "AccessReasoning": "Workspace owns this workflow",
@@ -120,7 +120,7 @@ class GetProcessResponse(BaseModel):
                         "rel": "http://www.opengis.net/def/rel/ogc/1.0/execute",
                         "type": "application/json",
                         "title": "Execute End Point",
-                        "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/echo/execution",
+                        "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/echo/execution",
                     }
                 ],
                 "inputs": {
@@ -334,7 +334,7 @@ class DeployProcessResponse(BaseModel):
                         "rel": "http://www.opengis.net/def/rel/ogc/1.0/execute",
                         "type": "application/json",
                         "title": "Execute End Point",
-                        "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/workflowID/execution",
+                        "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/processes/workflowID/execution",
                     }
                 ],
             }
@@ -372,7 +372,7 @@ class ExecuteProcessResponse(BaseModel):
                         "title": "Status location",
                         "rel": "monitor",
                         "type": "application/json",
-                        "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
+                        "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
                     }
                 ],
             },
@@ -411,7 +411,7 @@ class GetJobStatusResponse(BaseModel):
                         "title": "Status location",
                         "rel": "monitor",
                         "type": "application/json",
-                        "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
+                        "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
                     }
                 ],
             },
@@ -442,7 +442,7 @@ class GetAllJobStatusResponse(BaseModel):
                                 "title": "Status location",
                                 "rel": "monitor",
                                 "type": "application/json",
-                                "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
+                                "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs/806e3380-152e-11f0-b600-82b2cc669c52",
                             }
                         ],
                     }
@@ -497,23 +497,23 @@ class GetJobResultsResponse(BaseModel):
                 "links": [
                     {
                         "rel": "root",
-                        "href": "https://workspace.prod.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow.json",
                         "type": "application/json",
                         "title": "workflow Outputs Catalog",
                     },
                     {
                         "rel": "item",
-                        "href": "https://workspace.prod.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52/output-item.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52/output-item.json",
                         "type": "application/json",
                     },
                     {
                         "rel": "self",
-                        "href": "https://workspace.prod.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog/col_185e5c6a-152f-11f0-9687-82b2cc669c52.json",
                         "type": "application/json",
                     },
                     {
                         "rel": "parent",
-                        "href": "https://workspace.prod.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog.json",
+                        "href": "https://workspace.eodatahub-workspaces.org.uk/files/workspaces-eodhp-prod/processing-results/workflow/output-catalog.json",
                         "type": "application/json",
                     },
                 ],
@@ -559,7 +559,7 @@ class DeleteJobResponse(BaseModel):
                         "title": "The job list for the current process",
                         "rel": "parent",
                         "type": "application/json",
-                        "href": "https://prod.eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs",
+                        "href": "https://eodatahub.org.uk/api/catalogue/stac/catalogs/user/catalogs/workspace/jobs",
                     }
                 ],
                 "type": "process",
