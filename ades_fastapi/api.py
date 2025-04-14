@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .ades_client import ADESClient
@@ -143,9 +143,9 @@ def ping():
     logger.info("Getting Workflow Runner PING endpoint")
     response = ades_client.get_root()
     if response.status_code == 200:
-        return {"status": "PONG"}
+        return JSONResponse(content={"status": "PONG"})
     else:
-        return Response(
+        return JSONResponse(
             content={"status": "Failed to connect to ADES"},
             status_code=502,
         )
