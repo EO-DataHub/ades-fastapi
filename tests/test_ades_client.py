@@ -1130,7 +1130,7 @@ async def test_get_deployed_workspaced_jobs_query(
                 {"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"},
                 {
                     "rel": "next",
-                    "href": "http://localhost:8080/test_workspace/ogc-api/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
+                    "href": "http://localhost:8080/test_workspace/ogc-api/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z&skip=3",
                 },
             ],
         },
@@ -1191,7 +1191,7 @@ async def test_get_deployed_workspaced_jobs_query(
             },
             {
                 "rel": "next",
-                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z&skip=3",
             },
         ],
         "numberTotal": 3,
