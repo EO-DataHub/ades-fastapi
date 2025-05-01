@@ -787,13 +787,67 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
         status_code=200,
         json=lambda: {
             "jobs": [
-                {"jobID": "job-1"},
-                {"jobID": "job-2"},
-                {"jobID": "job-3"},
-                {"jobID": "job-4"},
-                {"jobID": "job-5"},
-                {"jobID": "job-6"},
-            ]
+                {
+                    "jobID": "job-1",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-1/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-2",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-2/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-3",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-3/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-4",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-4/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-5",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-5/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-6",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-6/file.log",
+                        }
+                    ],
+                },
+            ],
         },
     )
     request = MagicMock()
@@ -808,24 +862,115 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [
-            {"jobID": "job-1"},
-            {"jobID": "job-2"},
-            {"jobID": "job-3"},
-            {"jobID": "job-4"},
-            {"jobID": "job-5"},
-            {"jobID": "job-6"},
+            {
+                "jobID": "job-1",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-1/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-2",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-2/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-3",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-3/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-4",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-4/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-5",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-5/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-6",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-6/file.log",
+                    }
+                ],
+            },
         ],
         "numberTotal": 6,
     }
+
+
+@pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+async def test_get_deployed_workspaced_jobs_query(
+    mock_get_user_details, mock_send_request, ades_client
+):
+    mock_job_saver = MagicMock()
+    mock_job_saver.get_job_details.return_value = {
+        "jobID": "job_1",
+        "workflow_id": "convert-url-test",
+        "workflow_type": "workflow",
+        "deploy_workspace": "test-workspace",
+        "calling_workspace": "test-workspace",
+    }
+    request = MagicMock()
+    request.headers = {"authorization": "Bearer token"}
 
     # Test limit and skip
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {
             "jobs": [
-                {"jobID": "job-5"},
-                {"jobID": "job-6"},
-            ]
+                {
+                    "jobID": "job-5",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-5/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-6",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-6/file.log",
+                        }
+                    ],
+                },
+            ],
+            "links": [{"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"}],
         },
     )
 
@@ -841,14 +986,65 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     )
     assert response.status_code == 200
     assert json.loads(content) == {
-        "jobs": [{"jobID": "job-5"}, {"jobID": "job-6"}],
+        "jobs": [
+            {
+                "jobID": "job-5",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-5/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-6",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-6/file.log",
+                    }
+                ],
+            },
+        ],
+        "links": [
+            {
+                "rel": "self",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs",
+            }
+        ],
         "numberTotal": 2,
     }
 
     # Test status
     mock_send_request.return_value = MagicMock(
         status_code=200,
-        json=lambda: {"jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}]},
+        json=lambda: {
+            "jobs": [
+                {
+                    "jobID": "job-1",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-1/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-2",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-2/file.log",
+                        }
+                    ],
+                },
+            ],
+            "links": [{"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"}],
+        },
     )
 
     response, content = ades_client.get_deployed_workspaced_jobs(
@@ -863,14 +1059,81 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     )
     assert response.status_code == 200
     assert json.loads(content) == {
-        "jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}],
+        "jobs": [
+            {
+                "jobID": "job-1",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-1/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-2",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-2/file.log",
+                    }
+                ],
+            },
+        ],
+        "links": [
+            {
+                "rel": "self",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs",
+            }
+        ],
         "numberTotal": 2,
     }
 
     # Test datetime
     mock_send_request.return_value = MagicMock(
         status_code=200,
-        json=lambda: {"jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}, {"jobID": "job-3"}]},
+        json=lambda: {
+            "jobs": [
+                {
+                    "jobID": "job-1",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-1/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-2",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-2/file.log",
+                        }
+                    ],
+                },
+                {
+                    "jobID": "job-3",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-3/file.log",
+                        }
+                    ],
+                },
+            ],
+            "links": [
+                {"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"},
+                {
+                    "rel": "next",
+                    "href": "http://localhost:8080/test_workspace/ogc-api/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
+                },
+            ],
+        },
     )
 
     response, content = ades_client.get_deployed_workspaced_jobs(
@@ -889,8 +1152,168 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     )
     assert response.status_code == 200
     assert json.loads(content) == {
-        "jobs": [{"jobID": "job-1"}, {"jobID": "job-2"}, {"jobID": "job-3"}],
+        "jobs": [
+            {
+                "jobID": "job-1",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-1/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-2",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-2/file.log",
+                    }
+                ],
+            },
+            {
+                "jobID": "job-3",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-3/file.log",
+                    }
+                ],
+            },
+        ],
+        "links": [
+            {
+                "rel": "self",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs",
+            },
+            {
+                "rel": "next",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=3&datetime=2021-01-01T00:00:00Z/2021-01-02T00:00:00Z",
+            },
+        ],
         "numberTotal": 3,
+    }
+
+
+@pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
+    mock_get_user_details, mock_send_request, ades_client
+):
+    mock_job_saver = MagicMock()
+    mock_job_saver.get_job_details.return_value = {
+        "jobID": "job_1",
+        "workflow_id": "convert-url-test",
+        "workflow_type": "user-service",
+        "deploy_workspace": "test-workspace",
+        "calling_workspace": "another-workspace",
+    }
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "jobs": [
+                {
+                    "jobID": "job-1",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-1/file.log",
+                        }
+                    ],
+                },
+            ],
+            "links": [{"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"}],
+        },
+    )
+    request = MagicMock()
+    request.headers = {"authorization": "Bearer token"}
+    # Test limit
+    response, content = ades_client.get_deployed_workspaced_jobs(
+        request, "test_workspace", mock_job_saver
+    )
+    mock_send_request.assert_any_call(
+        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {
+        "jobs": [
+            {
+                "jobID": "job-1",
+                "links": [
+                    {
+                        "title": "test-log",
+                        "rel": "related",
+                        "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs/job-1/file.log",
+                    }
+                ],
+            },
+        ],
+        "links": [
+            {
+                "rel": "self",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs",
+            }
+        ],
+        "numberTotal": 1,
+    }
+
+
+@pytest.mark.asyncio
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
+    mock_get_user_details, mock_send_request, ades_client
+):
+    mock_job_saver = MagicMock()
+    mock_job_saver.get_job_details.return_value = {
+        "jobID": "job_1",
+        "workflow_id": "convert-url-test",
+        "workflow_type": "workflow",
+        "deploy_workspace": "test-workspace",
+        "calling_workspace": "another-workspace",
+    }
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "jobs": [
+                {
+                    "jobID": "job-1",
+                    "links": [
+                        {
+                            "title": "test-log",
+                            "rel": "related",
+                            "href": "http://localhost:8080/test_workspace/temp/job-1/file.log",
+                        }
+                    ],
+                },
+            ],
+            "links": [{"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"}],
+        },
+    )
+    request = MagicMock()
+    request.headers = {"authorization": "Bearer token"}
+    # Test limit
+    response, content = ades_client.get_deployed_workspaced_jobs(
+        request, "test_workspace", mock_job_saver
+    )
+    mock_send_request.assert_any_call(
+        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
+    )
+    assert response.status_code == 200
+    assert json.loads(content) == {
+        "jobs": [],
+        "links": [
+            {
+                "rel": "self",
+                "href": "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs",
+            }
+        ],
+        "numberTotal": 0,
     }
 
 
