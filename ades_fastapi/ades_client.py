@@ -550,13 +550,6 @@ class ADESClient:
                 )
         return links
 
-    def _format_status_link(self, links: list, workspace: str, job_id: str) -> list:
-        """Format the status link to include the base URL"""
-        for link in links:
-            if link["rel"] == "monitor":
-                link["href"] = f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}"
-        return links
-
     def _format_log_links(self, links: list, workspace: str, job_id: str) -> list:
         """Format the status link to include the base URL"""
         for link in links:
@@ -575,9 +568,6 @@ class ADESClient:
             response.json(), self.base_url, self.catalog_root, deploy_workspace
         )
 
-        # content_json["links"] = self._format_status_link(
-        #     content_json["links"], deploy_workspace, job_id
-        # )
         content_json["links"] = self._format_log_links(
             content_json["links"], deploy_workspace, job_id
         )
@@ -656,6 +646,7 @@ class ADESClient:
             job_details = job_saver.get_job_details(deploy_workspace, job_id)
             if job_details.get("calling_workspace") == workspace:
                 job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
+                job["links"] = self._format_log_links(job["links"], deploy_workspace, job_id)
                 filtered_jobs.append(job)
                 if limit and len(filtered_jobs) == limit:
                     break
@@ -664,12 +655,17 @@ class ADESClient:
                     job = replace_href_links(
                         job, self.base_url, self.catalog_root, deploy_workspace
                     )
+                    job["links"] = self._format_log_links(job["links"], deploy_workspace, job_id)
                     filtered_jobs.append(job)
                     if limit and len(filtered_jobs) == limit:
                         break
 
         response_json["jobs"] = filtered_jobs
         response_json["numberTotal"] = len(filtered_jobs)
+
+        response_json = replace_href_links(
+            response_json, self.base_url, self.catalog_root, deploy_workspace
+        )
 
         content = json.dumps(response_json)
 
