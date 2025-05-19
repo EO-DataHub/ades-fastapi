@@ -63,7 +63,7 @@ ADES_POLICY_BUCKET = os.getenv("ADES_POLICY_BUCKET", "ades-policy")
 ADES_POLICY_PREFIX = os.getenv("ADES_POLICY_PREFIX", "")
 
 # Workflow Tag name
-# WORKFLOW_TAG = "Metadata APIs for processing - finding, defining and executing processing workflows"
+WORKFLOW_TAG = "Metadata APIs"
 
 app = FastAPI(
     title="EODHP ADES",
@@ -74,13 +74,14 @@ app = FastAPI(
     openapi_url=f"{API_DOCS_ROOT}/workflow-runner/openapi.json",
     openapi_tags=[
         {
-            "name": "Metadata APIs",
+            "name": WORKFLOW_TAG,
             "description": (
                 "Use these APIs to find, define and execute EO Data Hub workflows, "
                 "and to locate their results. These endpoints implement the OGC "
                 "Processes API and package workflows as OGC Application Packages. "
                 "Each workspace (identified by `{deploy_workspace}`) is access‐controlled "
-                "via HTTP Bearer; you may only see or run workflows in your own workspace."
+                "via HTTP Bearer; you may only see or run workflows in your own workspace, "
+                "unless they are defined as publicly available or public user services."
             ),
         }
     ],
@@ -169,7 +170,7 @@ def ping():
 
 @app.delete(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Undeploy a workflow from the specified workspace",
     response_model=EmptyResponse,
@@ -207,7 +208,7 @@ def undeploy_process(
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="List all available workflows in the specified workspace",
     response_model=ListProcessesResponse,
@@ -247,7 +248,7 @@ def list_processes(
 
 @app.post(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Deploy a workflow to the specified workspace",
     response_model=DeployProcessResponse,
@@ -278,7 +279,7 @@ async def deploy_workflow(
 
 @app.put(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Update a workflow in the specified workspace",
     response_model=EmptyResponse,
@@ -314,7 +315,7 @@ async def update_workflow(
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Get workflow details in the specified workspace",
     response_model=GetProcessResponse,
@@ -353,7 +354,7 @@ def process_details(
 
 @app.post(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/processes/{{workflow_id}}/execution",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Execute a workflow from the specified workspace",
     response_model=ExecuteProcessResponse,
@@ -407,7 +408,7 @@ async def execute_process(
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Get job status",
     response_model=GetJobStatusResponse,
@@ -443,7 +444,7 @@ def process_status(
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/results",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Get job results",
     response_model=GetJobResultsResponse,
@@ -479,7 +480,7 @@ def process_results(
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     response_model=GetAllJobStatusResponse,
     summary="Get details for all available jobs in a workspace",
@@ -549,7 +550,7 @@ def get_all_jobs(request: Request):
 
 @app.get(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}/{{file_name}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     summary="Get job log file",
     response_class=PlainTextResponse,
@@ -588,7 +589,7 @@ def get_process_log(
 
 @app.delete(
     f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs/{{job_id}}",
-    tags=["Metadata APIs"],
+    tags=[WORKFLOW_TAG],
     dependencies=[Depends(opa_dependency)],
     response_model=DeleteJobResponse,
     summary="Delete job from workspace",
