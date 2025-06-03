@@ -79,7 +79,12 @@ def test_check_policy_get_workflow(
     dependency_client,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {
         "public": True,
         "allowed_access": {"workspaces": ["test_workspace"]},
@@ -103,6 +108,7 @@ def test_check_policy_get_workflow(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "GET",
             "is_public": True,
             "allowed_workspaces": ["test_workspace"],
@@ -126,7 +132,12 @@ def test_check_policy_execute_workflow(
     dependency_client,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {
         "public": True,
         "allowed_access": {"workspaces": ["test_workspace"]},
@@ -150,6 +161,7 @@ def test_check_policy_execute_workflow(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "POST",
             "is_public": True,
             "allowed_workspaces": ["test_workspace"],
@@ -168,7 +180,12 @@ def test_check_policy_execute_workflow(
 def test_check_policy_get_job(
     mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
-    mock_get_user_details.return_value = ("username", "workspace_1", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "workspace_1",
+        ["workspace_1", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -185,6 +202,7 @@ def test_check_policy_get_job(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "workspace_1",
+            "workspaces": ["workspace_1", "another_workspace"],
             "method": "GET",
             "calling_workspace": "workspace_1",
         }
@@ -201,7 +219,12 @@ def test_check_policy_get_job(
 def test_check_policy_deploy_workflow(
     mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -218,6 +241,7 @@ def test_check_policy_deploy_workflow(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "POST",
         }
     }
@@ -233,7 +257,12 @@ def test_check_policy_deploy_workflow(
 def test_check_policy_update_workflow(
     mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -252,6 +281,7 @@ def test_check_policy_update_workflow(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "PUT",
         }
     }
@@ -267,7 +297,12 @@ def test_check_policy_update_workflow(
 def test_check_policy_logs(
     mock_opa_request, mock_get_user_details, dependency_client, get_job_saver
 ):
-    mock_get_user_details.return_value = ("username", "workspace_2", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "workspace_2",
+        ["workspace_2", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -289,6 +324,7 @@ def test_check_policy_logs(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "workspace_2",
+            "workspaces": ["workspace_2", "another_workspace"],
             "method": "GET",
             "calling_workspace": "workspace_2",
         }
@@ -310,7 +346,12 @@ def test_check_policy_execute_workflow_no_policy(
     dependency_client,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {}
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
@@ -330,6 +371,7 @@ def test_check_policy_execute_workflow_no_policy(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "POST",
         }
     }
@@ -350,7 +392,12 @@ def test_check_policy_execute_workflow_user_service(
     dependency_client,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {"user_service": True}
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
@@ -370,6 +417,7 @@ def test_check_policy_execute_workflow_user_service(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "POST",
             "is_user_service": True,
             "is_public": False,
@@ -393,7 +441,12 @@ def test_check_policy_execute_workflow_user_service_workflow_owner(
     dependency_client,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {"user_service": True}
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
@@ -411,6 +464,7 @@ def test_check_policy_execute_workflow_user_service_workflow_owner(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "test_user",
+            "workspaces": ["test_user", "another_workspace"],
             "method": "POST",
             "is_user_service": True,
             "is_public": False,
@@ -451,7 +505,12 @@ def test_check_access_denied(
     mock_request,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = {
         "public": True,
         "allowed_access": {"workspaces": ["test_workspace"]},
@@ -476,7 +535,12 @@ def test_check_access_no_access_policy(
     mock_request,
     get_job_saver,
 ):
-    mock_get_user_details.return_value = ("username", "test_user", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "test_user",
+        ["test_user", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_get_access_policy.return_value = None
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
@@ -499,7 +563,12 @@ def test_check_access_job_access(
     get_job_saver,
 ):
     mock_request.scope["path_params"] = {"deploy_workspace": "workspace_2", "job_id": "job_3"}
-    mock_get_user_details.return_value = ("username", "workspace_2", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "workspace_2",
+        ["workspace_2", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -510,6 +579,7 @@ def test_check_access_job_access(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "workspace_2",
+            "workspaces": ["workspace_2", "another_workspace"],
             "method": "GET",
             "calling_workspace": "workspace_2",
         }
@@ -537,7 +607,12 @@ def test_check_access_job_access_user_service(
         "job_id": "job_2",
     }
     mock_request.method = "GET"
-    mock_get_user_details.return_value = ("username", "workspace_2", ["role1", "role2"])
+    mock_get_user_details.return_value = (
+        "username",
+        "workspace_2",
+        ["workspace_2", "another_workspace"],
+        ["role1", "role2"],
+    )
     mock_opa_request.return_value.status_code = 200
     mock_opa_request.return_value.json.return_value = {"result": True}
 
@@ -548,6 +623,7 @@ def test_check_access_job_access_user_service(
             "roles": ["role1", "role2"],
             "path": "/test/path",
             "workspace": "workspace_2",
+            "workspaces": ["workspace_2", "another_workspace"],
             "method": "GET",
             "calling_workspace": "workspace_1",
             "deployed_workspace": "workspace_2",

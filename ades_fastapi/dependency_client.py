@@ -40,7 +40,7 @@ class DependencyClient:
         job_saver: JobSaver,
     ) -> tuple:
         """Check OPA policy to determine if the request is allowed"""
-        _, workspace, roles = get_user_details(request)
+        username, workspace, workspaces, roles = get_user_details(request)
         path_params = self._get_path_params(request)
 
         # Add values for logs
@@ -54,6 +54,7 @@ class DependencyClient:
                 "roles": roles,
                 "path": request.url.path.replace(self.fastapi_root, "", 1),  # remove starting path
                 "workspace": workspace,
+                "workspaces": workspaces,
                 "method": request.method,
             }
         }
@@ -70,6 +71,11 @@ class DependencyClient:
             deploy_workspace and workflow_id and request.method in ["POST", "GET"]
         ):  # not needed for PUT updates
             # Checking access to workflow for details and execution
+            if request.method == "POST" and not workspace:
+                # If workspace is not set, we cannot check access
+                logger.warning(f"Workspace is not set, user {username} cannot execute a workflow")
+                return False, wf_type
+
             logger.debug(
                 "Checking access policy for workflow %s in workspace %s",
                 workflow_id,
@@ -135,6 +141,8 @@ class DependencyClient:
                 input_data["input"]["deployed_workspace"] = job_details.get(
                     "deploy_workspace", None
                 )
+
+        logger.info(input_data)
 
         response = self._opa_request(input_data)
 

@@ -55,12 +55,14 @@ def get_user_details(request: Request) -> tuple:
         logger.debug("Credentials: ", credentials)
         username = credentials.get("preferred_username", "")
         workspace = credentials.get("workspace", "")
+        workspaces = credentials.get("workspaces", [])
         roles = credentials.get("realm_access", {}).get("roles", [])
     else:
         username = ""
         workspace = ""
+        workspaces = []
         roles = []
-    return username, workspace, roles
+    return username, workspace, workspaces, roles
 
 
 def get_access_policy(

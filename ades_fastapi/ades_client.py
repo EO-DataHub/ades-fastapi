@@ -48,14 +48,14 @@ class ADESClient:
         workflow_id: str,
     ) -> tuple:
         """Check if the workflow is accessible to the current user"""
-        username, workspace, _ = get_user_details(request)
+        username, workspace, workspaces, _ = get_user_details(request)
 
-        if workspace == deploy_workspace:
-            return True, "Workspace owns this workflow"
+        if deploy_workspace in workspaces:
+            return True, "User has access to the owning workspace"
 
         logger.info(
-            "Checking workspace %s has access to workflow %s in workspace %s",
-            workspace,
+            "Checking user %s has access to workflow %s in workspace %s",
+            username,
             workflow_id,
             deploy_workspace,
         )
@@ -117,10 +117,12 @@ class ADESClient:
             return True, "Workflow is public"
         else:
             # Check if user is in the allowed list
-            if workspace in workflow_policy.get("allowed_access", {}).get("workspaces", {}):
+            workspaces_set = set(workspaces)
+            if workspaces_set & set(
+                workflow_policy.get("allowed_access", {}).get("workspaces", set())
+            ):
                 logger.info(
-                    "Workspace %s is in the allowed list for workflow %s in workspace %s",
-                    workspace,
+                    "User has access to a workspace in the allowed list for workflow %s in workspace %s",
                     workflow_id,
                     deploy_workspace,
                 )
@@ -399,7 +401,6 @@ class ADESClient:
         body: dict, creds: dict, calling_workspace: str, executing_workspace: str = None
     ):
 
-        aws_creds_calling = creds.get("calling_workspace", {}).get("aws_creds", {})
         api_token_calling = creds.get("calling_workspace", {}).get("api_token", {})
         aws_creds_executing = creds.get("executing_workspace", {}).get("aws_creds", {})
         api_token_executing = creds.get("executing_workspace", {}).get("api_token", {})
@@ -413,15 +414,6 @@ class ADESClient:
             body["inputs"].update({"executing_workspace": executing_workspace})
             # Add calling credentials
             logger.info("Setting user token in execution call")
-            body["inputs"].update(
-                {"STAGE_AWS_ACCESS_KEY_ID": aws_creds_calling.get("AccessKeyId", "null")}
-            )
-            body["inputs"].update(
-                {"STAGE_AWS_SECRET_ACCESS_KEY": aws_creds_calling.get("SecretAccessKey", "null")}
-            )
-            body["inputs"].update(
-                {"STAGE_AWS_SESSION_TOKEN": aws_creds_calling.get("SessionToken", "null")}
-            )
             body["inputs"].update({"CALLING_WORKSPACE_ACCESS_TOKEN": api_token_calling})
             # Add executing credentials
             if not (
@@ -470,7 +462,7 @@ class ADESClient:
         deploy_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
-        username, workspace, _ = get_user_details(
+        username, workspace, workspaces, _ = get_user_details(
             request
         )  # check this is the correct way to extract calling workspace
         token = get_user_token(request)
@@ -510,7 +502,7 @@ class ADESClient:
         deploy_workspace: str,
         workflow_id: str,
     ) -> requests.Response:
-        username, workspace, _ = get_user_details(request)
+        username, workspace, workspaces, _ = get_user_details(request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(
             token, username, workspace, deploy_workspace, workflow_id
@@ -598,7 +590,7 @@ class ADESClient:
         status: Optional[List[str]] = None,
         datetime: Optional[str] = None,
     ):
-        username, workspace, _ = get_user_details(request)
+        username, workspace, workspaces, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
@@ -637,21 +629,21 @@ class ADESClient:
             return response, json.dumps({"jobs": jobs, "numberTotal": 0})
 
         logger.info(
-            "Filtering jobs to those that were called by workspace %s deployed in workspace %s",
-            workspace,
+            "Filtering jobs to those that were called by workspaces %s deployed in workspace %s",
+            workspaces,
             deploy_workspace,
         )
         for job in jobs:
             job_id = job.get("jobID", "")
             job_details = job_saver.get_job_details(deploy_workspace, job_id)
-            if job_details.get("calling_workspace") == workspace:
+            if job_details.get("calling_workspace") in workspaces:
                 job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
                 job["links"] = self._format_log_links(job["links"], deploy_workspace, job_id)
                 filtered_jobs.append(job)
                 if limit and len(filtered_jobs) == limit:
                     break
             elif job_details.get("workflow_type") == "user-service":
-                if job_details.get("deploy_workspace") == workspace:
+                if job_details.get("deploy_workspace") in workspaces:
                     job = replace_href_links(
                         job, self.base_url, self.catalog_root, deploy_workspace
                     )
@@ -672,7 +664,7 @@ class ADESClient:
         return response, content
 
     def get_all_jobs(self, request, workspace_jobs):
-        username, workspace, _ = get_user_details(request)
+        username, workspace, workspaces, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)

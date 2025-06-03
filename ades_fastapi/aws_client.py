@@ -137,16 +137,19 @@ def generate_aws_credentials(
     logger.info(f"Incoming token is {token}")
 
     # Generate credentials for calling workspace
-    creds_dict = get_credentials(
-        ROLE_ARN_WORKSPACE,
-        token,
-        calling_workspace,
-        creds_dict,
-        "calling_workspace",
-        workflow_id,
-        username=username,
-        service_scope=False,
-    )
+    ####
+    # Removed as we now use service accounts to provide this access for stagein and stageout
+    ####
+    # creds_dict = get_credentials(
+    #     ROLE_ARN_WORKSPACE,
+    #     token,
+    #     calling_workspace,
+    #     creds_dict,
+    #     "calling_workspace",
+    #     workflow_id,
+    #     username=username,
+    #     service_scope=False,
+    # )
 
     # Generate credentials for executing workspace
     creds_dict = get_credentials(

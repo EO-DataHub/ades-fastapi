@@ -300,11 +300,6 @@ def test_configure_execute_request_user_service(ades_client):
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
-            "aws_creds": {
-                "AccessKeyId": "valid-access-key-id-workspace",
-                "SecretAccessKey": "valid-secret-access-key-workspace",
-                "SessionToken": "valid-session-token-workspace",
-            },
             "api_token": "valid-calling-token",
         },
         "executing_workspace": {
@@ -326,9 +321,6 @@ def test_configure_execute_request_user_service(ades_client):
             "input": "value",
             "calling_workspace": calling_workspace,
             "executing_workspace": executing_workspace,
-            "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-            "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-            "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
             "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
             "AWS_ACCESS_KEY_ID": "valid-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
@@ -342,11 +334,6 @@ def test_configure_execute_request_workflow(ades_client):
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
-            "aws_creds": {
-                "AccessKeyId": "valid-access-key-id-workspace",
-                "SecretAccessKey": "valid-secret-access-key-workspace",
-                "SessionToken": "valid-session-token-workspace",
-            },
             "api_token": "valid-calling-token",
         },
         "executing_workspace": {
@@ -368,9 +355,6 @@ def test_configure_execute_request_workflow(ades_client):
             "input": "value",
             "calling_workspace": calling_workspace,
             "executing_workspace": calling_workspace,
-            "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-            "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-            "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
             "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
             "AWS_ACCESS_KEY_ID": "valid-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
@@ -383,18 +367,16 @@ def test_configure_execute_request_workflow(ades_client):
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.generate_aws_credentials")
 @patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_execute_workflow(
     mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
 ):
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "aws_creds": {
-                "AccessKeyId": "valid-access-key-id-workspace",
-                "SecretAccessKey": "valid-secret-access-key-workspace",
-                "SessionToken": "valid-session-token-workspace",
-            },
             "api_token": "valid-calling-token",
         },
         "executing_workspace": {
@@ -428,9 +410,6 @@ async def test_execute_workflow(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "test-workspace",
-                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
                 "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "valid-access-key-id",
                 "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
@@ -450,18 +429,16 @@ async def test_execute_workflow(
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.generate_aws_credentials")
 @patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_execute_user_service(
     mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
 ):
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "aws_creds": {
-                "AccessKeyId": "valid-access-key-id-workspace",
-                "SecretAccessKey": "valid-secret-access-key-workspace",
-                "SessionToken": "valid-session-token-workspace",
-            },
             "api_token": "valid-calling-token",
         },
         "executing_workspace": {
@@ -495,9 +472,6 @@ async def test_execute_user_service(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "deploy_workspace",
-                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
                 "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "valid-access-key-id",
                 "AWS_SECRET_ACCESS_KEY": "valid-secret-access-key",
@@ -517,18 +491,16 @@ async def test_execute_user_service(
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.generate_aws_credentials")
 @patch("ades_fastapi.ades_client.ADESClient._send_execute_to_ades")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_execute_user_service_missing_executing_creds(
     mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
 ):
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
-            "aws_creds": {
-                "AccessKeyId": "valid-access-key-id-workspace",
-                "SecretAccessKey": "valid-secret-access-key-workspace",
-                "SessionToken": "valid-session-token-workspace",
-            },
             "api_token": "valid-calling-token",
         },
         "executing_workspace": {"aws_creds": {}, "api_token": "valid-executing-token"},
@@ -555,9 +527,6 @@ async def test_execute_user_service_missing_executing_creds(
                 "input": "value",
                 "calling_workspace": "test-workspace",
                 "executing_workspace": "deploy_workspace",
-                "STAGE_AWS_ACCESS_KEY_ID": "valid-access-key-id-workspace",
-                "STAGE_AWS_SECRET_ACCESS_KEY": "valid-secret-access-key-workspace",
-                "STAGE_AWS_SESSION_TOKEN": "valid-session-token-workspace",
                 "CALLING_WORKSPACE_ACCESS_TOKEN": "valid-calling-token",
                 "AWS_ACCESS_KEY_ID": "null",
                 "AWS_SECRET_ACCESS_KEY": "null",
@@ -773,7 +742,10 @@ async def test_get_job_results(mock_send_request, ades_client):
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_request, ades_client):
     mock_job_saver = MagicMock()
     mock_job_saver.get_job_details.return_value = {
@@ -929,7 +901,10 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_get_deployed_workspaced_jobs_query(
     mock_get_user_details, mock_send_request, ades_client
 ):
@@ -1200,7 +1175,10 @@ async def test_get_deployed_workspaced_jobs_query(
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
     mock_get_user_details, mock_send_request, ades_client
 ):
@@ -1265,7 +1243,10 @@ async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "yet-another-workspace"], []),
+)
 async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
     mock_get_user_details, mock_send_request, ades_client
 ):
@@ -1319,7 +1300,10 @@ async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.get_user_details", return_value=("username", "test-workspace", []))
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
+)
 async def test_get_all_jobs(mock_get_user_details, mock_send_request, ades_client):
     mock_send_request.return_value = MagicMock(
         status_code=200, json=lambda: {"jobID": "job-id-details"}
@@ -1386,7 +1370,12 @@ def test_check_workflow_access_public(
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "another-workspace"],
+        [],
+    )
 
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(read=MagicMock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -1411,8 +1400,8 @@ def test_check_workflow_access_public(
     )
 
     mock_logger.info.assert_any_call(
-        "Checking workspace %s has access to workflow %s in workspace %s",
-        "test-workspace",
+        "Checking user %s has access to workflow %s in workspace %s",
+        "username",
         workflow_id,
         deploy_workspace,
     )
@@ -1430,7 +1419,12 @@ def test_check_workflow_access_workspace_owner(
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "deployed-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "deployed-workspace",
+        ["other-workspace", "deployed-workspace", "another-workspace"],
+        [],
+    )
 
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(read=MagicMock(return_value=json.dumps({"public": True}).encode("utf-8")))
@@ -1448,7 +1442,7 @@ def test_check_workflow_access_workspace_owner(
         workflow_id=workflow_id,
     )
     assert result[0] is True
-    assert result[1] == "Workspace owns this workflow"
+    assert result[1] == "User has access to the owning workspace"
     mock_boto3_client.assert_not_called()
 
 
@@ -1464,7 +1458,12 @@ def test_check_workflow_access_user_service(
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "another-workspace"],
+        [],
+    )
 
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(
@@ -1491,8 +1490,8 @@ def test_check_workflow_access_user_service(
     )
 
     mock_logger.info.assert_any_call(
-        "Checking workspace %s has access to workflow %s in workspace %s",
-        "test-workspace",
+        "Checking user %s has access to workflow %s in workspace %s",
+        "username",
         workflow_id,
         deploy_workspace,
     )
@@ -1510,7 +1509,12 @@ def test_check_workflow_access_user_access(
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "another-workspace"],
+        [],
+    )
 
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(
@@ -1553,7 +1557,12 @@ def test_check_workflow_access_no_user_access(
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "yet-another-workspace"],
+        [],
+    )
 
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(
@@ -1606,7 +1615,12 @@ def test_check_workflow_access_no_policy(
     )
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "another-workspace"],
+        [],
+    )
 
     request = MagicMock(spec=Request)
     request.headers = {"authorization": "Bearer testtoken"}
@@ -1648,7 +1662,12 @@ def test_check_workflow_access_invalid_policy(
     }
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_get_user_details.return_value = "username", "test-workspace", []
+    mock_get_user_details.return_value = (
+        "username",
+        "test-workspace",
+        ["other-workspace", "test-workspace", "another-workspace"],
+        [],
+    )
 
     request = MagicMock(spec=Request)
     request.headers = {"authorization": "Bearer testtoken"}
