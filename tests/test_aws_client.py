@@ -52,7 +52,7 @@ def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_cre
 
     assert result == {
         "calling_workspace": {
-            "aws_creds": {"key": "value-calling"},
+            "aws_creds": {},
             "api_token": "longer-lasting-token-calling",
         },
         "executing_workspace": {
@@ -61,28 +61,15 @@ def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_cre
         },
     }
 
-    assert mock_get_credentials.call_count == 2
+    assert mock_get_credentials.call_count == 1
 
-    mock_get_credentials.assert_any_call(
-        ROLE_ARN_WORKSPACE,
-        token,
-        calling_workspace,
-        {
-            "calling_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-calling"},
-            "executing_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-executing"},
-        },
-        "calling_workspace",
-        "workflow-id",
-        username=username,
-        service_scope=False,
-    )
     mock_get_credentials.assert_any_call(
         "role-arn-service",
         token,
         executing_workspace,
         {
             "calling_workspace": {
-                "aws_creds": {"key": "value-calling"},
+                "aws_creds": {},
                 "api_token": "longer-lasting-token-calling",
             },
             "executing_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-executing"},
@@ -127,7 +114,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
 
     assert result == {
         "calling_workspace": {
-            "aws_creds": {"key": "value-calling"},
+            "aws_creds": {},
             "api_token": "longer-lasting-token-calling",
         },
         "executing_workspace": {
@@ -136,21 +123,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
         },
     }
 
-    assert mock_get_credentials.call_count == 2
-
-    mock_get_credentials.assert_any_call(
-        ROLE_ARN_WORKSPACE,
-        token,
-        calling_workspace,
-        {
-            "calling_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-calling"},
-            "executing_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-calling"},
-        },
-        "calling_workspace",
-        "workflow-id",
-        username=username,
-        service_scope=False,
-    )
+    assert mock_get_credentials.call_count == 1
 
     mock_get_credentials.assert_any_call(
         ROLE_ARN_SERVICE,
@@ -158,7 +131,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
         calling_workspace,
         {
             "calling_workspace": {
-                "aws_creds": {"key": "value-calling"},
+                "aws_creds": {},
                 "api_token": "longer-lasting-token-calling",
             },
             "executing_workspace": {"aws_creds": {}, "api_token": "longer-lasting-token-calling"},

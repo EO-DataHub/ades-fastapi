@@ -396,7 +396,7 @@ async def execute_process(
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
-        username, workspace, _ = get_user_details(request)
+        username, workspace, workspaces, _ = get_user_details(request)
         job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
 
     return Response(

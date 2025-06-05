@@ -57,12 +57,15 @@ def test_get_user_details(mock_jwt_decode):
     mock_jwt_decode.return_value = {
         "preferred_username": "username",
         "workspace": "my-workspace",
+        "workspaces": ["my-workspace", "another-workspace"],
         "realm_access": {"roles": ["role1", "role2"]},
     }
 
-    username, workspace, roles = get_user_details(request)
+    username, workspace, workspaces, roles = get_user_details(request)
 
+    assert username == "username"
     assert workspace == "my-workspace"
+    assert workspaces == ["my-workspace", "another-workspace"]
     assert roles == ["role1", "role2"]
     mock_jwt_decode.assert_called_once_with(
         "testtoken",
