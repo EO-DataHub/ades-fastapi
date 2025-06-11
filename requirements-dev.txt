@@ -136,7 +136,7 @@ pyyaml==6.0.2
     #   ades-fastapi (pyproject.toml)
     #   pre-commit
     #   responses
-requests==2.32.3
+requests==2.32.4
     # via
     #   ades-fastapi (pyproject.toml)
     #   moto
