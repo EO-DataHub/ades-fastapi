@@ -300,6 +300,33 @@ def test_get_workflow_id_from_file():
                 type: string
             input2:
                 type: string
+        steps:
+            step1:
+                run: some_tool.cwl
+            step2:
+                run: another_tool.cwl
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "test_workflow_id"
+    assert success
+
+
+def test_get_workflow_id_from_file_list():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+        - id: input1
+          type: string
+        - id: input2
+          type: string
+        steps:
+        - id: step1
+          run: some_tool.cwl
+        - id: step2
+          run: another_tool.cwl
     """
 
     success, result = get_workflow_id_from_file(cwl_str)
@@ -317,6 +344,77 @@ def test_get_workflow_id_from_file_illegal_input():
                 type: string
             input2:
                 type: string
+        steps:
+            step1:
+                run: some_tool.cwl
+            step2:
+                run: another_tool.cwl
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "Input token is not allowed in workflow"
+    assert not success
+
+
+def test_get_workflow_id_from_file_illegal_step():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+            input1:
+                type: string
+            input2:
+                type: string
+        steps:
+            node_stage_in-xxx:
+                run: some_tool.cwl
+            step2:
+                run: another_tool.cwl
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "Step node_stage_in-xxx is not allowed in workflow"
+    assert not success
+
+
+def test_get_workflow_id_from_file_list_illegal_input():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+        - id: input1
+          type: string
+        - id: input2
+          type: string
+        steps:
+        - id: step1
+          run: some_tool.cwl
+        - id: node_stage_out
+          run: another_tool.cwl
+    """
+
+    success, result = get_workflow_id_from_file(cwl_str)
+    assert result == "Step node_stage_out is not allowed in workflow"
+    assert not success
+
+
+def test_get_workflow_id_from_file_list_illegal_step():
+    cwl_str = """
+    $graph:
+      - class: Workflow
+        id: test_workflow_id
+        inputs:
+        - id: token
+          type: string
+        - id: input2
+          type: string
+        steps:
+        - id: step1
+          run: some_tool.cwl
+        - id: step2
+          run: another_tool.cwl
     """
 
     success, result = get_workflow_id_from_file(cwl_str)
