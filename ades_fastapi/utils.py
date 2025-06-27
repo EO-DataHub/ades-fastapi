@@ -136,7 +136,9 @@ def replace_href_links(
 
 def check_workflow_inputs(data: dict) -> tuple:
     inputs = data.get("inputs", {})
+    logger.debug("Checking workflow inputs: %s", inputs)
     steps = data.get("steps", {})
+    logger.debug("Checking workflow steps: %s", steps)
     if isinstance(inputs, list):
         for input in inputs:
             if input["id"].lower() in ILLEGAL_WORKFLOW_INPUTS:
