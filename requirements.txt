@@ -54,7 +54,7 @@ python-dateutil==2.9.0.post0
     # via botocore
 pyyaml==6.0.2
     # via ades-fastapi (pyproject.toml)
-requests==2.32.3
+requests==2.32.4
     # via ades-fastapi (pyproject.toml)
 s3transfer==0.10.4
     # via boto3

@@ -231,7 +231,7 @@ class ADESClient:
         )
 
         allowed_count = 0
-        if "application/json" in response.headers["Content-Type"]:
+        if "application/json" in response.headers.get("Content-Type", []):
             content_json = response.json()
             content_json = replace_href_links(
                 content_json, self.base_url, self.catalog_root, deploy_workspace
@@ -264,7 +264,7 @@ class ADESClient:
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        if "application/json" in request.headers["Content-Type"]:
+        if "application/json" in request.headers.get("Content-Type", []):
             logger.info("Deploying workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
@@ -272,7 +272,7 @@ class ADESClient:
             if not success:
                 raise HTTPException(status_code=400, detail=detail)
 
-        elif "application/cwl+yaml" in request.headers["Content-Type"]:
+        elif "application/cwl+yaml" in request.headers.get("Content-Type", []):
             logger.info(
                 "Deploying workflow from CWL file content to workspace %s", deploy_workspace
             )
@@ -297,7 +297,7 @@ class ADESClient:
             "POST", f"{deploy_workspace}/ogc-api/processes", headers, data
         )
 
-        if "application/json" in response.headers["Content-Type"]:
+        if "application/json" in response.headers.get("Content-Type", []):
             content_json = response.json()
             content_json = replace_href_links(
                 content_json, self.base_url, self.catalog_root, deploy_workspace
@@ -314,7 +314,7 @@ class ADESClient:
                 self.catalog_root,
                 deploy_workspace,
             ),
-            "Content-Type": response.headers["Content-Type"],
+            "Content-Type": response.headers.get("Content-Type", []),
         }
 
         return response, content
@@ -325,14 +325,14 @@ class ADESClient:
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        if "application/json" in request.headers["Content-Type"]:
+        if "application/json" in request.headers.get("Content-Type", []):
             logger.info("Updating workflow from URL to workspace %s", deploy_workspace)
             # Handle HTTP file content
             data = {"json": await request.json()}
             success, detail = get_workflow_id_from_url(data["json"]["executionUnit"]["href"])
             if not success:
                 raise HTTPException(status_code=400, detail=detail)
-        elif "application/cwl+yaml" in request.headers["Content-Type"]:
+        elif "application/cwl+yaml" in request.headers.get("Content-Type", []):
             logger.info("Updating workflow from CWL file content to workspace %s", deploy_workspace)
             # Handle string file content
             file_content = await request.body()
