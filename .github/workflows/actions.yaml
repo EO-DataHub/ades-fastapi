@@ -10,6 +10,8 @@ on:
 jobs:
   pre-commit-preparation:
     name: Pre-commit
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -24,14 +26,20 @@ jobs:
 
   security-scan:
     name: Call Security Scan
+    permissions:
+      contents: read
     uses: EO-DataHub/github-actions/.github/workflows/security.yaml@main
 
   unit-tests:
     name: Run unit tests
+    permissions:
+      contents: read
     uses: EO-DataHub/github-actions/.github/workflows/unit-tests-python.yaml@main
 
   get-tag-name:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       image_tag: ${{ steps.get-image-tag.outputs.IMAGE_TAG }}
     steps:
