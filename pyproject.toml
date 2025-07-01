@@ -79,7 +79,7 @@ classifiers = [
 dependencies = [
   "fastapi",
   "uvicorn",
-  "requests>=2.32.4",
+  "requests",
   "pyjwt",
   "pyyaml",
   "boto3",

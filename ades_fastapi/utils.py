@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 ILLEGAL_WORKFLOW_INPUTS_RAW = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
 ILLEGAL_WORKFLOW_INPUTS = [input.strip().lower() for input in ILLEGAL_WORKFLOW_INPUTS_RAW]
 
+ILLEGAL_WORKFLOW_STEPS_RAW = os.getenv(
+    "ILLEGAL_WORKFLOW_STEPS", "node_stage_in,node_stage_out"
+).split(",")
+ILLEGAL_WORKFLOW_STEPS = [step.strip().lower() for step in ILLEGAL_WORKFLOW_STEPS_RAW]
+
 
 class WorkflowType(Enum):
     DEFAULT = "default"
@@ -131,6 +136,9 @@ def replace_href_links(
 
 def check_workflow_inputs(data: dict) -> tuple:
     inputs = data.get("inputs", {})
+    logger.debug("Checking workflow inputs: %s", inputs)
+    steps = data.get("steps", {})
+    logger.debug("Checking workflow steps: %s", steps)
     if isinstance(inputs, list):
         for input in inputs:
             if input["id"].lower() in ILLEGAL_WORKFLOW_INPUTS:
@@ -139,6 +147,16 @@ def check_workflow_inputs(data: dict) -> tuple:
         for key, _ in inputs.items():
             if key.lower() in ILLEGAL_WORKFLOW_INPUTS:
                 return False, f"Input {key} is not allowed in workflow"
+    if isinstance(steps, list):
+        for step in steps:
+            for illegal_step in ILLEGAL_WORKFLOW_STEPS:
+                if step["id"].lower().startswith(illegal_step):
+                    return False, f"Step {step['id']} is not allowed in workflow"
+    elif isinstance(steps, dict):
+        for key, _ in steps.items():
+            for illegal_step in ILLEGAL_WORKFLOW_STEPS:
+                if key.lower().startswith(illegal_step):
+                    return False, f"Step {key} is not allowed in workflow"
     return True, data["id"]
 
 
