@@ -504,9 +504,7 @@ class ADESClient:
     ) -> requests.Response:
         username, workspace, workspaces, _ = get_user_details(request)
         token = get_user_token(request)
-        aws_creds = generate_aws_credentials(
-            token, username, workspace, deploy_workspace, workflow_id
-        )
+        aws_creds = generate_aws_credentials(token, username, workspace, workspace, workflow_id)
         try:
             body = await request.json()
         except json.JSONDecodeError as err:
