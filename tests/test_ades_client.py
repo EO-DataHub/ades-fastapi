@@ -425,6 +425,10 @@ async def test_execute_workflow(
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running", "jobID": "job_id"}, indent=2)
 
+    mock_generate_aws_credentials.assert_called_once_with(
+        "valid-token", "username", "test-workspace", "test-workspace", "workflow-id"
+    )
+
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.generate_aws_credentials")
@@ -487,6 +491,10 @@ async def test_execute_user_service(
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running"}, indent=2)
 
+    mock_generate_aws_credentials.assert_called_once_with(
+        "valid-token", "username", "test-workspace", "deploy_workspace", "workflow-id"
+    )
+
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.generate_aws_credentials")
@@ -541,6 +549,10 @@ async def test_execute_user_service_missing_executing_creds(
     )
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running"}, indent=2)
+
+    mock_generate_aws_credentials.assert_called_once_with(
+        "valid-token", "username", "test-workspace", "deploy_workspace", "workflow-id"
+    )
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
