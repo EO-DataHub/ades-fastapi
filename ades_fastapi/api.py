@@ -379,7 +379,7 @@ async def execute_process(
 ):
     """An endpoint to execute a workflow in a specified workspace"""
     log_text = workflow_type.value
-    logger.info("Executing %s %s in workspace %s", log_text, workflow_id, deploy_workspace)
+    logger.info("Executing %s %s deployed to workspace %s", log_text, workflow_id, deploy_workspace)
     match workflow_type:
         case WorkflowType.USER_SERVICE:
             response, content = await ades_client.execute_user_service(
