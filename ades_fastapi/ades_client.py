@@ -1,10 +1,11 @@
 import json
 import logging
 import os
-from typing import List, Optional
+from collections.abc import Sequence
+from typing import Any
 
 import boto3
-import botocore
+import botocore.exceptions
 import requests
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -34,7 +35,7 @@ class ADESClient:
         policy_bucket: str,
         policy_prefix: str,
         catalog_root: str,
-    ):
+    ) -> None:
         self.service_endpoint = service_endpoint
         self.base_url = base_url
         self.policy_bucket = policy_bucket
@@ -46,7 +47,7 @@ class ADESClient:
         request: Request,
         deploy_workspace: str,
         workflow_id: str,
-    ) -> tuple:
+    ) -> tuple[bool, str]:
         """Check if the workflow is accessible to the current user"""
         username, workspace, workspaces, _ = get_user_details(request)
 
@@ -107,9 +108,7 @@ class ADESClient:
 
         # Check if workflow is a user service
         if workflow_policy.get("user_service"):
-            logger.info(
-                "Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace
-            )
+            logger.info("Workflow %s in workspace %s is a user service", workflow_id, deploy_workspace)
             return True, "Workflow is a user-service"
         # Check if workflow is public
         elif workflow_policy.get("public"):
@@ -118,9 +117,7 @@ class ADESClient:
         else:
             # Check if user is in the allowed list
             workspaces_set = set(workspaces)
-            if workspaces_set & set(
-                workflow_policy.get("allowed_access", {}).get("workspaces", set())
-            ):
+            if workspaces_set & set(workflow_policy.get("allowed_access", {}).get("workspaces", set())):
                 logger.info(
                     "User has access to a workspace in the allowed list for workflow %s in workspace %s",
                     workflow_id,
@@ -143,10 +140,10 @@ class ADESClient:
         self,
         verb: str,
         url_path: str = "",
-        headers: Optional[dict] = None,
-        data: Optional[dict] = None,
+        headers: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: int = 10,
-    ):
+    ) -> Any:
         # Construct requests function
         if verb == "GET":
             func = requests.get
@@ -156,6 +153,9 @@ class ADESClient:
             func = requests.put
         elif verb == "DELETE":
             func = requests.delete
+        else:
+            msg = f"Unsupported HTTP verb: {verb}"
+            raise ValueError(msg)
 
         if url_path:
             url = f"{self.service_endpoint}/{url_path}"
@@ -174,32 +174,31 @@ class ADESClient:
 
         return response
 
-    def get_root(self):
+    def get_root(self) -> Any:
         try:
             response = self._send_request("GET")
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
         return response
 
-    def get_workspace_root(self, deploy_workspace: str):
+    def get_workspace_root(self, deploy_workspace: str) -> Any:
+        url = f"{deploy_workspace}/ogc-api/"
         try:
-            url = f"{deploy_workspace}/ogc-api/"
             response = self._send_request("GET", url)
-            content_json = response.json()
-            content = json.dumps(
-                replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace)
-            )
         except requests.exceptions.ConnectionError:
             return JSONResponse(content={"message": "Service Unavailable"}, status_code=503)
+        try:
+            content_json = response.json()
+            content = json.dumps(replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace))
         except json.JSONDecodeError:
             content = response.text
         return response, content
 
-    def undeploy_workflow(self, headers: dict, deploy_workspace: str, workflow_id: str):
+    def undeploy_workflow(
+        self, headers: dict[str, Any], deploy_workspace: str, workflow_id: str
+    ) -> tuple[requests.Response, str]:
         headers.pop("authorization", None)
-        response = self._send_request(
-            "DELETE", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers
-        )
+        response = self._send_request("DELETE", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers)
 
         try:
             content = json.dumps(response.json())
@@ -210,15 +209,15 @@ class ADESClient:
 
     def list_processes(
         self,
-        request: requests.Request,
+        request: Request,
         deploy_workspace: str,
-        limit: Optional[int],
-        skip: Optional[int],
-    ):
+        limit: int | None,
+        skip: int | None,
+    ) -> tuple[requests.Response, str]:
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        final_content = {}
+        final_content: dict[str, Any] = {}
         final_content["processes"] = []
 
         # For now, request all workflows and filter by access, using limit and skip after
@@ -233,9 +232,7 @@ class ADESClient:
         allowed_count = 0
         if "application/json" in response.headers.get("Content-Type", []):
             content_json = response.json()
-            content_json = replace_href_links(
-                content_json, self.base_url, self.catalog_root, deploy_workspace
-            )
+            content_json = replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace)
             final_content["links"] = content_json.get("links")
             for process_json in content_json.get("processes", []):
                 access, description = self._check_workflow_access(
@@ -247,9 +244,7 @@ class ADESClient:
                     allowed_count += 1
                     if skip and allowed_count <= skip:
                         continue
-                    process_json = replace_href_links(
-                        process_json, self.base_url, self.catalog_root, deploy_workspace
-                    )
+                    process_json = replace_href_links(process_json, self.base_url, self.catalog_root, deploy_workspace)
                     process_json.update({"AccessReasoning": description})
                     final_content["processes"].append(process_json)
                     if len(final_content["processes"]) == limit:
@@ -260,7 +255,7 @@ class ADESClient:
 
         return response, content
 
-    async def deploy_workflow(self, request: requests.Request, deploy_workspace: str):
+    async def deploy_workflow(self, request: Request, deploy_workspace: str) -> tuple[requests.Response, str]:
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
@@ -273,9 +268,7 @@ class ADESClient:
                 raise HTTPException(status_code=400, detail=detail)
 
         elif "application/cwl+yaml" in request.headers.get("Content-Type", []):
-            logger.info(
-                "Deploying workflow from CWL file content to workspace %s", deploy_workspace
-            )
+            logger.info("Deploying workflow from CWL file content to workspace %s", deploy_workspace)
             # Handle string file content
             file_content = await request.body()
 
@@ -288,20 +281,13 @@ class ADESClient:
         else:
             raise HTTPException(
                 status_code=415,
-                detail=(
-                    "Unsupported content type. Only application/json and "
-                    "application/cwl+yaml are supported"
-                ),
+                detail=("Unsupported content type. Only application/json and application/cwl+yaml are supported"),
             )
-        response = self._send_request(
-            "POST", f"{deploy_workspace}/ogc-api/processes", headers, data
-        )
+        response = self._send_request("POST", f"{deploy_workspace}/ogc-api/processes", headers, data)
 
         if "application/json" in response.headers.get("Content-Type", []):
             content_json = response.json()
-            content_json = replace_href_links(
-                content_json, self.base_url, self.catalog_root, deploy_workspace
-            )
+            content_json = replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace)
             content = json.dumps(content_json, indent=2)
         else:
             content = response.text
@@ -320,8 +306,8 @@ class ADESClient:
         return response, content
 
     async def update_workflow(
-        self, request: requests.Request, deploy_workspace: str, workflow_id: str
-    ):
+        self, request: Request, deploy_workspace: str, workflow_id: str
+    ) -> tuple[requests.Response, str]:
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
@@ -345,20 +331,15 @@ class ADESClient:
         else:
             raise HTTPException(
                 status_code=415,
-                detail=(
-                    "Unsupported content type. Only application/json and "
-                    "application/cwl+yaml are supported"
-                ),
+                detail=("Unsupported content type. Only application/json and application/cwl+yaml are supported"),
             )
 
-        response = self._send_request(
-            "PUT", f"{deploy_workspace}/ogc-api/processes/{detail}", headers, data
-        )
+        response = self._send_request("PUT", f"{deploy_workspace}/ogc-api/processes/{detail}", headers, data)
 
         try:
             content = json.dumps(response.json(), indent=2)
         except json.JSONDecodeError:
-            content = response.text if response.text else ""
+            content = response.text or ""
 
         # Need to include Location header from ADES to support deploy status endpoint
         response.headers.update(
@@ -375,17 +356,17 @@ class ADESClient:
         return response, content
 
     def get_workflow(
-        self, headers: dict, deploy_workspace: str, workflow_id: str, wf_type: WorkflowType
-    ):
+        self,
+        headers: dict[str, Any],
+        deploy_workspace: str,
+        workflow_id: str,
+        wf_type: WorkflowType,
+    ) -> tuple[requests.Response, str]:
         headers.pop("authorization", None)
-        response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers
-        )
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/processes/{workflow_id}", headers)
         try:
             content_json = response.json()
-            content_json = replace_href_links(
-                content_json, self.base_url, self.catalog_root, deploy_workspace
-            )
+            content_json = replace_href_links(content_json, self.base_url, self.catalog_root, deploy_workspace)
             if wf_type is WorkflowType.USER_SERVICE:
                 content_json.update({"AccessReasoning": "Workflow is a user-service"})
             content = json.dumps(content_json, indent=2)
@@ -398,8 +379,11 @@ class ADESClient:
 
     @staticmethod
     def _configure_execute_request(
-        body: dict, creds: dict, calling_workspace: str, executing_workspace: str = None
-    ):
+        body: dict[str, Any],
+        creds: dict[str, Any],
+        calling_workspace: str,
+        executing_workspace: str | None = None,
+    ) -> None:
 
         api_token_calling = creds.get("calling_workspace", {}).get("api_token", {})
         aws_creds_executing = creds.get("executing_workspace", {}).get("aws_creds", {})
@@ -416,34 +400,19 @@ class ADESClient:
             logger.info("Setting user token in execution call")
             body["inputs"].update({"CALLING_WORKSPACE_ACCESS_TOKEN": api_token_calling})
             # Add executing credentials
-            if not (
-                body["inputs"].get("AWS_ACCESS_KEY_ID") and body["inputs"].get("aws_access_key_id")
-            ):
-                body["inputs"].update(
-                    {"AWS_ACCESS_KEY_ID": aws_creds_executing.get("AccessKeyId", "null")}
-                )
-            if not (
-                body["inputs"].get("AWS_SECRET_ACCESS_KEY")
-                and body["inputs"].get("aws_secret_access_key")
-            ):
-                body["inputs"].update(
-                    {"AWS_SECRET_ACCESS_KEY": aws_creds_executing.get("SecretAccessKey", "null")}
-                )
-            if not (
-                body["inputs"].get("AWS_SESSION_TOKEN") and body["inputs"].get("aws_session_token")
-            ):
-                body["inputs"].update(
-                    {"AWS_SESSION_TOKEN": aws_creds_executing.get("SessionToken", "null")}
-                )
+            if not (body["inputs"].get("AWS_ACCESS_KEY_ID") and body["inputs"].get("aws_access_key_id")):
+                body["inputs"].update({"AWS_ACCESS_KEY_ID": aws_creds_executing.get("AccessKeyId", "null")})
+            if not (body["inputs"].get("AWS_SECRET_ACCESS_KEY") and body["inputs"].get("aws_secret_access_key")):
+                body["inputs"].update({"AWS_SECRET_ACCESS_KEY": aws_creds_executing.get("SecretAccessKey", "null")})
+            if not (body["inputs"].get("AWS_SESSION_TOKEN") and body["inputs"].get("aws_session_token")):
+                body["inputs"].update({"AWS_SESSION_TOKEN": aws_creds_executing.get("SessionToken", "null")})
             # TODO: Allow user service tokens to be generate when needed
             body["inputs"].update({"WORKSPACE_ACCESS_TOKEN": api_token_executing})
         except KeyError as e:
             logger.error("KeyError: %s", e)
             raise HTTPException(status_code=400, detail="Invalid input payload") from e
 
-    def _send_execute_to_ades(
-        self, deploy_workspace: str, workflow_id: str, body: dict
-    ) -> requests.Response:
+    def _send_execute_to_ades(self, deploy_workspace: str, workflow_id: str, body: dict[str, Any]) -> Any:
         headers = {
             "Prefer": "respond-async",
             "Content-Type": "application/json",
@@ -458,31 +427,25 @@ class ADESClient:
 
     async def execute_user_service(
         self,
-        request: requests.Request,
+        request: Request,
         deploy_workspace: str,
         workflow_id: str,
-    ) -> requests.Response:
-        username, workspace, workspaces, _ = get_user_details(
+    ) -> tuple[requests.Response, str]:
+        username, workspace, _workspaces, _ = get_user_details(
             request
         )  # check this is the correct way to extract calling workspace
         token = get_user_token(request)
-        aws_creds = generate_aws_credentials(
-            token, username, workspace, deploy_workspace, workflow_id
-        )
+        aws_creds = generate_aws_credentials(token, username, workspace, deploy_workspace, workflow_id)
         try:
             body = await request.json()
         except json.JSONDecodeError as err:
-            raise HTTPException(
-                status_code=400, detail="Invalid input payload, not valid JSON"
-            ) from err
+            raise HTTPException(status_code=400, detail="Invalid input payload, not valid JSON") from err
         self._configure_execute_request(body, aws_creds, workspace, deploy_workspace)
         response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
             try:
-                content_json = replace_href_links(
-                    response.json(), self.base_url, self.catalog_root, deploy_workspace
-                )
+                content_json = replace_href_links(response.json(), self.base_url, self.catalog_root, deploy_workspace)
                 content = json.dumps(content_json, indent=2)
             except json.JSONDecodeError:
                 content = response.text
@@ -498,29 +461,25 @@ class ADESClient:
 
     async def execute_workflow(
         self,
-        request: requests.Request,
+        request: Request,
         deploy_workspace: str,
         workflow_id: str,
-    ) -> requests.Response:
-        username, workspace, workspaces, _ = get_user_details(request)
+    ) -> tuple[requests.Response, str]:
+        username, workspace, _workspaces, _ = get_user_details(request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(token, username, workspace, workspace, workflow_id)
         try:
             body = await request.json()
         except json.JSONDecodeError as err:
-            raise HTTPException(
-                status_code=400, detail="Invalid input payload, not valid JSON"
-            ) from err
+            raise HTTPException(status_code=400, detail="Invalid input payload, not valid JSON") from err
         self._configure_execute_request(body, aws_creds, workspace, workspace)
         response = self._send_execute_to_ades(deploy_workspace, workflow_id, body)
         # Record the calling workspace for the generated jobID
         if response.status_code == 201:
             try:
-                content_json = replace_href_links(
-                    response.json(), self.base_url, self.catalog_root, deploy_workspace
-                )
+                content_json = replace_href_links(response.json(), self.base_url, self.catalog_root, deploy_workspace)
                 content = json.dumps(content_json, indent=2)
-            except json.json.JSONDecodeError:
+            except json.JSONDecodeError:
                 content = response.text
 
             if "Location" in response.headers:
@@ -535,9 +494,7 @@ class ADESClient:
         """Format the status link to include the base URL"""
         for link in links:
             if link["rel"] == "monitor":
-                link["href"] = (
-                    f"{self.base_url}/catalogs/user/catalogs/{workspace}/processes/{workflow_id}/execution"
-                )
+                link["href"] = f"{self.base_url}/catalogs/user/catalogs/{workspace}/processes/{workflow_id}/execution"
         return links
 
     def _format_log_links(self, links: list, workspace: str, job_id: str) -> list:
@@ -545,32 +502,28 @@ class ADESClient:
         for link in links:
             if link["rel"] == "related":
                 log_name = link["href"].rsplit("/", 1)[1]
-                link["href"] = (
-                    f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}/{log_name}"
-                )
+                link["href"] = f"{self.base_url}/catalogs/user/catalogs/{workspace}/jobs/{job_id}/{log_name}"
         return links
 
-    def get_job_status(self, headers: dict, deploy_workspace: str, job_id: str):
+    def get_job_status(
+        self, headers: dict[str, Any], deploy_workspace: str, job_id: str
+    ) -> tuple[requests.Response, str]:
         headers.pop("authorization", None)
         response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
 
-        content_json = replace_href_links(
-            response.json(), self.base_url, self.catalog_root, deploy_workspace
-        )
+        content_json = replace_href_links(response.json(), self.base_url, self.catalog_root, deploy_workspace)
 
-        content_json["links"] = self._format_log_links(
-            content_json["links"], deploy_workspace, job_id
-        )
+        content_json["links"] = self._format_log_links(content_json["links"], deploy_workspace, job_id)
 
         content = json.dumps(content_json, indent=2)
 
         return response, content
 
-    def get_job_results(self, headers: dict, deploy_workspace: str, job_id: str):
+    def get_job_results(
+        self, headers: dict[str, Any], deploy_workspace: str, job_id: str
+    ) -> tuple[requests.Response, str]:
         headers.pop("authorization", None)
-        response = self._send_request(
-            "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}/results", headers
-        )
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}/results", headers)
         try:
             content = json.dumps(response.json())
         except json.JSONDecodeError:
@@ -580,21 +533,21 @@ class ADESClient:
 
     def get_deployed_workspaced_jobs(
         self,
-        request,
+        request: Request,
         deploy_workspace: str,
         job_saver: JobSaver,
-        limit: Optional[int] = None,
-        skip: Optional[int] = None,
-        status: Optional[List[str]] = None,
-        datetime: Optional[str] = None,
-    ):
-        username, workspace, workspaces, _ = get_user_details(request)
+        limit: int | None = None,
+        skip: int | None = None,
+        status: Sequence[str] | None = None,
+        datetime: str | None = None,
+    ) -> tuple[requests.Response, str]:
+        _username, _workspace, workspaces, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
         # Add limit to data params
-        params = {}
+        params: dict[str, Any] = {}
         if limit:
             params.update({"limit": limit})
         if skip:
@@ -642,9 +595,7 @@ class ADESClient:
                     break
             elif job_details.get("workflow_type") == "user-service":
                 if job_details.get("deploy_workspace") in workspaces:
-                    job = replace_href_links(
-                        job, self.base_url, self.catalog_root, deploy_workspace
-                    )
+                    job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
                     job["links"] = self._format_log_links(job["links"], deploy_workspace, job_id)
                     filtered_jobs.append(job)
                     if limit and len(filtered_jobs) == limit:
@@ -653,16 +604,14 @@ class ADESClient:
         response_json["jobs"] = filtered_jobs
         response_json["numberTotal"] = len(filtered_jobs)
 
-        response_json = replace_href_links(
-            response_json, self.base_url, self.catalog_root, deploy_workspace
-        )
+        response_json = replace_href_links(response_json, self.base_url, self.catalog_root, deploy_workspace)
 
         content = json.dumps(response_json)
 
         return response, content
 
-    def get_all_jobs(self, request, workspace_jobs):
-        username, workspace, workspaces, _ = get_user_details(request)
+    def get_all_jobs(self, request: Request, workspace_jobs: dict[str, Any]) -> str:
+        _username, workspace, _workspaces, _ = get_user_details(request)
 
         headers = dict(request.headers)
         headers.pop("authorization", None)
@@ -672,13 +621,9 @@ class ADESClient:
         for job in workspace_jobs.get(workspace, []):
             deploy_workspace = job["deploy_workspace"]
             job_id = job["jobID"]
-            response = self._send_request(
-                "GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers
-            )
+            response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
             job_details = response.json()
-            job_details = replace_href_links(
-                job_details, self.base_url, self.catalog_root, deploy_workspace
-            )
+            job_details = replace_href_links(job_details, self.base_url, self.catalog_root, deploy_workspace)
             job_details_list.append(job_details)
 
         response_json = {"workspace": workspace, "jobs": job_details_list}
@@ -687,9 +632,7 @@ class ADESClient:
 
         return content
 
-    def _get_workflow_id_from_job_id(
-        self, deploy_workspace: str, job_id: str, headers: dict
-    ) -> str:
+    def _get_workflow_id_from_job_id(self, deploy_workspace: str, job_id: str, headers: dict[str, Any]) -> str:
         response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
         workflow_id = response.json().get("processID", "")
         return workflow_id
@@ -699,38 +642,30 @@ class ADESClient:
         job_id: str,
         file_name: str,
         deploy_workspace: str,
-        headers: dict,
-    ) -> tuple:
+        headers: dict[str, Any],
+    ) -> tuple[requests.Response, bytes]:
         workflow_id = self._get_workflow_id_from_job_id(deploy_workspace, job_id, headers)
 
         if not workflow_id:
             raise HTTPException(status_code=404, detail="Workflow ID for given jobID not found")
 
-        logger.info(
-            "Accessing logs: %s for job: %s and workflow: %s", file_name, job_id, workflow_id
-        )
+        logger.info("Accessing logs: %s for job: %s and workflow: %s", file_name, job_id, workflow_id)
 
         workflow_job_id = f"{workflow_id}-{job_id}"
 
         headers.pop("authorization", None)
 
-        response = self._send_request(
-            "GET", f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}", headers
-        )
+        response = self._send_request("GET", f"{deploy_workspace}/temp/{workflow_job_id}/{file_name}", headers)
 
         return response, response.content
 
-    def delete_job(self, headers: dict, deploy_workspace: str, job_id: str):
+    def delete_job(self, headers: dict[str, Any], deploy_workspace: str, job_id: str) -> tuple[requests.Response, str]:
         headers.pop("authorization", None)
-        response = self._send_request(
-            "DELETE", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers
-        )
+        response = self._send_request("DELETE", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
 
         try:
             response_json = response.json()
-            response_json = replace_href_links(
-                response_json, self.base_url, self.catalog_root, deploy_workspace
-            )
+            response_json = replace_href_links(response_json, self.base_url, self.catalog_root, deploy_workspace)
             content = json.dumps(response_json)
         except json.JSONDecodeError:
             content = response.text

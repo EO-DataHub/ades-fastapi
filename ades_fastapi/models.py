@@ -1,25 +1,28 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PingResponse(BaseModel):
-    status: str
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "PONG"}})
 
-    class Config:
-        schema_extra = {"example": {"status": "PONG"}}
+    status: str
 
 
 class InputsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     title: str
     description: str
-    schema: dict
-    extended_schema: dict = Field(alias="extended-schema", default=None)
+    schema_: dict = Field(alias="schema")
+    extended_schema: dict | None = Field(alias="extended-schema", default=None)
 
 
 class OutputsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     title: str
     description: str
-    schema: dict
-    extended_schema: dict = Field(alias="extended-schema", default=None)
+    schema_: dict = Field(alias="schema")
+    extended_schema: dict | None = Field(alias="extended-schema", default=None)
 
 
 class LinksResponse(BaseModel):
@@ -30,13 +33,8 @@ class LinksResponse(BaseModel):
 
 
 class EmptyResponse(BaseModel):
-    status: str
-    title: str
-    type: str
-    detail: str
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {},
             "error_example": {
                 "title": "NoSuchProcess",
@@ -44,6 +42,12 @@ class EmptyResponse(BaseModel):
                 "detail": "Unable to parse the ZCFG file: workflow.zcfg (No message provided)",
             },
         }
+    )
+
+    status: str
+    title: str
+    type: str
+    detail: str
 
 
 class ProcessDetailsResponse(BaseModel):
@@ -60,10 +64,8 @@ class ProcessDetailsResponse(BaseModel):
 
 
 class ListProcessesResponse(BaseModel):
-    processes: list[ProcessDetailsResponse]
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "processes": [
                     {
@@ -88,24 +90,14 @@ class ListProcessesResponse(BaseModel):
                 ]
             }
         }
+    )
+
+    processes: list[ProcessDetailsResponse]
 
 
 class GetProcessResponse(BaseModel):
-    id: str
-    title: str
-    description: str
-    mutable: bool
-    version: str
-    metadata: list[dict]
-    jobControlOptions: list[str]
-    outputTransmission: list[str]
-    links: list[LinksResponse]
-    inputs: dict[str, InputsResponse]
-    outputs: dict[str, OutputsResponse]
-    AccessReasoning: str
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "echo",
                 "title": "Echo input",
@@ -139,9 +131,7 @@ class GetProcessResponse(BaseModel):
                                         {"$ref": "http://zoo-project.org/dl/link.json"},
                                         {
                                             "type": "object",
-                                            "properties": {
-                                                "type": {"enum": ["text/xml", "application/json"]}
-                                            },
+                                            "properties": {"type": {"enum": ["text/xml", "application/json"]}},
                                         },
                                     ]
                                 },
@@ -234,9 +224,7 @@ class GetProcessResponse(BaseModel):
                                         {"$ref": "http://zoo-project.org/dl/link.json"},
                                         {
                                             "type": "object",
-                                            "properties": {
-                                                "type": {"enum": ["text/xml", "application/json"]}
-                                            },
+                                            "properties": {"type": {"enum": ["text/xml", "application/json"]}},
                                         },
                                     ]
                                 },
@@ -305,21 +293,25 @@ class GetProcessResponse(BaseModel):
                 "detail": "Unable to parse the ZCFG file: workflow.zcfg (No message provided)",
             },
         }
+    )
 
-
-class DeployProcessResponse(BaseModel):
     id: str
     title: str
     description: str
     mutable: bool
     version: str
     metadata: list[dict]
-    outputTransmission: list[str]
     jobControlOptions: list[str]
+    outputTransmission: list[str]
     links: list[LinksResponse]
+    inputs: dict[str, InputsResponse]
+    outputs: dict[str, OutputsResponse]
+    AccessReasoning: str
 
-    class Config:
-        schema_extra = {
+
+class DeployProcessResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "workflowID",
                 "title": "Workflow title",
@@ -339,23 +331,22 @@ class DeployProcessResponse(BaseModel):
                 ],
             }
         }
+    )
+
+    id: str
+    title: str
+    description: str
+    mutable: bool
+    version: str
+    metadata: list[dict]
+    outputTransmission: list[str]
+    jobControlOptions: list[str]
+    links: list[LinksResponse]
 
 
 class ExecuteProcessResponse(BaseModel):
-    progress: int
-    id: str
-    jobID: str
-    type: str
-    processID: str
-    created: str
-    started: str
-    updated: str
-    status: str
-    message: str
-    links: list[LinksResponse]
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "progress": 0,
                 "id": "806e3380-152e-11f0-b600-82b2cc669c52",
@@ -378,23 +369,24 @@ class ExecuteProcessResponse(BaseModel):
             },
             "error_example": {"detail": "Invalid input pyload, not valid JSON"},
         }
+    )
+
+    progress: int
+    id: str
+    jobID: str
+    type: str
+    processID: str
+    created: str
+    started: str
+    updated: str
+    status: str
+    message: str
+    links: list[LinksResponse]
 
 
 class GetJobStatusResponse(BaseModel):
-    progress: int
-    id: str
-    jobID: str
-    type: str
-    processID: str
-    created: str
-    started: str
-    updated: str
-    status: str
-    message: str
-    links: list[LinksResponse]
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "progress": 0,
                 "id": "806e3380-152e-11f0-b600-82b2cc669c52",
@@ -417,13 +409,24 @@ class GetJobStatusResponse(BaseModel):
             },
             "error_example": {"detail": "Invalid input pyload, not valid JSON"},
         }
+    )
+
+    progress: int
+    id: str
+    jobID: str
+    type: str
+    processID: str
+    created: str
+    started: str
+    updated: str
+    status: str
+    message: str
+    links: list[LinksResponse]
 
 
 class GetAllJobStatusResponse(BaseModel):
-    jobs: list[GetJobStatusResponse]
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "jobs": [
                     {
@@ -450,24 +453,24 @@ class GetAllJobStatusResponse(BaseModel):
             },
             "error_example": {"detail": "Invalid input pyload, not valid JSON"},
         }
+    )
+
+    jobs: list[GetJobStatusResponse]
 
 
 class ExtentSpatial(BaseModel):
-    bbox: list[list[float, float, float, float]] = Field(
+    bbox: list[list[float]] = Field(
         ...,
         description="A list of coordinates defining the surrounding bbox for the Collection",
-        example=[[-170, -89, 179, 89]],
+        examples=[[[-170, -89, 179, 89]]],
     )
 
 
 class ExtentTemporal(BaseModel):
-    interval: list[list[str, str]] = Field(
+    interval: list[list[str]] = Field(
         ...,
-        description=(
-            "A list of temporal intervals, where each interval "
-            "is a list containing a start and end time."
-        ),
-        example=[["2025-04-09T10:00:00Z", "2025-04-09T12:00:00Z"]],
+        description="A list of temporal intervals, where each interval is a list containing a start and end time.",
+        examples=[[["2025-04-09T10:00:00Z", "2025-04-09T12:00:00Z"]]],
     )
 
 
@@ -477,18 +480,8 @@ class Extent(BaseModel):
 
 
 class GetJobResultsResponse(BaseModel):
-    type: str
-    id: str
-    stac_version: str
-    description: str
-    title: str
-    extent: Extent
-    license: str
-    keywords: list[str]
-    links: list[LinksResponse]
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "type": "Collection",
                 "id": "col_185e5c6a-152f-11f0-9687-82b2cc669c52",
@@ -520,9 +513,7 @@ class GetJobResultsResponse(BaseModel):
                 "title": "Result Collection for Job 185e5c6a-152f-11f0-9687-82b2cc669c52",
                 "extent": {
                     "spatial": {"bbox": [[-180, -90, 180, 90]]},
-                    "temporal": {
-                        "interval": [["2025-04-09T10:41:10.071152Z", "2025-04-09T10:41:10.071152Z"]]
-                    },
+                    "temporal": {"interval": [["2025-04-09T10:41:10.071152Z", "2025-04-09T10:41:10.071152Z"]]},
                 },
                 "license": "proprietary",
                 "keywords": ["eoepca"],
@@ -533,22 +524,22 @@ class GetJobResultsResponse(BaseModel):
                 "detail": "The job is still running.",
             },
         }
+    )
+
+    type: str
+    id: str
+    stac_version: str
+    description: str
+    title: str
+    extent: Extent
+    license: str
+    keywords: list[str]
+    links: list[LinksResponse]
 
 
 class DeleteJobResponse(BaseModel):
-    id: str
-    jobID: str
-    status: str
-    message: str
-    links: list[LinksResponse]
-    type: str
-    processID: str
-    created: str
-    started: str
-    updated: str
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "13c9aaf4-1531-11f0-b8cf-82b2cc669c52",
                 "jobID": "13c9aaf4-1531-11f0-b8cf-82b2cc669c52",
@@ -574,11 +565,23 @@ class DeleteJobResponse(BaseModel):
                 "detail": "The JobID from the request does not match any of the Jobs running on this server",
             },
         }
+    )
+
+    id: str
+    jobID: str
+    status: str
+    message: str
+    links: list[LinksResponse]
+    type: str
+    processID: str
+    created: str
+    started: str
+    updated: str
 
 
 class GetJobLogResponse(BaseModel):
-
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": "Some log file contents",
         }
+    )

@@ -1,7 +1,9 @@
-# created by virtualenv automatically
 venv/
+.venv/
 *.pyc
 *.egg-info
-*.make-venv-installed
-*.pre-commit-config.yaml
+.pre-commit-config.yaml
 .vscode/
+__pycache__/
+.pytest_cache/
+.ruff_cache/

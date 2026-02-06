@@ -134,7 +134,7 @@ def generate_aws_credentials(
         },
     }
 
-    logger.info(f"Incoming token is {token}")
+    logger.info("Incoming token is %s", token)
 
     # We no longer generate credentials for calling workspace as we now
     # use service accounts to provide this access for stagein and stageout

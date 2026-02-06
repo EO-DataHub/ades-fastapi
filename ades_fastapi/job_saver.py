@@ -1,8 +1,8 @@
 import json
 import logging
 import os
+from typing import Any
 
-import boto3
 import requests
 
 from .utils import WorkflowType
@@ -18,7 +18,7 @@ WORKFLOWS_BUCKET = os.getenv("WORKFLOWS_BUCKET", "workflows-bucket")
 
 
 class JobSaver:
-    def __init__(self, s3_client: boto3.client):
+    def __init__(self, s3_client: Any) -> None:
         self.s3_client = s3_client
 
     def record_owner(
@@ -28,7 +28,7 @@ class JobSaver:
         deploy_workspace: str,
         calling_workspace: str,
         workflow_type: WorkflowType = WorkflowType.WORKFLOW,
-    ):
+    ) -> None:
         """Record workspace of job owner"""
         try:
             job_id = response.json()["jobID"]
@@ -58,7 +58,7 @@ class JobSaver:
             ContentType="application/json",
         )
 
-    def get_job_details(self, workspace: str, job_id: str) -> dict:
+    def get_job_details(self, workspace: str, job_id: str) -> dict[str, Any]:
         """Get job owner from S3 job details"""
         logger.debug(
             "Identifying job details in bucket %s and key %s",
@@ -75,6 +75,6 @@ class JobSaver:
             return {}
         return json.loads(job_details.get("Body").read().decode("utf-8"))
 
-    def get_job_owner(self, workspace: str, job_id: str):
+    def get_job_owner(self, workspace: str, job_id: str) -> str | None:
         job_details = self.get_job_details(workspace, job_id)
         return job_details["calling_workspace"] if job_details else None

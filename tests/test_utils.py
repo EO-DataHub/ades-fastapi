@@ -1,7 +1,7 @@
 import json
 from unittest import mock
 
-import botocore
+import botocore.exceptions
 from fastapi import Request
 
 from ades_fastapi.utils import (
@@ -20,7 +20,7 @@ from ades_fastapi.utils import (
 
 # Mock the logger to avoid unnecessary logging during tests
 @mock.patch("ades_fastapi.utils.logger")
-def test_get_path_params(mock_logger):
+def test_get_path_params(mock_logger: mock.MagicMock) -> None:
     request = mock.Mock(spec=Request)
     request.scope = {"path_params": {"key": "value"}}
     result = get_path_params(request)
@@ -30,7 +30,7 @@ def test_get_path_params(mock_logger):
 
 @mock.patch("ades_fastapi.utils.requests.post")
 @mock.patch("ades_fastapi.utils.logger")
-def test_opa_request(mock_logger, mock_post):
+def test_opa_request(mock_logger: mock.MagicMock, mock_post: mock.MagicMock) -> None:
     input_data = {"key": "value"}
     opa_service_endpoint = "http://opa-service"
 
@@ -43,14 +43,12 @@ def test_opa_request(mock_logger, mock_post):
 
     assert response.status_code == 200
     assert response.json() == {"result": True}
-    mock_logger.debug.assert_called_once_with(
-        "Sending request to OPA service with input: %s", input_data
-    )
+    mock_logger.debug.assert_called_once_with("Sending request to OPA service with input: %s", input_data)
     mock_post.assert_called_once_with(opa_service_endpoint, json=input_data)
 
 
 @mock.patch("ades_fastapi.utils.jwt.decode")
-def test_get_user_details(mock_jwt_decode):
+def test_get_user_details(mock_jwt_decode: mock.MagicMock) -> None:
     request = mock.Mock(spec=Request)
     request.headers = {"authorization": "Bearer testtoken"}
 
@@ -76,7 +74,7 @@ def test_get_user_details(mock_jwt_decode):
 
 @mock.patch("ades_fastapi.utils.boto3.client")
 @mock.patch("ades_fastapi.utils.logger")
-def test_get_access_policy(mock_logger, mock_boto3_client):
+def test_get_access_policy(mock_logger: mock.MagicMock, mock_boto3_client: mock.MagicMock) -> None:
     mock_s3_client = mock.Mock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -89,9 +87,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
     deploy_workspace = "test-workspace"
     workflow_id = "test_workflow"
 
-    result = get_access_policy(
-        deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
-    )
+    result = get_access_policy(deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix)
 
     assert result == {"public": True}
     mock_s3_client.get_object.assert_called_once_with(
@@ -104,9 +100,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         {"Error": {"Code": "NoSuchKey"}}, "get_object"
     )
 
-    result = get_access_policy(
-        deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
-    )
+    result = get_access_policy(deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix)
     assert result is None
     mock_logger.warning.assert_any_call(
         "No access policy found for workflow %s in workspace %s",
@@ -119,9 +113,7 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
         {"Error": {"Code": "SomeOtherError"}}, "get_object"
     )
 
-    result = get_access_policy(
-        deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
-    )
+    result = get_access_policy(deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix)
     assert result is None
     mock_logger.error.assert_any_call(
         "Error getting access policy for workflow %s in workspace %s",
@@ -132,22 +124,18 @@ def test_get_access_policy(mock_logger, mock_boto3_client):
 
 @mock.patch("ades_fastapi.utils.boto3.client")
 @mock.patch("ades_fastapi.utils.logger")
-def test_get_access_policy_json_decode_error(mock_logger, mock_boto3_client):
+def test_get_access_policy_json_decode_error(mock_logger: mock.MagicMock, mock_boto3_client: mock.MagicMock) -> None:
     mock_s3_client = mock.Mock()
     mock_boto3_client.return_value = mock_s3_client
 
-    mock_s3_client.get_object.return_value = {
-        "Body": mock.Mock(read=mock.Mock(return_value="invalid json".encode("utf-8")))
-    }
+    mock_s3_client.get_object.return_value = {"Body": mock.Mock(read=mock.Mock(return_value=b"invalid json"))}
 
     ades_policy_bucket = "test-bucket"
     ades_policy_prefix = "test-prefix"
     deploy_workspace = "test-workspace"
     workflow_id = "test_workflow"
 
-    result = get_access_policy(
-        deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix
-    )
+    result = get_access_policy(deploy_workspace, workflow_id, ades_policy_bucket, ades_policy_prefix)
 
     assert result is None
     mock_logger.error.assert_any_call(
@@ -156,16 +144,16 @@ def test_get_access_policy_json_decode_error(mock_logger, mock_boto3_client):
     )
 
 
-def test_convert_workspace_to_username():
+def test_convert_workspace_to_username() -> None:
     assert convert_workspace_to_username("test_workspace") == "test-workspace"
 
 
-def test_convert_username_to_workspace():
+def test_convert_username_to_workspace() -> None:
     assert convert_username_to_workspace("test-username") == "test_username"
     assert convert_username_to_workspace("") == ""
 
 
-def test_replace_href_links():
+def test_replace_href_links() -> None:
     content_dict = {
         "links": [
             {"href": "http://localhost:8080/test-workspace/ogc-api/extra/path/test1"},
@@ -175,17 +163,15 @@ def test_replace_href_links():
     ades_ingress_path = "http://ades-ingress/path"
     result = replace_href_links(content_dict, ades_ingress_path, "user", "test-workspace")
     assert (
-        result["links"][0]["href"]
-        == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test1"
+        result["links"][0]["href"] == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test1"
     )
     assert (
-        result["links"][1]["href"]
-        == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test2"
+        result["links"][1]["href"] == "http://ades-ingress/path/catalogs/user/catalogs/test-workspace/extra/path/test2"
     )
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url(mock_get):
+def test_get_workflow_id_from_url(mock_get: mock.MagicMock) -> None:
     mock_response = mock.Mock()
     mock_response.text = """
     $graph:
@@ -211,7 +197,7 @@ def test_get_workflow_id_from_url(mock_get):
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url_illegal_input(mock_get):
+def test_get_workflow_id_from_url_illegal_input(mock_get: mock.MagicMock) -> None:
     mock_response = mock.Mock()
     mock_response.text = """
     $graph:
@@ -237,7 +223,7 @@ def test_get_workflow_id_from_url_illegal_input(mock_get):
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url_missing_workflow(mock_get):
+def test_get_workflow_id_from_url_missing_workflow(mock_get: mock.MagicMock) -> None:
     mock_response = mock.Mock()
     mock_response.text = """
     $graph:
@@ -258,7 +244,7 @@ def test_get_workflow_id_from_url_missing_workflow(mock_get):
 
 
 @mock.patch("ades_fastapi.utils.requests.get")
-def test_get_workflow_id_from_url_not_yaml(mock_get):
+def test_get_workflow_id_from_url_not_yaml(mock_get: mock.MagicMock) -> None:
     mock_response = mock.Mock()
     mock_response.text = """
     $graph
@@ -278,7 +264,7 @@ def test_get_workflow_id_from_url_not_yaml(mock_get):
     mock_get.assert_called_once_with(url, headers=headers)
 
 
-def test_get_workflow_id_from_file_missing_workflow():
+def test_get_workflow_id_from_file_missing_workflow() -> None:
     cwl_str = """
     $graph:
       - class: CommandLineTool
@@ -290,7 +276,7 @@ def test_get_workflow_id_from_file_missing_workflow():
     assert not success
 
 
-def test_get_workflow_id_from_file():
+def test_get_workflow_id_from_file() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -312,7 +298,7 @@ def test_get_workflow_id_from_file():
     assert success
 
 
-def test_get_workflow_id_from_file_list():
+def test_get_workflow_id_from_file_list() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -334,7 +320,7 @@ def test_get_workflow_id_from_file_list():
     assert success
 
 
-def test_get_workflow_id_from_file_illegal_input():
+def test_get_workflow_id_from_file_illegal_input() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -356,7 +342,7 @@ def test_get_workflow_id_from_file_illegal_input():
     assert not success
 
 
-def test_get_workflow_id_from_file_illegal_step():
+def test_get_workflow_id_from_file_illegal_step() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -378,7 +364,7 @@ def test_get_workflow_id_from_file_illegal_step():
     assert not success
 
 
-def test_get_workflow_id_from_file_list_illegal_input():
+def test_get_workflow_id_from_file_list_illegal_input() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -400,7 +386,7 @@ def test_get_workflow_id_from_file_list_illegal_input():
     assert not success
 
 
-def test_get_workflow_id_from_file_list_illegal_step():
+def test_get_workflow_id_from_file_list_illegal_step() -> None:
     cwl_str = """
     $graph:
       - class: Workflow
@@ -422,7 +408,7 @@ def test_get_workflow_id_from_file_list_illegal_step():
     assert not success
 
 
-def test_get_workflow_id_from_file_not_yaml():
+def test_get_workflow_id_from_file_not_yaml() -> None:
     cwl_str = """
     $graph
       - class: CommandLineTool
@@ -436,7 +422,7 @@ def test_get_workflow_id_from_file_not_yaml():
 
 @mock.patch("ades_fastapi.utils.requests.get")
 @mock.patch("ades_fastapi.utils.logger")
-def test_list_jobs_dict(mock_logger, mock_get):
+def test_list_jobs_dict(mock_logger: mock.MagicMock, mock_get: mock.MagicMock) -> None:
     mock_response = mock.Mock()
     mock_response.json.return_value = {"jobs": []}
     mock_get.return_value = mock_response

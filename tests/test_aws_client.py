@@ -21,11 +21,20 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "client-secret")
 
 @patch("ades_fastapi.aws_client.get_credentials")
 @patch("ades_fastapi.aws_client.generate_token")
-def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_credentials):
+def test_generate_aws_credentials_user_service(
+    mock_generate_token: MagicMock, mock_get_credentials: MagicMock
+) -> None:
     # Configure mocks
     def side_effect(
-        role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
-    ):
+        role_arn: str,
+        token: str,
+        workspace: str,
+        creds_dict: dict[str, dict[str, object]],
+        key: str,
+        workflow_id: str,
+        username: str,
+        service_scope: bool,
+    ) -> dict[str, dict[str, object]]:
         creds_dict = copy.deepcopy(creds_dict)
         if key == "calling_workspace":
             creds_dict[key]["aws_creds"] = {"key": "value-calling"}
@@ -33,7 +42,7 @@ def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_cre
             creds_dict[key]["aws_creds"] = {"key": "value-executing"}
         return creds_dict
 
-    def get_ades_token(token, workspace, scope):
+    def get_ades_token(token: str, workspace: str, scope: str) -> str:
         if "user_services" in scope:
             return "longer-lasting-token-executing"
         return "longer-lasting-token-calling"
@@ -46,9 +55,7 @@ def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_cre
     calling_workspace = "calling_workspace"
     executing_workspace = "executing_workspace"
 
-    result = generate_aws_credentials(
-        token, username, calling_workspace, executing_workspace, "workflow-id"
-    )
+    result = generate_aws_credentials(token, username, calling_workspace, executing_workspace, "workflow-id")
 
     assert result == {
         "calling_workspace": {
@@ -83,11 +90,18 @@ def test_generate_aws_credentials_user_service(mock_generate_token, mock_get_cre
 
 @patch("ades_fastapi.aws_client.generate_token")
 @patch("ades_fastapi.aws_client.get_credentials")
-def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_token):
+def test_generate_aws_credentials_workflow(mock_get_credentials: MagicMock, mock_generate_token: MagicMock) -> None:
     # Configure mocks
     def side_effect(
-        role_arn, token, workspace, creds_dict, key, workflow_id, username, service_scope
-    ):
+        role_arn: str,
+        token: str,
+        workspace: str,
+        creds_dict: dict[str, dict[str, object]],
+        key: str,
+        workflow_id: str,
+        username: str,
+        service_scope: bool,
+    ) -> dict[str, dict[str, object]]:
         creds_dict = copy.deepcopy(creds_dict)
         if key == "calling_workspace":
             creds_dict[key]["aws_creds"] = {"key": "value-calling"}
@@ -95,7 +109,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
             creds_dict[key]["aws_creds"] = {"key": "value-executing"}
         return creds_dict
 
-    def get_ades_token(token, workspace, scope):
+    def get_ades_token(token: str, workspace: str, scope: str) -> str:
         if "user_services" in scope:
             return "longer-lasting-token-executing"
         return "longer-lasting-token-calling"
@@ -108,9 +122,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
     calling_workspace = "calling_workspace"
     executing_workspace = "calling_workspace"
 
-    result = generate_aws_credentials(
-        token, username, calling_workspace, executing_workspace, "workflow-id"
-    )
+    result = generate_aws_credentials(token, username, calling_workspace, executing_workspace, "workflow-id")
 
     assert result == {
         "calling_workspace": {
@@ -145,7 +157,7 @@ def test_generate_aws_credentials_workflow(mock_get_credentials, mock_generate_t
 
 @patch("ades_fastapi.aws_client.generate_token")
 @patch("boto3.client")
-def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
+def test_get_credentials_workflow(mock_boto_client: MagicMock, mock_generate_token: MagicMock) -> None:
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.return_value = {"Credentials": {"key": "value"}}
     mock_boto_client.return_value = mock_sts_instance
@@ -181,7 +193,7 @@ def test_get_credentials_workflow(mock_boto_client, mock_generate_token):
 
 @patch("ades_fastapi.aws_client.generate_token")
 @patch("boto3.client")
-def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_token):
+def test_get_credentials_workflow_invalid_token(mock_boto_client: MagicMock, mock_generate_token: MagicMock) -> None:
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.side_effect = Exception("Invalid token")
     mock_boto_client.return_value = mock_sts_instance
@@ -217,7 +229,7 @@ def test_get_credentials_workflow_invalid_token(mock_boto_client, mock_generate_
 
 @patch("ades_fastapi.aws_client.generate_token")
 @patch("boto3.client")
-def test_get_credentials_user_service(mock_boto_client, mock_generate_token):
+def test_get_credentials_user_service(mock_boto_client: MagicMock, mock_generate_token: MagicMock) -> None:
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.return_value = {"Credentials": {"key": "value"}}
     mock_boto_client.return_value = mock_sts_instance
@@ -243,9 +255,7 @@ def test_get_credentials_user_service(mock_boto_client, mock_generate_token):
         "calling_workspace": {"aws_creds": {}, "api_token": "some-token"},
         "executing_workspace": {"aws_creds": {"key": "value"}, "api_token": "some-token"},
     }
-    mock_generate_token.assert_called_once_with(
-        "initial-token", "workspace", "user_services:workspace"
-    )
+    mock_generate_token.assert_called_once_with("initial-token", "workspace", "user_services:workspace")
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
         RoleSessionName="workspace-username-workflow-id",
@@ -256,7 +266,9 @@ def test_get_credentials_user_service(mock_boto_client, mock_generate_token):
 
 @patch("ades_fastapi.aws_client.generate_token")
 @patch("boto3.client")
-def test_get_credentials_user_service_invalid_token(mock_boto_client, mock_generate_token):
+def test_get_credentials_user_service_invalid_token(
+    mock_boto_client: MagicMock, mock_generate_token: MagicMock
+) -> None:
     mock_sts_instance = MagicMock()
     mock_sts_instance.assume_role_with_web_identity.side_effect = Exception("Invalid token")
     mock_boto_client.return_value = mock_sts_instance
@@ -282,9 +294,7 @@ def test_get_credentials_user_service_invalid_token(mock_boto_client, mock_gener
         "calling_workspace": {"aws_creds": {}, "api_token": "some-token"},
         "executing_workspace": {"aws_creds": {}, "api_token": "some-token"},
     }
-    mock_generate_token.assert_called_once_with(
-        "initial-token", "workspace", "user_services:workspace"
-    )
+    mock_generate_token.assert_called_once_with("initial-token", "workspace", "user_services:workspace")
     mock_sts_instance.assume_role_with_web_identity.assert_called_once_with(
         RoleArn="role_arn",
         RoleSessionName="workspace-username-workflow-id",
@@ -293,7 +303,7 @@ def test_get_credentials_user_service_invalid_token(mock_boto_client, mock_gener
     )
 
 
-def test_generate_token_workflow():
+def test_generate_token_workflow() -> None:
     # Configure mocks
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
@@ -309,9 +319,7 @@ def test_generate_token_workflow():
     }
 
     with requests_mock.Mocker() as m:
-        m.post(
-            keycloak_url, status_code=200, json=lambda a, b: {"access_token": "new-access-token"}
-        )
+        m.post(keycloak_url, status_code=200, json=lambda a, b: {"access_token": "new-access-token"})
         result = generate_token(token, workspace, scope)
         last_request = m.last_request
 
@@ -320,7 +328,7 @@ def test_generate_token_workflow():
         assert result == "new-access-token"
 
 
-def test_generate_token_user_service():
+def test_generate_token_user_service() -> None:
     # Configure mocks
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
@@ -336,9 +344,7 @@ def test_generate_token_user_service():
     }
 
     with requests_mock.Mocker() as m:
-        m.post(
-            keycloak_url, status_code=200, json=lambda a, b: {"access_token": "new-access-token"}
-        )
+        m.post(keycloak_url, status_code=200, json=lambda a, b: {"access_token": "new-access-token"})
         result = generate_token(token, workspace, scope)
         last_request = m.last_request
 
@@ -347,7 +353,7 @@ def test_generate_token_user_service():
         assert result == "new-access-token"
 
 
-def test_generate_token_error():
+def test_generate_token_error() -> None:
     # Configure mocks
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
@@ -364,7 +370,7 @@ def test_generate_token_error():
 
     with requests_mock.Mocker() as m:
         m.post(keycloak_url, status_code=500, text="An error was raised")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Failed to generate workspace token"):
             generate_token(token, workspace, scope)
 
         last_request = m.last_request
@@ -373,7 +379,7 @@ def test_generate_token_error():
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
 
 
-def test_generate_token_blank_token():
+def test_generate_token_blank_token() -> None:
     # Configure mocks
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
@@ -390,7 +396,7 @@ def test_generate_token_blank_token():
 
     with requests_mock.Mocker() as m:
         m.post(keycloak_url, status_code=200, json=lambda a, b: {"access_token": None})
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Failed to generate workspace token"):
             generate_token(token, workspace, scope)
 
         last_request = m.last_request
@@ -399,7 +405,7 @@ def test_generate_token_blank_token():
         assert last_request.headers["Content-Type"] == "application/x-www-form-urlencoded"
 
 
-def test_generate_token_missing_token():
+def test_generate_token_missing_token() -> None:
     # Configure mocks
     keycloak_url = "https://example/keycloak/realms/test/protocol/openid-connect/token"
     token = "valid-token"
@@ -416,7 +422,7 @@ def test_generate_token_missing_token():
 
     with requests_mock.Mocker() as m:
         m.post(keycloak_url, status_code=200, json=lambda a, b: {"another-token": "value"})
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Failed to generate workspace token"):
             generate_token(token, workspace, scope)
 
         last_request = m.last_request
