@@ -1,7 +1,6 @@
 import logging
 import os
-from distutils.util import strtobool
-from typing import List, Literal, Optional
+from typing import Annotated, Literal
 
 import boto3
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
@@ -25,6 +24,12 @@ from .models import (
 )
 from .utils import WorkflowType, get_user_details
 
+
+def strtobool(val: str) -> bool:
+    """Convert string representation of truth to bool."""
+    return val.lower() in ("yes", "true", "t", "1", "y")
+
+
 logging.basicConfig(
     level=logging.DEBUG if os.getenv("DEBUG") else logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -38,9 +43,7 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path")
 
 # OPA service endpoint
-OPA_SERVICE_ENDPOINT = os.getenv(
-    "OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/ades/allow"
-)
+OPA_SERVICE_ENDPOINT = os.getenv("OPA_SERVICE_ENDPOINT", "http://opal-client.opal:8181/v1/data/ades/allow")
 
 # Root path for FastAPI
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
@@ -79,7 +82,7 @@ app = FastAPI(
                 "Use these APIs to find, define and execute EO Data Hub workflows, "
                 "and to locate their results. These endpoints implement the OGC "
                 "Processes API and package workflows as OGC Application Packages. "
-                "Each workspace (identified by `{deploy_workspace}`) is access‐controlled "
+                "Each workspace (identified by `{deploy_workspace}`) is access-controlled "
                 "via HTTP Bearer; you may only see or run workflows in your own workspace, "
                 "unless they are defined as publicly available or public user services."
             ),
@@ -88,11 +91,13 @@ app = FastAPI(
 )
 
 logger.info(
-    f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
+    "%s/catalogs/%s/catalogs/{deploy_workspace}/jobs",
+    ADES_FASTAPI_ROOT_PATH,
+    USER_CATALOG_ROOT,
 )
 
 
-def configure_job_saver():
+def configure_job_saver() -> JobSaver:
     """Configure the job saver"""
     s3_client = boto3.client("s3")
     return JobSaver(s3_client)
@@ -126,7 +131,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def opa_dependency(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),  # noqa: B008
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> WorkflowType:
     """Dependency to check if the user is authorized to access the endpoint"""
     passed, wf_type = dependency_client.check_access(request, job_saver)
@@ -155,7 +160,7 @@ def opa_dependency(
         502: {"description": "Service is not reachable"},
     },
 )
-def ping():
+def ping() -> JSONResponse:
     """A status endpoint for the Workflow Runner API to check the availability of the service"""
     logger.info("Getting Workflow Runner PING endpoint")
     response = ades_client.get_root()
@@ -183,21 +188,19 @@ def ping():
 )
 def undeploy_process(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace from which the workflow will be undeployed",
-    ),
-    workflow_id: str = Path(
-        ...,
-        description="The ID of the workflow to be undeployed",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace from which the workflow will be undeployed"),
+    ],
+    workflow_id: Annotated[
+        str,
+        Path(description="The ID of the workflow to be undeployed"),
+    ],
+) -> Response:
     """An endpoint to undeploy a workflow from the specified workspace"""
     logger.info("Undeploying workflow %s in workspace %s", workflow_id, deploy_workspace)
 
-    response, content = ades_client.undeploy_workflow(
-        dict(request.headers), deploy_workspace, workflow_id
-    )
+    response, content = ades_client.undeploy_workflow(dict(request.headers), deploy_workspace, workflow_id)
 
     return Response(
         content=content,
@@ -213,31 +216,29 @@ def undeploy_process(
     summary="List all available workflows in the specified workspace",
     response_model=ListProcessesResponse,
     responses={
-        200: {
-            "description": "Workflows available in the specified workspace are returned in a list"
-        },
+        200: {"description": "Workflows available in the specified workspace are returned in a list"},
         401: {"description": "User not authenticated"},
     },
 )
 def list_processes(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace to list workflows from",
-    ),
-    limit: Optional[int] = Query(
-        None,
-        description="Maximum number of workflows to return, leaving this blank returns all",
-        example=10,
-    ),
-    skip: int = Query(0, description="Number of workflows to skip", example=0),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace to list workflows from"),
+    ],
+    limit: Annotated[
+        int | None,
+        Query(
+            description="Maximum number of workflows to return, leaving this blank returns all",
+            examples=[10],
+        ),
+    ] = None,
+    skip: Annotated[int, Query(description="Number of workflows to skip", examples=[0])] = 0,
+) -> Response:
     """An endpoint to list all workflows deployed in a workspace"""
     logger.info("Listing workflows in workspace %s", deploy_workspace)
 
-    response, content = ades_client.list_processes(
-        request, deploy_workspace, limit=limit, skip=skip
-    )
+    response, content = ades_client.list_processes(request, deploy_workspace, limit=limit, skip=skip)
 
     return Response(
         content=content,
@@ -262,11 +263,11 @@ def list_processes(
 )
 async def deploy_workflow(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace to deploy the workflow to",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace to deploy the workflow to"),
+    ],
+) -> Response:
     """An endpoint to deploy a workflow to a specified workspace"""
     response, content = await ades_client.deploy_workflow(request, deploy_workspace)
 
@@ -292,15 +293,15 @@ async def deploy_workflow(
 )
 async def update_workflow(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace to update the workflow in",
-    ),
-    workflow_id: str = Path(
-        ...,
-        description="The workflow ID of the workflow to update",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace to update the workflow in"),
+    ],
+    workflow_id: Annotated[
+        str,
+        Path(description="The workflow ID of the workflow to update"),
+    ],
+) -> Response:
     """An endpoint to update a workflow in a specified workspace"""
     logger.info("Updating workflow %s in workspace %s", workflow_id, deploy_workspace)
 
@@ -328,22 +329,20 @@ async def update_workflow(
 )
 def process_details(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace containing the workflow to view",
-    ),
-    workflow_id: str = Path(
-        ...,
-        description="The workflow ID of the workflow to view details for",
-    ),
-    wf_type: WorkflowType = Depends(opa_dependency),  # noqa: B008
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace containing the workflow to view"),
+    ],
+    workflow_id: Annotated[
+        str,
+        Path(description="The workflow ID of the workflow to view details for"),
+    ],
+    wf_type: Annotated[WorkflowType, Depends(opa_dependency)],
+) -> Response:
     """An endpoint to get details of a workflow in a specified workspace"""
     logger.info("Getting details of workflow %s in workspace %s", workflow_id, deploy_workspace)
 
-    response, content = ades_client.get_workflow(
-        dict(request.headers), deploy_workspace, workflow_id, wf_type
-    )
+    response, content = ades_client.get_workflow(dict(request.headers), deploy_workspace, workflow_id, wf_type)
 
     return Response(
         content=content,
@@ -367,16 +366,16 @@ def process_details(
 )
 async def execute_process(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace that contains the workflow to execute",
-    ),
-    workflow_id: str = Path(
-        ...,
-        description="The workflow ID of the workflow to execute",
-    ),
-    workflow_type: tuple = Depends(opa_dependency),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace that contains the workflow to execute"),
+    ],
+    workflow_id: Annotated[
+        str,
+        Path(description="The workflow ID of the workflow to execute"),
+    ],
+    workflow_type: Annotated[WorkflowType, Depends(opa_dependency)],
+) -> Response:
     """An endpoint to execute a workflow in a specified workspace"""
     log_text = workflow_type.value
     logger.info("Executing %s %s deployed to workspace %s", log_text, workflow_id, deploy_workspace)
@@ -396,7 +395,7 @@ async def execute_process(
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
-        username, workspace, workspaces, _ = get_user_details(request)
+        _username, workspace, _workspaces, _ = get_user_details(request)
         job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
 
     return Response(
@@ -421,15 +420,15 @@ async def execute_process(
 )
 def process_status(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace in which the workflow was deployed",
-    ),
-    job_id: str = Path(
-        ...,
-        description="The ID of the job to get the status for",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace in which the workflow was deployed"),
+    ],
+    job_id: Annotated[
+        str,
+        Path(description="The ID of the job to get the status for"),
+    ],
+) -> Response:
     """An endpoint to get the status of a job"""
     logger.info("Getting status of job %s in workspace %s", job_id, deploy_workspace)
 
@@ -457,15 +456,15 @@ def process_status(
 )
 def process_results(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace in which the workflow was deployed",
-    ),
-    job_id: str = Path(
-        ...,
-        description="The ID of the job to get the results for",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace in which the workflow was deployed"),
+    ],
+    job_id: Annotated[
+        str,
+        Path(description="The ID of the job to get the results for"),
+    ],
+) -> Response:
     """An endpoint to get the results of a completed job"""
     logger.debug("Getting results of job %s in workspace %s", job_id, deploy_workspace)
 
@@ -490,27 +489,30 @@ def process_results(
 )
 def get_deployed_workspaced_jobs(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace to get the jobs in",
-    ),
-    limit: Optional[int] = Query(
-        None, description="Maximum number of jobs to return, leaving this blank returns all"
-    ),
-    skip: Optional[int] = Query(0, description="Number of jobs to skip"),
-    status: Optional[
-        List[Literal["accepted", "running", "successful", "failed", "dismissed"]]
-    ] = Query(  # noqa: B008
-        None,
-        description="A list of job statuses to filter for",
-        example=["accepted", "running"],
-    ),
-    datetime: Optional[str] = Query(
-        None,
-        description="A date range to filter for the created date of workflow jobs.",
-        example="2023-01-01T00:00:00Z/2023-01-02T00:00:00Z",
-    ),  # noqa: B008
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace to get the jobs in"),
+    ],
+    limit: Annotated[
+        int | None,
+        Query(description="Maximum number of jobs to return, leaving this blank returns all"),
+    ] = None,
+    skip: Annotated[int | None, Query(description="Number of jobs to skip")] = 0,
+    status: Annotated[
+        list[Literal["accepted", "running", "successful", "failed", "dismissed"]] | None,
+        Query(
+            description="A list of job statuses to filter for",
+            examples=[["accepted", "running"]],
+        ),
+    ] = None,
+    datetime: Annotated[
+        str | None,
+        Query(
+            description="A date range to filter for the created date of workflow jobs.",
+            examples=["2023-01-01T00:00:00Z/2023-01-02T00:00:00Z"],
+        ),
+    ] = None,
+) -> Response:
     """An endpoint to list all jobs in a specified workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
 
@@ -536,10 +538,10 @@ def get_deployed_workspaced_jobs(
 ##############
 # @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
 # dependencies=[Depends(opa_dependency)])
-def get_all_jobs(request: Request):
+def get_all_jobs(request: Request) -> Response:
     """Endpoint to list all jobs called by the specified user"""
 
-    content = ades_client.get_all_jobs(dict(request.headers), job_saver.workspace_jobs)
+    content = ades_client.get_all_jobs(request, {})
 
     return Response(
         content=content,
@@ -564,21 +566,19 @@ def get_all_jobs(request: Request):
 )
 def get_process_log(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace in which the running workflow was deployed",
-    ),
-    job_id: str = Path(
-        ...,
-        description="The ID of the job to get the results for",
-    ),
-    file_name: str = Path(..., description="The name of the log file to retrieve"),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace in which the running workflow was deployed"),
+    ],
+    job_id: Annotated[
+        str,
+        Path(description="The ID of the job to get the results for"),
+    ],
+    file_name: Annotated[str, Path(description="The name of the log file to retrieve")],
+) -> Response:
     """An endpoint to get the logs of a job"""
     logger.info("Getting log %s for job %s in workspace %s", file_name, job_id, deploy_workspace)
-    response, content = ades_client.get_log(
-        job_id, file_name, deploy_workspace, dict(request.headers)
-    )
+    response, content = ades_client.get_log(job_id, file_name, deploy_workspace, dict(request.headers))
 
     return Response(
         content=content,
@@ -602,15 +602,15 @@ def get_process_log(
 )
 def delete_job(
     request: Request,
-    deploy_workspace: str = Path(
-        ...,
-        description="The name of the workspace in which the running workflow was deployed",
-    ),
-    job_id: str = Path(
-        ...,
-        description="The ID of the job to delete",
-    ),
-):
+    deploy_workspace: Annotated[
+        str,
+        Path(description="The name of the workspace in which the running workflow was deployed"),
+    ],
+    job_id: Annotated[
+        str,
+        Path(description="The ID of the job to delete"),
+    ],
+) -> Response:
     """An endpoint to delete a job from the specified workspace"""
     logger.info("Deleting job %s in workspace %s", job_id, deploy_workspace)
 

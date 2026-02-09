@@ -1,8 +1,9 @@
 import json
 import os
+from unittest import mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import botocore
+import botocore.exceptions
 import pytest
 from fastapi import HTTPException, Request
 
@@ -16,7 +17,7 @@ ADES_INGRESS_PATH = os.getenv("ADES_INGRESS_PATH", "https://example-path")
 
 
 @pytest.fixture
-def ades_client():
+def ades_client() -> ADESClient:
     return ADESClient(
         service_endpoint="http://test-service-endpoint",
         base_url="http://test-base-url",
@@ -28,7 +29,9 @@ def ades_client():
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.get_workflow_id_from_file", return_value=(False, "Invalid CWL"))
-async def test_deploy_workflow_invalid_cwl(mock_get_workflow_id_from_file, ades_client):
+async def test_deploy_workflow_invalid_cwl(
+    mock_get_workflow_id_from_file: mock.MagicMock, ades_client: ADESClient
+) -> None:
     request = MagicMock()
     request.headers = {"Content-Type": "application/cwl+yaml"}
     request.body = AsyncMock(return_value=b"test-cwl-content")
@@ -42,7 +45,11 @@ async def test_deploy_workflow_invalid_cwl(mock_get_workflow_id_from_file, ades_
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.get_workflow_id_from_url", return_value=(True, "workflow-id"))
-async def test_deploy_workflow_json(mock_get_workflow_id_from_url, mock_send_request, ades_client):
+async def test_deploy_workflow_json(
+    mock_get_workflow_id_from_url: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {"Details": "Content"},
@@ -57,10 +64,7 @@ async def test_deploy_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 
     response, content = await ades_client.deploy_workflow(request, "test_workspace")
     assert response.status_code == 200
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
     assert content == json.dumps({"Details": "Content"}, indent=2)
 
     mock_send_request.assert_called_once_with(
@@ -73,7 +77,9 @@ async def test_deploy_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.get_workflow_id_from_url", return_value=(False, "Invalid URL"))
-async def test_deploy_workflow_invalid_json(mock_get_workflow_id_from_url, ades_client):
+async def test_deploy_workflow_invalid_json(
+    mock_get_workflow_id_from_url: mock.MagicMock, ades_client: ADESClient
+) -> None:
     request = MagicMock()
     request.headers = {"authorization": "Bearer valid-token", "Content-Type": "application/json"}
     request.json = AsyncMock(return_value={"executionUnit": {"href": "http://test-url"}})
@@ -87,7 +93,11 @@ async def test_deploy_workflow_invalid_json(mock_get_workflow_id_from_url, ades_
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.get_workflow_id_from_file", return_value=(True, "workflow-id"))
-async def test_deploy_workflow_cwl(mock_get_workflow_id_from_file, mock_send_request, ades_client):
+async def test_deploy_workflow_cwl(
+    mock_get_workflow_id_from_file: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {"Details": "Content"},
@@ -105,10 +115,7 @@ async def test_deploy_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
     response, content = await ades_client.deploy_workflow(request, "test_workspace")
     assert response.status_code == 200
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
     assert content == json.dumps({"Details": "Content"}, indent=2)
 
     mock_send_request.assert_called_once_with(
@@ -120,7 +127,7 @@ async def test_deploy_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
 
 @pytest.mark.asyncio
-async def test_deploy_workflow_unsupported_content_type(ades_client):
+async def test_deploy_workflow_unsupported_content_type(ades_client: ADESClient) -> None:
     request = MagicMock()
     request.headers = {"Content-Type": "text/plain"}
 
@@ -128,14 +135,18 @@ async def test_deploy_workflow_unsupported_content_type(ades_client):
         await ades_client.deploy_workflow(request, "test_workspace")
     assert excinfo.value.status_code == 415
     assert excinfo.value.detail == (
-        "Unsupported content type. Only application/json and " "application/cwl+yaml are supported"
+        "Unsupported content type. Only application/json and application/cwl+yaml are supported"
     )
 
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.get_workflow_id_from_url", return_value=(True, "workflow-id"))
-async def test_update_workflow_json(mock_get_workflow_id_from_url, mock_send_request, ades_client):
+async def test_update_workflow_json(
+    mock_get_workflow_id_from_url: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {"Details": "Content"},
@@ -150,10 +161,7 @@ async def test_update_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 
     response, content = await ades_client.update_workflow(request, "test_workspace", "workflow-id")
     assert response.status_code == 200
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
     assert content == json.dumps({"Details": "Content"}, indent=2)
 
     mock_send_request.assert_called_once_with(
@@ -167,7 +175,11 @@ async def test_update_workflow_json(mock_get_workflow_id_from_url, mock_send_req
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.get_workflow_id_from_file", return_value=(True, "workflow-id"))
-async def test_update_workflow_cwl(mock_get_workflow_id_from_file, mock_send_request, ades_client):
+async def test_update_workflow_cwl(
+    mock_get_workflow_id_from_file: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {"Details": "Content"},
@@ -182,10 +194,7 @@ async def test_update_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
     response, content = await ades_client.update_workflow(request, "test_workspace", "workflow-id")
     assert response.status_code == 200
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/execution"
     assert content == json.dumps({"Details": "Content"}, indent=2)
 
     mock_send_request.assert_called_once_with(
@@ -198,7 +207,7 @@ async def test_update_workflow_cwl(mock_get_workflow_id_from_file, mock_send_req
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_root(mock_send_request, ades_client):
+async def test_get_root(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"message": "OK"})
     response = ades_client.get_root()
     assert response.status_code == 200
@@ -207,7 +216,7 @@ async def test_get_root(mock_send_request, ades_client):
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_workspace_root(mock_send_request, ades_client):
+async def test_get_workspace_root(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"message": "OK"})
     response, content = ades_client.get_workspace_root("test_workspace")
     assert response.status_code == 200
@@ -216,7 +225,7 @@ async def test_get_workspace_root(mock_send_request, ades_client):
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_undeploy_workflow(mock_send_request, ades_client):
+async def test_undeploy_workflow(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"message": "OK"})
     headers = {"authorization": "Bearer token"}
     response, content = ades_client.undeploy_workflow(headers, "test_workspace", "workflow-id")
@@ -231,7 +240,11 @@ async def test_undeploy_workflow(mock_send_request, ades_client):
     return_value=(True, "Access granted"),
 )
 # @patch("ades_fastapi.ades_client.replace_href_links", side_effect=lambda x, y: x)
-async def test_list_processes(mock_check_workflow_access, mock_send_request, ades_client):
+async def test_list_processes(
+    mock_check_workflow_access: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {
@@ -283,12 +296,10 @@ async def test_list_processes(mock_check_workflow_access, mock_send_request, ade
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_workflow(mock_send_request, ades_client):
+async def test_get_workflow(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"id": "workflow-id"})
     headers = {"authorization": "Bearer token"}
-    response, content = ades_client.get_workflow(
-        headers, "test_workspace", "workflow-id", WorkflowType.USER_SERVICE
-    )
+    response, content = ades_client.get_workflow(headers, "test_workspace", "workflow-id", WorkflowType.USER_SERVICE)
     assert response.status_code == 200
     assert json.loads(content) == {
         "id": "workflow-id",
@@ -296,7 +307,7 @@ async def test_get_workflow(mock_send_request, ades_client):
     }
 
 
-def test_configure_execute_request_user_service(ades_client):
+def test_configure_execute_request_user_service(ades_client: ADESClient) -> None:
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
@@ -330,7 +341,7 @@ def test_configure_execute_request_user_service(ades_client):
     }
 
 
-def test_configure_execute_request_workflow(ades_client):
+def test_configure_execute_request_workflow(ades_client: ADESClient) -> None:
     body = {"inputs": {"input": "value"}}
     creds = {
         "calling_workspace": {
@@ -372,8 +383,11 @@ def test_configure_execute_request_workflow(ades_client):
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
 async def test_execute_workflow(
-    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_execute_to_ades: mock.MagicMock,
+    mock_generate_aws_credentials: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
@@ -398,9 +412,7 @@ async def test_execute_workflow(
     request = MagicMock(headers={"authorization": "Bearer valid-token"})
     request.json = AsyncMock(return_value={"inputs": {"input": "value"}})
 
-    response, content = await ades_client.execute_workflow(
-        request, "deploy_workspace", "workflow-id"
-    )
+    response, content = await ades_client.execute_workflow(request, "deploy_workspace", "workflow-id")
 
     mock_send_execute_to_ades.assert_called_once_with(
         "deploy_workspace",
@@ -418,10 +430,7 @@ async def test_execute_workflow(
             }
         },
     )
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running", "jobID": "job_id"}, indent=2)
 
@@ -438,8 +447,11 @@ async def test_execute_workflow(
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
 async def test_execute_user_service(
-    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_execute_to_ades: mock.MagicMock,
+    mock_generate_aws_credentials: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
@@ -464,9 +476,7 @@ async def test_execute_user_service(
     request = MagicMock(headers={"authorization": "Bearer valid-token"})
     request.json = AsyncMock(return_value={"inputs": {"input": "value"}})
 
-    response, content = await ades_client.execute_user_service(
-        request, "deploy_workspace", "workflow-id"
-    )
+    response, content = await ades_client.execute_user_service(request, "deploy_workspace", "workflow-id")
 
     mock_send_execute_to_ades.assert_called_once_with(
         "deploy_workspace",
@@ -484,10 +494,7 @@ async def test_execute_user_service(
             }
         },
     )
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running"}, indent=2)
 
@@ -504,8 +511,11 @@ async def test_execute_user_service(
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
 async def test_execute_user_service_missing_executing_creds(
-    mock_get_user_details, mock_send_execute_to_ades, mock_generate_aws_credentials, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_execute_to_ades: mock.MagicMock,
+    mock_generate_aws_credentials: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     # Configure mocks
     mock_generate_aws_credentials.return_value = {
         "calling_workspace": {
@@ -523,9 +533,7 @@ async def test_execute_user_service_missing_executing_creds(
     request = MagicMock(headers={"authorization": "Bearer valid-token"})
     request.json = AsyncMock(return_value={"inputs": {"input": "value"}})
 
-    response, content = await ades_client.execute_user_service(
-        request, "deploy_workspace", "workflow-id"
-    )
+    response, content = await ades_client.execute_user_service(request, "deploy_workspace", "workflow-id")
 
     mock_send_execute_to_ades.assert_called_once_with(
         "deploy_workspace",
@@ -543,10 +551,7 @@ async def test_execute_user_service_missing_executing_creds(
             }
         },
     )
-    assert (
-        response.headers["Location"]
-        == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
-    )
+    assert response.headers["Location"] == "http://test-base-url/catalogs/user/catalogs/deploy_workspace/execution"
     assert response.status_code == 201
     assert content == json.dumps({"Status": "Running"}, indent=2)
 
@@ -556,7 +561,7 @@ async def test_execute_user_service_missing_executing_creds(
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-def test_send_execute_to_ades(mock_send_request, ades_client):
+def test_send_execute_to_ades(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_send_request.return_value = mock_response
     headers = {
@@ -574,20 +579,18 @@ def test_send_execute_to_ades(mock_send_request, ades_client):
 
 
 @patch("requests.get")
-def test_send_request_get_root(mock_request, ades_client):
+def test_send_request_get_root(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
     response = ades_client._send_request("GET", headers=headers)
 
-    mock_request.assert_called_once_with(
-        "http://test-service-endpoint", headers=headers, timeout=10
-    )
+    mock_request.assert_called_once_with("http://test-service-endpoint", headers=headers, timeout=10)
     assert response == mock_response
 
 
 @patch("requests.get")
-def test_send_request_get_root_no_headers(mock_request, ades_client):
+def test_send_request_get_root_no_headers(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     response = ades_client._send_request("GET")
@@ -597,7 +600,7 @@ def test_send_request_get_root_no_headers(mock_request, ades_client):
 
 
 @patch("requests.get")
-def test_send_request_get_workflow(mock_request, ades_client):
+def test_send_request_get_workflow(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -605,14 +608,12 @@ def test_send_request_get_workflow(mock_request, ades_client):
     data = {"json": {"inputs": {"inputs": "value"}}}
     response = ades_client._send_request("GET", url_path, headers, data)
 
-    mock_request.assert_called_once_with(
-        "http://test-service-endpoint/test/path", headers=headers, **data, timeout=10
-    )
+    mock_request.assert_called_once_with("http://test-service-endpoint/test/path", headers=headers, **data, timeout=10)
     assert response == mock_response
 
 
 @patch("requests.post")
-def test_send_request_execute_workflow(mock_request, ades_client):
+def test_send_request_execute_workflow(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -630,7 +631,7 @@ def test_send_request_execute_workflow(mock_request, ades_client):
 
 
 @patch("requests.put")
-def test_send_request_update_workflow(mock_request, ades_client):
+def test_send_request_update_workflow(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -648,7 +649,7 @@ def test_send_request_update_workflow(mock_request, ades_client):
 
 
 @patch("requests.post")
-def test_send_request_deploy_workflow(mock_request, ades_client):
+def test_send_request_deploy_workflow(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -666,7 +667,7 @@ def test_send_request_deploy_workflow(mock_request, ades_client):
 
 
 @patch("requests.delete")
-def test_send_request_delete_workflow(mock_request, ades_client):
+def test_send_request_delete_workflow(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -682,7 +683,7 @@ def test_send_request_delete_workflow(mock_request, ades_client):
 
 
 @patch("requests.delete")
-def test_send_request_delete_job(mock_request, ades_client):
+def test_send_request_delete_job(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -698,7 +699,7 @@ def test_send_request_delete_job(mock_request, ades_client):
 
 
 @patch("requests.get")
-def test_send_request_view_log(mock_request, ades_client):
+def test_send_request_view_log(mock_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_response = MagicMock()
     mock_request.return_value = mock_response
     headers = {"Content-Type": "application/json"}
@@ -715,7 +716,7 @@ def test_send_request_view_log(mock_request, ades_client):
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_job_status(mock_send_request, ades_client):
+async def test_get_job_status(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(
         status_code=200,
         json=lambda: {
@@ -744,7 +745,7 @@ async def test_get_job_status(mock_send_request, ades_client):
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_job_results(mock_send_request, ades_client):
+async def test_get_job_results(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"result": "success"})
     headers = {"authorization": "Bearer token"}
     response, content = ades_client.get_job_results(headers, "test_workspace", "job-id")
@@ -758,7 +759,11 @@ async def test_get_job_results(mock_send_request, ades_client):
     "ades_fastapi.ades_client.get_user_details",
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
-async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_request, ades_client):
+async def test_get_deployed_workspaced_jobs(
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_job_saver = MagicMock()
     mock_job_saver.get_job_details.return_value = {
         "jobID": "job_1",
@@ -837,12 +842,8 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
     # Test limit
-    response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test_workspace", mock_job_saver
-    )
-    mock_send_request.assert_any_call(
-        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
-    )
+    response, content = ades_client.get_deployed_workspaced_jobs(request, "test_workspace", mock_job_saver)
+    mock_send_request.assert_any_call("GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60)
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [
@@ -918,8 +919,10 @@ async def test_get_deployed_workspaced_jobs(mock_get_user_details, mock_send_req
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
 async def test_get_deployed_workspaced_jobs_query(
-    mock_get_user_details, mock_send_request, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_job_saver = MagicMock()
     mock_job_saver.get_job_details.return_value = {
         "jobID": "job_1",
@@ -1192,8 +1195,10 @@ async def test_get_deployed_workspaced_jobs_query(
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
 async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
-    mock_get_user_details, mock_send_request, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_job_saver = MagicMock()
     mock_job_saver.get_job_details.return_value = {
         "jobID": "job_1",
@@ -1223,12 +1228,8 @@ async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
     # Test limit
-    response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test_workspace", mock_job_saver
-    )
-    mock_send_request.assert_any_call(
-        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
-    )
+    response, content = ades_client.get_deployed_workspaced_jobs(request, "test_workspace", mock_job_saver)
+    mock_send_request.assert_any_call("GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60)
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [
@@ -1260,8 +1261,10 @@ async def test_get_deployed_workspaced_jobs_user_service_deployed_workspace(
     return_value=("username", "test-workspace", ["test-workspace", "yet-another-workspace"], []),
 )
 async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
-    mock_get_user_details, mock_send_request, ades_client
-):
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_job_saver = MagicMock()
     mock_job_saver.get_job_details.return_value = {
         "jobID": "job_1",
@@ -1291,12 +1294,8 @@ async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
     request = MagicMock()
     request.headers = {"authorization": "Bearer token"}
     # Test limit
-    response, content = ades_client.get_deployed_workspaced_jobs(
-        request, "test_workspace", mock_job_saver
-    )
-    mock_send_request.assert_any_call(
-        "GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60
-    )
+    response, content = ades_client.get_deployed_workspaced_jobs(request, "test_workspace", mock_job_saver)
+    mock_send_request.assert_any_call("GET", "test_workspace/ogc-api/jobs", {}, data={"params": {}}, timeout=60)
     assert response.status_code == 200
     assert json.loads(content) == {
         "jobs": [],
@@ -1316,10 +1315,12 @@ async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
     "ades_fastapi.ades_client.get_user_details",
     return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
 )
-async def test_get_all_jobs(mock_get_user_details, mock_send_request, ades_client):
-    mock_send_request.return_value = MagicMock(
-        status_code=200, json=lambda: {"jobID": "job-id-details"}
-    )
+async def test_get_all_jobs(
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
+    mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"jobID": "job-id-details"})
     request = MagicMock()
     request.headers = {"authorization": "Bearer token", "Content-Type": "application/json"}
     workspace_jobs = {
@@ -1350,19 +1351,17 @@ async def test_get_all_jobs(mock_get_user_details, mock_send_request, ades_clien
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_get_log(mock_send_request, ades_client):
+async def test_get_log(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, content="log content")
     headers = {"authorization": "Bearer token"}
-    response, content = ades_client.get_log(
-        "workflow-job-id", "file-name", "test_workspace", headers
-    )
+    response, content = ades_client.get_log("workflow-job-id", "file-name", "test_workspace", headers)
     assert response.status_code == 200
     assert content == "log content"
 
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-async def test_delete_job(mock_send_request, ades_client):
+async def test_delete_job(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"message": "Deleted"})
     headers = {"authorization": "Bearer token"}
     response, content = ades_client.delete_job(headers, "test_workspace", "job-id")
@@ -1374,11 +1373,11 @@ async def test_delete_job(mock_send_request, ades_client):
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_public(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -1423,11 +1422,11 @@ def test_check_workflow_access_public(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_workspace_owner(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -1462,11 +1461,11 @@ def test_check_workflow_access_workspace_owner(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_user_service(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -1478,9 +1477,7 @@ def test_check_workflow_access_user_service(
     )
 
     mock_s3_client.get_object.return_value = {
-        "Body": MagicMock(
-            read=MagicMock(return_value=json.dumps({"user_service": True}).encode("utf-8"))
-        )
+        "Body": MagicMock(read=MagicMock(return_value=json.dumps({"user_service": True}).encode("utf-8")))
     }
 
     request = MagicMock(spec=Request)
@@ -1513,11 +1510,11 @@ def test_check_workflow_access_user_service(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_user_access(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -1531,9 +1528,7 @@ def test_check_workflow_access_user_access(
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(
             read=MagicMock(
-                return_value=json.dumps(
-                    {"allowed_access": {"workspaces": ["test-workspace"]}}
-                ).encode("utf-8")
+                return_value=json.dumps({"allowed_access": {"workspaces": ["test-workspace"]}}).encode("utf-8")
             )
         )
     }
@@ -1561,11 +1556,11 @@ def test_check_workflow_access_user_access(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_no_user_access(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_boto3_client.return_value = mock_s3_client
 
@@ -1579,9 +1574,7 @@ def test_check_workflow_access_no_user_access(
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(
             read=MagicMock(
-                return_value=json.dumps(
-                    {"allowed_access": {"workspaces": ["another-workspace"]}}
-                ).encode("utf-8")
+                return_value=json.dumps({"allowed_access": {"workspaces": ["another-workspace"]}}).encode("utf-8")
             )
         )
     }
@@ -1609,11 +1602,11 @@ def test_check_workflow_access_no_user_access(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_no_policy(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     error_response = {
         "Error": {
@@ -1622,9 +1615,7 @@ def test_check_workflow_access_no_policy(
         }
     }
     operation_name = "GetObject"
-    mock_s3_client.get_object.side_effect = botocore.exceptions.ClientError(
-        error_response, operation_name
-    )
+    mock_s3_client.get_object.side_effect = botocore.exceptions.ClientError(error_response, operation_name)
     mock_boto3_client.return_value = mock_s3_client
 
     mock_get_user_details.return_value = (
@@ -1657,20 +1648,14 @@ def test_check_workflow_access_no_policy(
 @patch("ades_fastapi.ades_client.boto3.client")
 @patch("ades_fastapi.ades_client.logger")
 def test_check_workflow_access_invalid_policy(
-    mock_logger,
-    mock_boto3_client,
-    mock_get_user_details,
-    ades_client,
-):
+    mock_logger: mock.MagicMock,
+    mock_boto3_client: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
     mock_s3_client = MagicMock()
     mock_s3_client.get_object.return_value = {
-        "Body": MagicMock(
-            read=MagicMock(
-                return_value='{"allowed_access":{"workspaces":"another-workspace"]}}'.encode(
-                    "utf-8"
-                )
-            )
-        )
+        "Body": MagicMock(read=MagicMock(return_value=b'{"allowed_access":{"workspaces":"another-workspace"]}}'))
     }
     mock_boto3_client.return_value = mock_s3_client
 

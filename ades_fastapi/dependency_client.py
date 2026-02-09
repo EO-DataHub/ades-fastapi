@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import requests
 from fastapi import Request
@@ -12,12 +13,12 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 class DependencyClient:
     def __init__(
         self,
-        fastapi_root,
-        opa_service_endpoint,
-        ades_policy_bucket,
-        ades_policy_prefix,
-        enable_opa_policy_check,
-    ):
+        fastapi_root: str,
+        opa_service_endpoint: str,
+        ades_policy_bucket: str,
+        ades_policy_prefix: str,
+        enable_opa_policy_check: bool | int,
+    ) -> None:
         self.fastapi_root = fastapi_root
         self.opa_service_endpoint = opa_service_endpoint
         self.ades_policy_bucket = ades_policy_bucket
@@ -30,7 +31,7 @@ class DependencyClient:
         return requests.post(self.opa_service_endpoint, json=input_data)
 
     @staticmethod
-    def _get_path_params(request: Request):
+    def _get_path_params(request: Request) -> dict[str, Any]:
         logger.debug("CALCULATING PATH PARAMETERS")
         return request.scope.get("path_params", {})
 
@@ -38,7 +39,7 @@ class DependencyClient:
         self,
         request: Request,
         job_saver: JobSaver,
-    ) -> tuple:
+    ) -> tuple[bool, WorkflowType]:
         """Check OPA policy to determine if the request is allowed"""
         username, workspace, workspaces, roles = get_user_details(request)
         path_params = self._get_path_params(request)
@@ -67,13 +68,11 @@ class DependencyClient:
         job_id = path_params.get("job_id")
         workflow_job_id = path_params.get("workflow_job_id")
 
-        if (
-            deploy_workspace and workflow_id and request.method in ["POST", "GET"]
-        ):  # not needed for PUT updates
+        if deploy_workspace and workflow_id and request.method in ["POST", "GET"]:  # not needed for PUT updates
             # Checking access to workflow for details and execution
             if request.method == "POST" and not workspace:
                 # If workspace is not set, we cannot check access
-                logger.warning(f"Workspace is not set, user {username} cannot execute a workflow")
+                logger.warning("Workspace is not set, user %s cannot execute a workflow", username)
                 return False, wf_type
 
             logger.debug(
@@ -95,9 +94,9 @@ class DependencyClient:
             if access_policy:
                 logger.info("Access policy is: %s", access_policy)
                 input_data["input"]["is_public"] = access_policy.get("public", False)
-                input_data["input"]["allowed_workspaces"] = access_policy.get(
-                    "allowed_access", {}
-                ).get("workspaces", [])
+                input_data["input"]["allowed_workspaces"] = access_policy.get("allowed_access", {}).get(
+                    "workspaces", []
+                )
                 input_data["input"]["is_user_service"] = access_policy.get("user_service", False)
                 # TODO: determine ownership based on workspaces in user group
                 if deploy_workspace == workspace:
@@ -109,9 +108,7 @@ class DependencyClient:
 
         if deploy_workspace and job_id:
             # Check access to job
-            logger.debug(
-                "Checking job access for job %s deployed to workspace %s", job_id, deploy_workspace
-            )
+            logger.debug("Checking job access for job %s deployed to workspace %s", job_id, deploy_workspace)
 
             job_details = job_saver.get_job_details(deploy_workspace, job_id)
 
@@ -138,9 +135,7 @@ class DependencyClient:
 
             if job_details.get("workflow_type") == "user-service":
                 # If job is for a user-service, allow deploying workspace to access
-                input_data["input"]["deployed_workspace"] = job_details.get(
-                    "deploy_workspace", None
-                )
+                input_data["input"]["deployed_workspace"] = job_details.get("deploy_workspace", None)
 
         logger.info(input_data)
 
@@ -150,7 +145,7 @@ class DependencyClient:
             return False, wf_type
         return True, wf_type
 
-    def check_access(self, request, job_saver):
+    def check_access(self, request: Request, job_saver: JobSaver) -> tuple[bool, WorkflowType]:
         passed, workflow_type = self._check_policy(
             request,
             job_saver,

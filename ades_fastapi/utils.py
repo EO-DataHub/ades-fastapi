@@ -3,9 +3,10 @@ import logging
 import os
 from enum import Enum
 from json import JSONDecodeError
+from typing import Any
 
 import boto3
-import botocore
+import botocore.exceptions
 import jwt
 import requests
 import yaml
@@ -16,9 +17,7 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 ILLEGAL_WORKFLOW_INPUTS_RAW = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
 ILLEGAL_WORKFLOW_INPUTS = [input.strip().lower() for input in ILLEGAL_WORKFLOW_INPUTS_RAW]
 
-ILLEGAL_WORKFLOW_STEPS_RAW = os.getenv(
-    "ILLEGAL_WORKFLOW_STEPS", "node_stage_in,node_stage_out"
-).split(",")
+ILLEGAL_WORKFLOW_STEPS_RAW = os.getenv("ILLEGAL_WORKFLOW_STEPS", "node_stage_in,node_stage_out").split(",")
 ILLEGAL_WORKFLOW_STEPS = [step.strip().lower() for step in ILLEGAL_WORKFLOW_STEPS_RAW]
 
 
@@ -29,7 +28,7 @@ class WorkflowType(Enum):
     OTHER = "other"  # not for prod use
 
 
-def get_path_params(request: Request):
+def get_path_params(request: Request) -> dict[str, Any]:
     logger.debug("CALCULATING PATH PARAMETERS")
     return request.scope.get("path_params", {})
 
@@ -46,7 +45,7 @@ def get_user_token(request: Request) -> str:
     return token.replace("Bearer ", "")
 
 
-def get_user_details(request: Request) -> tuple:
+def get_user_details(request: Request) -> tuple[str, str, list[str], list[str]]:
     """Get user details from the request"""
     token = request.headers.get("authorization", "")
     stripped_token = token.replace("Bearer ", "")
@@ -57,7 +56,7 @@ def get_user_details(request: Request) -> tuple:
             options={"verify_signature": False},
             algorithms=["HS256"],
         )
-        logger.debug("Credentials: ", credentials)
+        logger.debug("Credentials: %s", credentials)
         username = credentials.get("preferred_username", "")
         workspace = credentials.get("workspace", "")
         workspaces = credentials.get("workspaces", [])
@@ -71,8 +70,8 @@ def get_user_details(request: Request) -> tuple:
 
 
 def get_access_policy(
-    deploy_workspace: str, workflow_id: str, ades_policy_bucket: str, ades_policy_prefix: str = None
-) -> dict:
+    deploy_workspace: str, workflow_id: str, ades_policy_bucket: str, ades_policy_prefix: str | None = None
+) -> dict | None:
     """Get the access policy for a workflow"""
     s3_client = boto3.client("s3")
 
@@ -122,9 +121,7 @@ def replace_href_link(link: str, base_url: str, catalog_root: str, workspace: st
     return link.replace(replace_prefix, new_prefix, 1)
 
 
-def replace_href_links(
-    content_dict: dict, base_url: str, catalog_root: str, workspace: str
-) -> dict:
+def replace_href_links(content_dict: dict, base_url: str, catalog_root: str, workspace: str) -> dict:
     """Replace href links in the JSON response"""
     if "links" in content_dict:
         for link in content_dict["links"]:
@@ -134,7 +131,7 @@ def replace_href_links(
     return content_dict
 
 
-def check_workflow_inputs(data: dict) -> tuple:
+def check_workflow_inputs(data: dict) -> tuple[bool, str]:
     inputs = data.get("inputs", {})
     logger.debug("Checking workflow inputs: %s", inputs)
     steps = data.get("steps", {})
@@ -160,7 +157,7 @@ def check_workflow_inputs(data: dict) -> tuple:
     return True, data["id"]
 
 
-def get_workflow_id_from_file(data: str) -> tuple:
+def get_workflow_id_from_file(data: str | bytes) -> tuple[bool, str]:
     try:
         cwl_dict = yaml.safe_load(data)
     except yaml.YAMLError:
@@ -177,7 +174,7 @@ def get_workflow_id_from_file(data: str) -> tuple:
     return False, "No Workflow found in CWL file"
 
 
-def get_workflow_id_from_url(url: str) -> tuple:
+def get_workflow_id_from_url(url: str) -> tuple[bool, str]:
     # Need to mimic browser headers to get around some sites blocking requests
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -206,8 +203,6 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
     headers = dict(request.headers)
     headers.pop("Authorization", None)
-    response = requests.get(
-        f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs", headers=headers
-    )
+    response = requests.get(f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs", headers=headers)
 
     return response.json()

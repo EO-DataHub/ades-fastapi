@@ -10,13 +10,13 @@ from ades_fastapi.utils import WorkflowType
 
 
 @pytest.fixture
-def job_saver():
+def job_saver() -> JobSaver:
     mock_client_instance = mock.Mock()
     return JobSaver(mock_client_instance)
 
 
 @patch("boto3.client")
-def test_record_owner_success(mock_client, job_saver):
+def test_record_owner_success(mock_client: mock.MagicMock, job_saver: JobSaver) -> None:
     response = mock.Mock(spec=Response)
     response.json.side_effect = [
         {"jobID": "11111"},
@@ -104,7 +104,7 @@ def test_record_owner_success(mock_client, job_saver):
     )
 
 
-def test_record_owner_key_error(job_saver):
+def test_record_owner_key_error(job_saver: JobSaver) -> None:
     response = mock.Mock(spec=Response)
     response.json.return_value = {}
 

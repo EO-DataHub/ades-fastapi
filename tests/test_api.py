@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -15,21 +16,21 @@ API_DOCS_ROOT = os.getenv("API_DOCS_ROOT", "/api/docs")
 USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
 
 
-def override_opa_dependency_workflow():
+def override_opa_dependency_workflow() -> WorkflowType:
     return WorkflowType.WORKFLOW
 
 
-def override_opa_dependency_user_service():
+def override_opa_dependency_user_service() -> WorkflowType:
     return WorkflowType.USER_SERVICE
 
 
-def override_opa_dependency_other():
+def override_opa_dependency_other() -> WorkflowType:
     return WorkflowType.OTHER
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_root")
-def test_ping(mock_get_root, mock_check_access):
+def test_ping(mock_get_root: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     mock_get_root.return_value = MagicMock(
@@ -43,7 +44,7 @@ def test_ping(mock_get_root, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.undeploy_workflow")
-def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
+def test_undeploy_processes(mock_undeploy_workflow: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -66,7 +67,7 @@ def test_undeploy_processes(mock_undeploy_workflow, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.list_processes")
-def test_list_processes(mock_list_processes, mock_check_access):
+def test_list_processes(mock_list_processes: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -88,7 +89,7 @@ def test_list_processes(mock_list_processes, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.deploy_workflow")
-def test_deploy_workflow(mock_deploy_workflow, mock_check_access):
+def test_deploy_workflow(mock_deploy_workflow: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -110,7 +111,7 @@ def test_deploy_workflow(mock_deploy_workflow, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.update_workflow")
-def test_update_workflow(mock_update_workflow, mock_check_access):
+def test_update_workflow(mock_update_workflow: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -134,7 +135,7 @@ def test_update_workflow(mock_update_workflow, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_workflow")
-def test_process_details(mock_get_workflow, mock_check_access):
+def test_process_details(mock_get_workflow: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -162,8 +163,11 @@ def test_process_details(mock_get_workflow, mock_check_access):
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.execute_user_service")
 def test_execute_process_user_service(
-    mock_execute_user_service, mock_check_access, mock_job_saver, mock_get_user_details
-):
+    mock_execute_user_service: mock.MagicMock,
+    mock_check_access: mock.MagicMock,
+    mock_job_saver: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.USER_SERVICE
     # Configure mocks
@@ -197,8 +201,12 @@ def test_execute_process_user_service(
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.execute_workflow")
 def test_execute_process_workflow(
-    mock_execute_workflow, mock_check_access, mock_job_saver, mock_get_user_details, mock_sleep
-):
+    mock_execute_workflow: mock.MagicMock,
+    mock_check_access: mock.MagicMock,
+    mock_job_saver: mock.MagicMock,
+    mock_get_user_details: mock.MagicMock,
+    mock_sleep: mock.MagicMock,
+) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -228,7 +236,7 @@ def test_execute_process_workflow(
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
-def test_execute_process_other(mock_check_access):
+def test_execute_process_other(mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.OTHER
     deploy_workspace = "test_workspace"
@@ -243,7 +251,7 @@ def test_execute_process_other(mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_job_status")
-def test_execute_process_status(mock_get_job_status, mock_check_access):
+def test_execute_process_status(mock_get_job_status: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -267,7 +275,7 @@ def test_execute_process_status(mock_get_job_status, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_job_results")
-def test_execute_process_results(mock_get_job_results, mock_check_access):
+def test_execute_process_results(mock_get_job_results: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -291,7 +299,9 @@ def test_execute_process_results(mock_get_job_results, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs")
-def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_check_access):
+def test_get_deployed_workspaced_jobs(
+    mock_get_deployed_workspaced_jobs: mock.MagicMock, mock_check_access: mock.MagicMock
+) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -325,7 +335,7 @@ def test_get_deployed_workspaced_jobs(mock_get_deployed_workspaced_jobs, mock_ch
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_all_jobs")
-def ignore_test_get_all_jobs(mock_get_all_jobs, mock_check_access):
+def ignore_test_get_all_jobs(mock_get_all_jobs: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
@@ -341,14 +351,12 @@ def ignore_test_get_all_jobs(mock_get_all_jobs, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_log")
-def test_get_log(mock_get_log, mock_check_access):
+def test_get_log(mock_get_log: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
     mock_get_log.return_value = (
-        MagicMock(
-            status_code=200, headers={"Content-Type": "application/json"}, content="Some log text"
-        ),
+        MagicMock(status_code=200, headers={"Content-Type": "application/json"}, content="Some log text"),
         "Some log text",
     )
     deploy_workspace = "test_workspace"
@@ -368,7 +376,7 @@ def test_get_log(mock_get_log, mock_check_access):
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.delete_job")
-def test_delete_job(mock_delete_job, mock_check_access):
+def test_delete_job(mock_delete_job: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
     mock_check_access.return_value = True, WorkflowType.WORKFLOW
     # Configure mocks
