@@ -30,7 +30,7 @@ name = "ades-fastapi"
 dynamic = ["version"]
 description = "A FastApi application to handle requests to the Workflow Runner component of the EODH."
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.14,<3.15"
 license = {file = "LICENSE"}
 authors = [
   {name = "Telespazio UK Ltd", email = "thomas.jellicoe@telespazio.com" }
