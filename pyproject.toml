@@ -51,7 +51,7 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "requests",
-  "pyjwt",
+  "pyjwt[crypto]",
   "pyyaml",
   "boto3",
   "httpx",
