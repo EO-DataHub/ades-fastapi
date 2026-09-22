@@ -14,6 +14,8 @@ import yaml
 from fastapi import HTTPException, Request
 from jwt import PyJWKClient
 
+from ades_fastapi.aws_client import KEYCLOAK_BASE_URL
+
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 ILLEGAL_WORKFLOW_INPUTS_RAW = os.getenv("ILLEGAL_WORKFLOW_INPUTS", "token").split(",")
@@ -22,12 +24,13 @@ ILLEGAL_WORKFLOW_INPUTS = [input.strip().lower() for input in ILLEGAL_WORKFLOW_I
 ILLEGAL_WORKFLOW_STEPS_RAW = os.getenv("ILLEGAL_WORKFLOW_STEPS", "node_stage_in,node_stage_out").split(",")
 ILLEGAL_WORKFLOW_STEPS = [step.strip().lower() for step in ILLEGAL_WORKFLOW_STEPS_RAW]
 
-KEYCLOAK_BASE_URL = os.environ.get("KEYCLOAK_BASE_URL", "example/keycloak/realms/test")
 KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs"
 
 # Matches the client IDs tokens for this platform are actually issued under, per the
-# reference implementation in eodh-ac-api/wf-catalogue-service.
-JWT_AUDIENCE = ["oauth2-proxy-workspaces", "oauth2-proxy", "account"]
+# reference implementation in eodh-ac-api/wf-catalogue-service. Overridable per deployment
+# since the Keycloak client/audience isn't guaranteed to be the same everywhere.
+JWT_AUDIENCE_RAW = os.environ.get("JWT_AUDIENCE", "oauth2-proxy-workspaces,oauth2-proxy,account")
+JWT_AUDIENCE = [aud.strip() for aud in JWT_AUDIENCE_RAW.split(",") if aud.strip()]
 
 
 @lru_cache

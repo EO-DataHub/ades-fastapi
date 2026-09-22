@@ -6,6 +6,7 @@ import boto3
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.concurrency import run_in_threadpool
 
 from .ades_client import ADESClient
 from .dependency_client import DependencyClient
@@ -395,7 +396,8 @@ async def execute_process(
         case _:
             raise HTTPException(status_code=400, detail="Invalid workflow type")
     if response.status_code == 201:
-        _username, workspace, _workspaces, _ = get_user_details(request)
+        # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
+        _username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
         job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
 
     return Response(
