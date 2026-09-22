@@ -1,9 +1,11 @@
 import json
 import types
+from collections.abc import Generator
 from unittest import mock
 
 import botocore.exceptions
 import jwt
+import jwt.utils
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException, Request
@@ -36,7 +38,7 @@ def _token(key: rsa.RSAPrivateKey, aud: str = "account", **claims: object) -> st
 
 
 @pytest.fixture(autouse=True)
-def mock_jwks() -> mock.Mock:
+def mock_jwks() -> Generator[mock.MagicMock, None, None]:
     with mock.patch.object(utils, "_jwks_client") as mock_client:
         mock_client.return_value.get_signing_key_from_jwt.return_value = types.SimpleNamespace(
             key=PRIVATE_KEY.public_key()
