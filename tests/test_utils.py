@@ -33,7 +33,7 @@ def _request_with_token(token: str) -> mock.Mock:
     return request
 
 
-def _token(key: rsa.RSAPrivateKey, aud: str = "account", **claims: object) -> str:
+def _token(key: rsa.RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
     return jwt.encode({"sub": "test-user", "aud": aud, **claims}, key, algorithm="RS256")
 
 
@@ -111,7 +111,7 @@ def test_get_user_details_forged_signature_is_rejected() -> None:
     """
     header = jwt.utils.base64url_encode(b'{"alg":"RS256","typ":"JWT"}').decode()
     payload = jwt.utils.base64url_encode(
-        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"account"}'
+        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"eodh"}'
     ).decode()
     forged_signature = jwt.utils.base64url_encode(b"not-a-real-signature").decode()
     forged_token = f"{header}.{payload}.{forged_signature}"

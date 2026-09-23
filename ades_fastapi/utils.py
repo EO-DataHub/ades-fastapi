@@ -26,10 +26,11 @@ ILLEGAL_WORKFLOW_STEPS = [step.strip().lower() for step in ILLEGAL_WORKFLOW_STEP
 
 KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs"
 
-# Matches the client IDs tokens for this platform are actually issued under, per the
-# reference implementation in eodh-ac-api/wf-catalogue-service. Overridable per deployment
-# since the Keycloak client/audience isn't guaranteed to be the same everywhere.
-JWT_AUDIENCE_RAW = os.environ.get("JWT_AUDIENCE", "oauth2-proxy-workspaces,oauth2-proxy,account")
+# The Keycloak client IDs platform tokens are issued for (the audience mappers on the eodh and
+# eodh-workspaces clients, eodhp-argocd-deployment apps/keycloak/base/realms.yaml). This list is
+# duplicated across the platform's services, so change them together. Overridable per
+# deployment via JWT_AUDIENCE.
+JWT_AUDIENCE_RAW = os.environ.get("JWT_AUDIENCE", "eodh,eodh-workspaces")
 JWT_AUDIENCE = [aud.strip() for aud in JWT_AUDIENCE_RAW.split(",") if aud.strip()]
 
 
