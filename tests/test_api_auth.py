@@ -17,7 +17,7 @@ USER_CATALOG_ROOT = os.getenv("USER_CATALOG_ROOT", "user")
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
 
 
-def mock_jwt_decode(token: str, options: dict[str, Any], algorithms: list[str]) -> dict[str, Any]:
+def mock_jwt_decode(token: str, key: Any, audience: list[str], algorithms: list[str]) -> dict[str, Any]:
     if token == "valid_token":
         return {"preferred_username": "username", "workspace": "test_user", "roles": ["hub_user"]}
     elif token == "another_valid_token":
@@ -42,6 +42,7 @@ def mock_requests_get(url: str, headers: dict[str, str], timeout: int = 10) -> M
 @pytest.fixture(autouse=True)
 def mock_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("jwt.decode", mock_jwt_decode)
+    monkeypatch.setattr("ades_fastapi.utils._jwks_client", lambda: MagicMock())
     monkeypatch.setattr("requests.post", mock_requests_post)
     monkeypatch.setattr("requests.get", mock_requests_get)
 

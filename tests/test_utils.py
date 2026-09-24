@@ -1,9 +1,16 @@
 import json
+import types
+from collections.abc import Generator
 from unittest import mock
 
 import botocore.exceptions
-from fastapi import Request
+import jwt
+import jwt.utils
+import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import HTTPException, Request
 
+from ades_fastapi import utils
 from ades_fastapi.utils import (
     convert_username_to_workspace,
     convert_workspace_to_username,
@@ -16,6 +23,27 @@ from ades_fastapi.utils import (
     opa_request,
     replace_href_links,
 )
+
+PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def _request_with_token(token: str) -> mock.Mock:
+    request = mock.Mock(spec=Request)
+    request.headers = {"authorization": f"Bearer {token}"}
+    return request
+
+
+def _token(key: rsa.RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
+    return jwt.encode({"sub": "test-user", "aud": aud, **claims}, key, algorithm="RS256")
+
+
+@pytest.fixture(autouse=True)
+def mock_jwks() -> Generator[mock.MagicMock]:
+    with mock.patch.object(utils, "_jwks_client") as mock_client:
+        mock_client.return_value.get_signing_key_from_jwt.return_value = types.SimpleNamespace(
+            key=PRIVATE_KEY.public_key()
+        )
+        yield mock_client
 
 
 # Mock the logger to avoid unnecessary logging during tests
@@ -47,17 +75,15 @@ def test_opa_request(mock_logger: mock.MagicMock, mock_post: mock.MagicMock) -> 
     mock_post.assert_called_once_with(opa_service_endpoint, json=input_data)
 
 
-@mock.patch("ades_fastapi.utils.jwt.decode")
-def test_get_user_details(mock_jwt_decode: mock.MagicMock) -> None:
-    request = mock.Mock(spec=Request)
-    request.headers = {"authorization": "Bearer testtoken"}
-
-    mock_jwt_decode.return_value = {
-        "preferred_username": "username",
-        "workspace": "my-workspace",
-        "workspaces": ["my-workspace", "another-workspace"],
-        "realm_access": {"roles": ["role1", "role2"]},
-    }
+def test_get_user_details() -> None:
+    token = _token(
+        PRIVATE_KEY,
+        preferred_username="username",
+        workspace="my-workspace",
+        workspaces=["my-workspace", "another-workspace"],
+        realm_access={"roles": ["role1", "role2"]},
+    )
+    request = _request_with_token(token)
 
     username, workspace, workspaces, roles = get_user_details(request)
 
@@ -65,11 +91,57 @@ def test_get_user_details(mock_jwt_decode: mock.MagicMock) -> None:
     assert workspace == "my-workspace"
     assert workspaces == ["my-workspace", "another-workspace"]
     assert roles == ["role1", "role2"]
-    mock_jwt_decode.assert_called_once_with(
-        "testtoken",
-        options={"verify_signature": False},
-        algorithms=["HS256"],
-    )
+
+
+def test_get_user_details_no_token() -> None:
+    request = mock.Mock(spec=Request)
+    request.headers = {}
+
+    username, workspace, workspaces, roles = get_user_details(request)
+
+    assert username == ""
+    assert workspace == ""
+    assert workspaces == []
+    assert roles == []
+
+
+def test_get_user_details_forged_signature_is_rejected() -> None:
+    """This is the exact bug that shipped: verify_signature was False, so any signature -
+    including one that is not cryptographically valid at all - was accepted.
+    """
+    header = jwt.utils.base64url_encode(b'{"alg":"RS256","typ":"JWT"}').decode()
+    payload = jwt.utils.base64url_encode(
+        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"eodh"}'
+    ).decode()
+    forged_signature = jwt.utils.base64url_encode(b"not-a-real-signature").decode()
+    forged_token = f"{header}.{payload}.{forged_signature}"
+    request = _request_with_token(forged_token)
+
+    with pytest.raises(HTTPException) as raised:
+        get_user_details(request)
+
+    assert raised.value.status_code == 401
+
+
+def test_get_user_details_token_signed_by_a_different_key_is_rejected() -> None:
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _token(other_key)
+    request = _request_with_token(token)
+
+    with pytest.raises(HTTPException) as raised:
+        get_user_details(request)
+
+    assert raised.value.status_code == 401
+
+
+def test_get_user_details_wrong_audience_is_rejected() -> None:
+    token = _token(PRIVATE_KEY, aud="some-other-client")
+    request = _request_with_token(token)
+
+    with pytest.raises(HTTPException) as raised:
+        get_user_details(request)
+
+    assert raised.value.status_code == 401
 
 
 @mock.patch("ades_fastapi.utils.boto3.client")

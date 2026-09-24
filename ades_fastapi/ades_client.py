@@ -9,6 +9,7 @@ import botocore.exceptions
 import requests
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from .aws_client import generate_aws_credentials
 from .job_saver import JobSaver
@@ -431,9 +432,8 @@ class ADESClient:
         deploy_workspace: str,
         workflow_id: str,
     ) -> tuple[requests.Response, str]:
-        username, workspace, _workspaces, _ = get_user_details(
-            request
-        )  # check this is the correct way to extract calling workspace
+        # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
+        username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(token, username, workspace, deploy_workspace, workflow_id)
         try:
@@ -465,7 +465,8 @@ class ADESClient:
         deploy_workspace: str,
         workflow_id: str,
     ) -> tuple[requests.Response, str]:
-        username, workspace, _workspaces, _ = get_user_details(request)
+        # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
+        username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(token, username, workspace, workspace, workflow_id)
         try:

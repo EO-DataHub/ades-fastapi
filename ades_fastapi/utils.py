@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from enum import Enum
+from functools import lru_cache
 from json import JSONDecodeError
 from typing import Any
 
@@ -10,7 +11,10 @@ import botocore.exceptions
 import jwt
 import requests
 import yaml
-from fastapi import Request
+from fastapi import HTTPException, Request
+from jwt import PyJWKClient
+
+from ades_fastapi.aws_client import KEYCLOAK_BASE_URL
 
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
@@ -19,6 +23,23 @@ ILLEGAL_WORKFLOW_INPUTS = [input.strip().lower() for input in ILLEGAL_WORKFLOW_I
 
 ILLEGAL_WORKFLOW_STEPS_RAW = os.getenv("ILLEGAL_WORKFLOW_STEPS", "node_stage_in,node_stage_out").split(",")
 ILLEGAL_WORKFLOW_STEPS = [step.strip().lower() for step in ILLEGAL_WORKFLOW_STEPS_RAW]
+
+KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs"
+
+# The Keycloak client IDs platform tokens are issued for (the audience mappers on the eodh and
+# eodh-workspaces clients, eodhp-argocd-deployment apps/keycloak/base/realms.yaml). This list is
+# duplicated across the platform's services (accounting-service, eodh-ac-api,
+# wf-catalogue-service), so change them together.
+JWT_AUDIENCE = ["eodh", "eodh-workspaces"]
+
+
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    """One client per process, so the JWKS document is cached rather than re-fetched from
+    Keycloak on every request. PyJWKClient does this caching internally, but only across
+    calls on the same instance.
+    """
+    return PyJWKClient(KEYCLOAK_CERTS_URL)
 
 
 class WorkflowType(Enum):
@@ -51,11 +72,20 @@ def get_user_details(request: Request) -> tuple[str, str, list[str], list[str]]:
     stripped_token = token.replace("Bearer ", "")
     logger.debug("Token: %s", stripped_token)
     if stripped_token:
-        credentials = jwt.decode(
-            stripped_token,
-            options={"verify_signature": False},
-            algorithms=["HS256"],
-        )
+        # The signature is verified against Keycloak's own published key (fetched from
+        # KEYCLOAK_CERTS_URL), rather than trusting an upstream gateway to have checked it: a
+        # gateway sitting in front of the public path does not cover traffic that reaches this
+        # service directly from elsewhere on the cluster network.
+        try:
+            signing_key = _jwks_client().get_signing_key_from_jwt(stripped_token)
+            credentials = jwt.decode(
+                stripped_token,
+                signing_key.key,
+                audience=JWT_AUDIENCE,
+                algorithms=["RS256"],
+            )
+        except jwt.exceptions.PyJWTError as e:
+            raise HTTPException(status_code=401, detail="Invalid JWT token") from e
         logger.debug("Credentials: %s", credentials)
         username = credentials.get("preferred_username", "")
         workspace = credentials.get("workspace", "")
