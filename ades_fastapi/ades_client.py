@@ -433,9 +433,7 @@ class ADESClient:
         workflow_id: str,
     ) -> tuple[requests.Response, str]:
         # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
-        username, workspace, _workspaces, _ = await run_in_threadpool(
-            get_user_details, request
-        )  # check this is the correct way to extract calling workspace
+        username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
         token = get_user_token(request)
         aws_creds = generate_aws_credentials(token, username, workspace, deploy_workspace, workflow_id)
         try:

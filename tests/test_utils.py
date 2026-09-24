@@ -38,7 +38,7 @@ def _token(key: rsa.RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
 
 
 @pytest.fixture(autouse=True)
-def mock_jwks() -> Generator[mock.MagicMock, None, None]:
+def mock_jwks() -> Generator[mock.MagicMock]:
     with mock.patch.object(utils, "_jwks_client") as mock_client:
         mock_client.return_value.get_signing_key_from_jwt.return_value = types.SimpleNamespace(
             key=PRIVATE_KEY.public_key()

@@ -28,10 +28,9 @@ KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs
 
 # The Keycloak client IDs platform tokens are issued for (the audience mappers on the eodh and
 # eodh-workspaces clients, eodhp-argocd-deployment apps/keycloak/base/realms.yaml). This list is
-# duplicated across the platform's services, so change them together. Overridable per
-# deployment via JWT_AUDIENCE.
-JWT_AUDIENCE_RAW = os.environ.get("JWT_AUDIENCE", "eodh,eodh-workspaces")
-JWT_AUDIENCE = [aud.strip() for aud in JWT_AUDIENCE_RAW.split(",") if aud.strip()]
+# duplicated across the platform's services (accounting-service, eodh-ac-api,
+# wf-catalogue-service), so change them together.
+JWT_AUDIENCE = ["eodh", "eodh-workspaces"]
 
 
 @lru_cache
