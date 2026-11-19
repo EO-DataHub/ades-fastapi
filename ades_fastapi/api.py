@@ -23,7 +23,7 @@ from .models import (
     ListProcessesResponse,
     PingResponse,
 )
-from .utils import WorkflowType, get_user_details
+from .utils import WorkflowType, get_user_details, is_valid_datetime_param
 
 
 def strtobool(val: str) -> bool:
@@ -517,6 +517,13 @@ def get_deployed_workspaced_jobs(
 ) -> Response:
     """An endpoint to list all jobs in a specified workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
+
+    # An empty value means no filter, as it did before this check
+    if datetime and not is_valid_datetime_param(datetime):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid datetime: use an RFC 3339 date-time or interval, for example 2026-01-01T00:00:00Z/..",
+        )
 
     response, content = ades_client.get_deployed_workspaced_jobs(
         request,

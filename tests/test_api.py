@@ -2,6 +2,7 @@ import os
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -331,6 +332,46 @@ def test_get_deployed_workspaced_jobs(
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
     assert response.json() == {"jobs": [{"jobID": "job_1234"}]}
+
+
+@pytest.mark.parametrize("datetime_value", ["not-a-date", "x,2026-01-01T00:00:00Z/..", "2026-01-01' OR '1'='1"])
+@patch("ades_fastapi.dependency_client.DependencyClient.check_access")
+@patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs")
+def test_get_deployed_workspaced_jobs_rejects_invalid_datetime(
+    mock_get_deployed_workspaced_jobs: mock.MagicMock,
+    mock_check_access: mock.MagicMock,
+    datetime_value: str,
+) -> None:
+    mock_check_access.return_value = True, WorkflowType.WORKFLOW
+
+    response = client.get(
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/test_workspace/jobs",
+        params={"datetime": datetime_value},
+    )
+
+    assert response.status_code == 400
+    mock_get_deployed_workspaced_jobs.assert_not_called()
+
+
+@patch("ades_fastapi.dependency_client.DependencyClient.check_access")
+@patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs")
+def test_get_deployed_workspaced_jobs_treats_empty_datetime_as_no_filter(
+    mock_get_deployed_workspaced_jobs: mock.MagicMock,
+    mock_check_access: mock.MagicMock,
+) -> None:
+    mock_check_access.return_value = True, WorkflowType.WORKFLOW
+    mock_get_deployed_workspaced_jobs.return_value = (
+        MagicMock(status_code=200, headers={"Content-Type": "application/json"}),
+        '{"jobs": []}',
+    )
+
+    response = client.get(
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/test_workspace/jobs",
+        params={"datetime": ""},
+    )
+
+    assert response.status_code == 200
+    mock_get_deployed_workspaced_jobs.assert_called_once()
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")

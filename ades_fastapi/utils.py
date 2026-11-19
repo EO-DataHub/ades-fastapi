@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import re
+from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 from json import JSONDecodeError
@@ -142,6 +144,34 @@ def convert_username_to_workspace(username: str) -> str:
     if not username:
         return ""
     return username.replace("-", "_")
+
+
+# RFC 3339 date or date-time. A strict pattern, because `datetime.fromisoformat` accepts any
+# single character, such as a quote, between the date and the time
+_RFC3339_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}(?:[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2}))?")
+
+
+def is_valid_datetime_param(value: str) -> bool:
+    """Check a jobs `datetime` filter is an RFC 3339 date-time or interval.
+
+    Accepts an RFC 3339 date or date-time (`2026-01-01T00:00:00Z`) or an interval
+    (`start/end`), where one end may be open (`..` or empty). ZOO puts this value into SQL text, so
+    anything else, including commas and quotes, is rejected here.
+    """
+    parts = value.split("/")
+    if len(parts) > 2:
+        return False
+    bounded = [part for part in parts if part not in ("", "..")]
+    if not bounded:
+        return False
+    for part in bounded:
+        if not _RFC3339_DATETIME.fullmatch(part):
+            return False
+        try:
+            datetime.fromisoformat(part)
+        except ValueError:
+            return False
+    return True
 
 
 def replace_href_link(link: str, base_url: str, catalog_root: str, workspace: str) -> str:
