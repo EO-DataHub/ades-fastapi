@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import time
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import boto3
@@ -26,6 +28,8 @@ from .utils import (
 logger = logging.getLogger(__name__)  # Add this line to define the logger
 
 JOBS_TIMEOUT = int(os.getenv("JOBS_TIMEOUT", "60"))
+# Clamped to 1..10: botocore's default connection pool holds 10 connections
+JOB_DETAILS_MAX_WORKERS = max(1, min(int(os.getenv("JOB_DETAILS_MAX_WORKERS", "10")), 10))
 
 
 class ADESClient:
@@ -561,6 +565,7 @@ class ADESClient:
         filtered_jobs = []
 
         # Get all jobs in the deployed workspace
+        ades_start = time.perf_counter()
         response = self._send_request(
             "GET",
             f"{deploy_workspace}/ogc-api/jobs",
@@ -568,6 +573,7 @@ class ADESClient:
             data={"params": params},
             timeout=JOBS_TIMEOUT,
         )
+        ades_seconds = time.perf_counter() - ades_start
 
         try:
             response_json = response.json()
@@ -585,9 +591,24 @@ class ADESClient:
             workspaces,
             deploy_workspace,
         )
-        for job in jobs:
-            job_id = job.get("jobID", "")
-            job_details = job_saver.get_job_details(deploy_workspace, job_id)
+        # Each job's owner record is a separate S3 object, so read them concurrently
+        job_ids = [job.get("jobID", "") for job in jobs]
+        with ThreadPoolExecutor(max_workers=JOB_DETAILS_MAX_WORKERS) as executor:
+            all_job_details = list(
+                executor.map(lambda job_id: job_saver.get_job_details(deploy_workspace, job_id), job_ids)
+            )
+        owners_seconds = time.perf_counter() - ades_start - ades_seconds
+
+        # Timings show whether a slow list is spent in ADES or in the owner lookups
+        logger.info(
+            "Listed %d jobs in workspace %s: ADES took %.2fs, owner lookups took %.2fs",
+            len(jobs),
+            deploy_workspace,
+            ades_seconds,
+            owners_seconds,
+        )
+
+        for job, job_id, job_details in zip(jobs, job_ids, all_job_details, strict=True):
             if job_details.get("calling_workspace") in workspaces:
                 job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
                 job["links"] = self._format_log_links(job["links"], deploy_workspace, job_id)

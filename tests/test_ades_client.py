@@ -1683,3 +1683,35 @@ def test_check_workflow_access_invalid_policy(
         Bucket="test-policy-bucket",
         Key=f"test-policy-prefix/{deploy_workspace}/test_workflow.access-policy.json",
     )
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch(
+    "ades_fastapi.ades_client.get_user_details",
+    return_value=("username", "test-workspace", ["test-workspace"], []),
+)
+def test_get_deployed_workspaced_jobs_keeps_next_page_link(
+    mock_get_user_details: mock.MagicMock,
+    mock_send_request: mock.MagicMock,
+    ades_client: ADESClient,
+) -> None:
+    mock_job_saver = MagicMock()
+    mock_job_saver.get_job_details.return_value = {"calling_workspace": "test-workspace"}
+    mock_send_request.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "jobs": [{"jobID": "job-1", "links": []}, {"jobID": "job-2", "links": []}],
+            "links": [
+                {"rel": "self", "href": "http://localhost:8080/test_workspace/ogc-api/jobs"},
+                {"rel": "next", "href": "http://localhost:8080/test_workspace/ogc-api/jobs?limit=2&skip=2"},
+            ],
+            "numberTotal": 5,
+        },
+    )
+    request = MagicMock()
+    request.headers = {}
+
+    _response, content = ades_client.get_deployed_workspaced_jobs(request, "test_workspace", mock_job_saver, limit=2)
+
+    links = {link["rel"]: link["href"] for link in json.loads(content)["links"]}
+    assert links["next"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=2&skip=2"

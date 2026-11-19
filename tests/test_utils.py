@@ -19,6 +19,7 @@ from ades_fastapi.utils import (
     get_user_details,
     get_workflow_id_from_file,
     get_workflow_id_from_url,
+    is_valid_datetime_param,
     list_jobs_dict,
     opa_request,
     replace_href_links,
@@ -510,3 +511,46 @@ def test_list_jobs_dict(mock_logger: mock.MagicMock, mock_get: mock.MagicMock) -
         f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs",
         headers={"authorization": "Bearer testtoken"},
     )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-01-01T00:00:00Z",
+        "2026-01-01",
+        "2026-01-01T00:00:00Z/2026-12-31T00:00:00Z",
+        "2026-01-01T00:00:00+01:00/..",
+        "../2026-12-31T00:00:00Z",
+        "2026-01-01T00:00:00Z/",
+    ],
+)
+def test_is_valid_datetime_param_accepts_iso_instants_and_intervals(value: str) -> None:
+    assert is_valid_datetime_param(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "..",
+        "../..",
+        "/",
+        "not-a-date",
+        "2026-01-01T00:00:00Z/2026-12-31T00:00:00Z/2027-01-01T00:00:00Z",
+        "x,2026-01-01T00:00:00Z/..",
+        "2026-01-01T00:00:00Z'",
+        "2026-01-01' OR '1'='1",
+        "2026-01-01'00:00:00Z",
+        "2026-01-01;00:00:00Z",
+        "2026-01-01,00:00:00Z",
+        "2026-01-01T00:00:00Z/2026-01-02'00:00:00Z",
+        "2026-W01-1",
+        "20260101T000000Z",
+        "2026-01-01 00:00:00Z",
+        "2026-01-01T10",
+        "2026-13-01",
+        "2026-01-01T00:00:00Z\n",
+    ],
+)
+def test_is_valid_datetime_param_rejects_anything_else(value: str) -> None:
+    assert not is_valid_datetime_param(value)
