@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,9 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 JOBS_TIMEOUT = int(os.getenv("JOBS_TIMEOUT", "60"))
 # Clamped to 1..10: botocore's default connection pool holds 10 connections
 JOB_DETAILS_MAX_WORKERS = max(1, min(int(os.getenv("JOB_DETAILS_MAX_WORKERS", "10")), 10))
+# A caller index key without its prefix: reverse milliseconds, deploy workspace, job ID.
+# Also the shape of the `after` cursor for scope=called.
+CALLED_AFTER_PATTERN = re.compile(r"\d{13}/[^/]+/[^/]+")
 
 
 class ADESClient:
@@ -676,13 +680,15 @@ class ADESClient:
 
         keys = [obj["Key"] for obj in listing.get("Contents", [])]
         targets: list[tuple[str, str]] = []
+        last_cursor: str | None = None
         for key in keys:
-            parts = key[len(prefix) :].split("/")
-            if len(parts) != 3 or not all(parts):
+            suffix = key[len(prefix) :]
+            if not CALLED_AFTER_PATTERN.fullmatch(suffix):
                 logger.warning("Skipping malformed caller index key %s", key)
                 continue
-            _reverse_ms, deploy_workspace, job_id = parts
+            _reverse_ms, deploy_workspace, job_id = suffix.split("/")
             targets.append((deploy_workspace, job_id))
+            last_cursor = suffix
 
         with ThreadPoolExecutor(max_workers=JOB_DETAILS_MAX_WORKERS) as executor:
             fetched = list(executor.map(lambda target: self._fetch_called_job(headers, *target), targets))
@@ -703,35 +709,23 @@ class ADESClient:
         if after:
             self_query["after"] = after
         links = [{"rel": "self", "type": "application/json", "href": f"{jobs_url}?{urlencode(self_query, safe='/')}"}]
-        if listing.get("IsTruncated") and keys:
-            next_query = {"scope": "called", "limit": limit, "after": keys[-1][len(prefix) :]}
-            links.append(
-                {"rel": "next", "type": "application/json", "href": f"{jobs_url}?{urlencode(next_query, safe='/')}"}
-            )
+        if listing.get("IsTruncated"):
+            if last_cursor is None:
+                logger.warning(
+                    "No well-formed caller index key on a truncated page for workspace %s, omitting next link",
+                    workspace,
+                )
+            else:
+                next_query = {"scope": "called", "limit": limit, "after": last_cursor}
+                links.append(
+                    {
+                        "rel": "next",
+                        "type": "application/json",
+                        "href": f"{jobs_url}?{urlencode(next_query, safe='/')}",
+                    }
+                )
 
         return {"jobs": jobs, "links": links, "numberTotal": len(jobs)}
-
-    def get_all_jobs(self, request: Request, workspace_jobs: dict[str, Any]) -> str:
-        _username, workspace, _workspaces, _ = get_user_details(request)
-
-        headers = dict(request.headers)
-        headers.pop("authorization", None)
-
-        job_details_list = []
-
-        for job in workspace_jobs.get(workspace, []):
-            deploy_workspace = job["deploy_workspace"]
-            job_id = job["jobID"]
-            response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
-            job_details = response.json()
-            job_details = replace_href_links(job_details, self.base_url, self.catalog_root, deploy_workspace)
-            job_details_list.append(job_details)
-
-        response_json = {"workspace": workspace, "jobs": job_details_list}
-
-        content = json.dumps(response_json)
-
-        return content
 
     def _get_workflow_id_from_job_id(self, deploy_workspace: str, job_id: str, headers: dict[str, Any]) -> str:
         response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)

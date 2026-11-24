@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 from collections.abc import Sequence
 from typing import Annotated, Literal
 
@@ -10,7 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.concurrency import run_in_threadpool
 
-from .ades_client import ADESClient
+from .ades_client import CALLED_AFTER_PATTERN, ADESClient
 from .dependency_client import DependencyClient
 from .job_saver import JobSaver
 from .models import (
@@ -487,6 +486,13 @@ def process_results(
     dependencies=[Depends(opa_dependency)],
     response_model=GetAllJobStatusResponse,
     summary="Get details for all available jobs in a workspace",
+    description=(
+        "Use `scope` to choose which jobs to list. `deployed`, the default, lists jobs run in this workspace. "
+        "`called` lists jobs this workspace started in other workspaces, newest first.\n\n"
+        "With `scope=called`, results come one page at a time. To get the next page, follow the `next` link, "
+        "which carries an opaque `after` cursor. `after` is only used with `scope=called`. "
+        "`scope=called` does not support the `status`, `datetime` or `skip` filters."
+    ),
     responses={
         204: {"description": "Job details returned successfully"},
     },
@@ -562,7 +568,6 @@ def get_deployed_workspaced_jobs(
 
 CALLED_JOBS_DEFAULT_LIMIT = 20
 CALLED_JOBS_MAX_LIMIT = 100
-_CALLED_AFTER_PATTERN = re.compile(r"\d{13}/[^/]+/[^/]+")
 
 
 def _list_called_jobs(
@@ -596,7 +601,7 @@ def _list_called_jobs(
             detail=f"limit must be between 1 and {CALLED_JOBS_MAX_LIMIT} with scope=called",
         )
 
-    if after is not None and not _CALLED_AFTER_PATTERN.fullmatch(after):
+    if after is not None and not CALLED_AFTER_PATTERN.fullmatch(after):
         raise HTTPException(
             status_code=400,
             detail="Invalid after: use the value from the next link of a scope=called page",
@@ -604,23 +609,6 @@ def _list_called_jobs(
 
     content = ades_client.get_called_jobs(request, workspace, limit, after)
     return JSONResponse(content=content)
-
-
-##############
-## NOT USED ##
-##############
-# @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
-# dependencies=[Depends(opa_dependency)])
-def get_all_jobs(request: Request) -> Response:
-    """Endpoint to list all jobs called by the specified user"""
-
-    content = ades_client.get_all_jobs(request, {})
-
-    return Response(
-        content=content,
-        media_type="application/json",
-        status_code=200,
-    )
 
 
 @app.get(
