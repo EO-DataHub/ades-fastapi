@@ -144,7 +144,7 @@ def called_scope_backends() -> Iterator[dict[str, MagicMock]]:
         yield {"s3": s3, "send_request": send_request, "deployed": deployed}
 
 
-def test_stage2_called_scope_lists_index_with_default_limit_and_after(
+def test_jobs_list_called_scope_lists_caller_index(
     called_scope_backends: dict[str, MagicMock],
 ) -> None:
     after = "8235000000009/publisher/job-0"
@@ -160,7 +160,7 @@ def test_stage2_called_scope_lists_index_with_default_limit_and_after(
     called_scope_backends["deployed"].assert_not_called()
 
 
-def test_stage2_called_scope_for_workspace_not_in_token_is_forbidden(
+def test_jobs_list_called_scope_forbidden_for_other_workspace(
     called_scope_backends: dict[str, MagicMock],
 ) -> None:
     response = client.get(
@@ -173,34 +173,41 @@ def test_stage2_called_scope_for_workspace_not_in_token_is_forbidden(
     called_scope_backends["s3"].list_objects_v2.assert_not_called()
 
 
+UNSUPPORTED_FILTER = [re.compile("not supported", re.IGNORECASE), re.compile(re.escape("scope=called"))]
+
+
 @pytest.mark.parametrize(
-    "filter_params",
-    [{"status": "running"}, {"datetime": "2026-01-01T00:00:00Z/.."}, {"skip": 5}],
+    ("query", "status", "detail_patterns"),
+    [
+        ({"status": "running"}, 400, UNSUPPORTED_FILTER),
+        ({"datetime": "2026-01-01T00:00:00Z/.."}, 400, UNSUPPORTED_FILTER),
+        ({"skip": 5}, 400, UNSUPPORTED_FILTER),
+        ({"after": "job-1"}, 400, []),
+        ({"after": "8235000000001/job-1"}, 400, []),
+        ({"after": "not-a-time/publisher/job-1"}, 400, []),
+        ({"after": "8235000000001/publisher/job-1/extra"}, 400, []),
+        ({"limit": 101}, 422, []),
+    ],
+    ids=[
+        "status-filter",
+        "datetime-filter",
+        "skip",
+        "after-job-id-only",
+        "after-missing-workspace",
+        "after-bad-time",
+        "after-extra-part",
+        "limit-above-100",
+    ],
 )
-def test_stage2_called_scope_rejects_unsupported_filters(
-    called_scope_backends: dict[str, MagicMock], filter_params: dict[str, Any]
+def test_jobs_list_called_scope_rejects_bad_query(
+    called_scope_backends: dict[str, MagicMock],
+    query: dict[str, Any],
+    status: int,
+    detail_patterns: list[re.Pattern[str]],
 ) -> None:
-    response = client.get(CALLER_JOBS_URL, params={"scope": "called", **filter_params}, headers=AUTH)
+    response = client.get(CALLER_JOBS_URL, params={"scope": "called", **query}, headers=AUTH)
 
-    assert response.status_code == 400
-    assert re.search(r"not supported", str(response.json()["detail"]), re.IGNORECASE)
-    assert "scope=called" in str(response.json()["detail"])
-    called_scope_backends["s3"].list_objects_v2.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "after",
-    ["job-1", "8235000000001/job-1", "not-a-time/publisher/job-1", "8235000000001/publisher/job-1/extra"],
-)
-def test_stage2_called_scope_rejects_malformed_after(called_scope_backends: dict[str, MagicMock], after: str) -> None:
-    response = client.get(CALLER_JOBS_URL, params={"scope": "called", "after": after}, headers=AUTH)
-
-    assert response.status_code == 400
-    called_scope_backends["s3"].list_objects_v2.assert_not_called()
-
-
-def test_stage2_called_scope_rejects_limit_above_100(called_scope_backends: dict[str, MagicMock]) -> None:
-    response = client.get(CALLER_JOBS_URL, params={"scope": "called", "limit": 101}, headers=AUTH)
-
-    assert response.status_code == 422
+    assert response.status_code == status
+    for pattern in detail_patterns:
+        assert pattern.search(str(response.json()["detail"]))
     called_scope_backends["s3"].list_objects_v2.assert_not_called()

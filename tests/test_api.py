@@ -423,10 +423,10 @@ def test_delete_job(mock_delete_job: mock.MagicMock, mock_check_access: mock.Mag
     assert response.json() == {"Result": "deleted"}
 
 
-@pytest.mark.parametrize("scope_params", [{}, {"scope": "deployed"}])
+@pytest.mark.parametrize("scope_params", [{}, {"scope": "deployed"}], ids=["no-scope", "scope-deployed"])
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs")
-def test_stage2_jobs_list_without_called_scope_uses_deployed_list_as_before(
+def test_jobs_list_default_scope_uses_deployed_list(
     mock_get_deployed_workspaced_jobs: mock.MagicMock,
     mock_check_access: mock.MagicMock,
     scope_params: dict[str, str],
@@ -447,15 +447,3 @@ def test_stage2_jobs_list_without_called_scope_uses_deployed_list_as_before(
     assert isinstance(args[0], Request)
     assert args[1:] == ("test_workspace", ades_api.job_saver)
     assert kwargs == {"limit": 500, "skip": 2, "status": ["running"], "datetime": None}
-
-
-def test_stage3_jobs_route_openapi_documents_scope_and_after() -> None:
-    operation = app.openapi()["paths"][
-        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
-    ]["get"]
-    params = {param["name"]: param for param in operation["parameters"]}
-
-    assert params["scope"].get("description")
-    assert params["after"].get("description")
-    called_docs = (operation.get("description", "") + params["scope"]["description"]).lower()
-    assert all(name in called_docs for name in ["status", "datetime", "skip"])

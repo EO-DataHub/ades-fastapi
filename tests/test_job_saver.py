@@ -139,7 +139,7 @@ def test_record_owner_key_error(job_saver: JobSaver) -> None:
         job_saver.record_owner(response, "workflow_id", "deploy_workspace", "calling_workspace")
 
 
-def test_stage1_cross_workspace_job_writes_owner_and_index_records(job_saver: JobSaver) -> None:
+def test_record_owner_writes_caller_index_for_cross_workspace_job(job_saver: JobSaver) -> None:
     before_ms = _now_ms()
     job_saver.record_owner(_job_response("11111"), "workflow_id", "publisher", "caller")
     after_ms = _now_ms()
@@ -167,13 +167,13 @@ def test_stage1_cross_workspace_job_writes_owner_and_index_records(job_saver: Jo
     assert before_ms <= started_ms <= after_ms
 
 
-def test_stage1_same_workspace_job_writes_only_owner_record(job_saver: JobSaver) -> None:
+def test_record_owner_same_workspace_job_writes_no_caller_index(job_saver: JobSaver) -> None:
     job_saver.record_owner(_job_response("11111"), "workflow_id", "caller", "caller")
 
     assert [kw["Key"] for kw in _put_kwargs(job_saver)] == ["caller/11111"]
 
 
-def test_stage1_user_service_job_in_another_workspace_writes_index_record(job_saver: JobSaver) -> None:
+def test_record_owner_writes_caller_index_for_user_service_job(job_saver: JobSaver) -> None:
     job_saver.record_owner(_job_response("11111"), "service_id", "provider", "caller", WorkflowType.USER_SERVICE)
 
     [index] = _index_puts(job_saver)
@@ -181,9 +181,7 @@ def test_stage1_user_service_job_in_another_workspace_writes_index_record(job_sa
     assert json.loads(index["Body"])["workflow_type"] == "user-service"
 
 
-def test_stage1_index_write_failure_is_logged_and_not_raised(
-    job_saver: JobSaver, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_record_owner_logs_caller_index_write_failure(job_saver: JobSaver, caplog: pytest.LogCaptureFixture) -> None:
     def put_object(**kwargs: Any) -> dict[str, Any]:
         if kwargs["Key"].startswith("_by-caller/"):
             raise ClientError({"Error": {"Code": "AccessDenied", "Message": "denied"}}, "PutObject")
@@ -198,7 +196,7 @@ def test_stage1_index_write_failure_is_logged_and_not_raised(
     assert any(r.levelno >= logging.WARNING and r.name.startswith("ades_fastapi") for r in caplog.records)
 
 
-def test_stage1_later_job_index_key_sorts_first(job_saver: JobSaver) -> None:
+def test_record_owner_caller_index_sorts_newest_first(job_saver: JobSaver) -> None:
     job_saver.record_owner(_job_response("older"), "workflow_id", "publisher", "caller")
     time.sleep(0.002)
     job_saver.record_owner(_job_response("newer"), "workflow_id", "publisher", "caller")

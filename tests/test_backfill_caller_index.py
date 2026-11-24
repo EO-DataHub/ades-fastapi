@@ -66,7 +66,7 @@ def body_of(s3: Any, key: str) -> str:
     return s3.get_object(Bucket=WORKFLOWS_BUCKET, Key=key)["Body"].read().decode("utf-8")
 
 
-def test_stage4_cross_workspace_owner_record_gets_index_from_last_modified(s3: Any) -> None:
+def test_backfill_writes_caller_index_from_last_modified(s3: Any) -> None:
     put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
 
     run_backfill("--apply")
@@ -76,7 +76,7 @@ def test_stage4_cross_workspace_owner_record_gets_index_from_last_modified(s3: A
     assert body_of(s3, index_key) == body_of(s3, "publisher/job-1")
 
 
-def test_stage4_same_workspace_owner_record_writes_nothing(s3: Any) -> None:
+def test_backfill_same_workspace_job_writes_nothing(s3: Any) -> None:
     put(s3, "caller/job-1", owner_body("job-1", "caller", "caller"))
 
     run_backfill("--apply")
@@ -84,7 +84,7 @@ def test_stage4_same_workspace_owner_record_writes_nothing(s3: Any) -> None:
     assert keys(s3, "_by-caller/") == []
 
 
-def test_stage4_already_indexed_job_writes_nothing(s3: Any) -> None:
+def test_backfill_already_indexed_job_writes_nothing(s3: Any) -> None:
     put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
     existing = "_by-caller/caller/8235000000001/publisher/job-1"
     put(s3, existing, owner_body("job-1", "publisher", "caller"))
@@ -94,7 +94,7 @@ def test_stage4_already_indexed_job_writes_nothing(s3: Any) -> None:
     assert keys(s3, "_by-caller/") == [existing]
 
 
-def test_stage4_underscore_keys_are_not_read_as_owner_records(s3: Any, capsys: pytest.CaptureFixture[str]) -> None:
+def test_backfill_skips_underscore_keys(s3: Any, capsys: pytest.CaptureFixture[str]) -> None:
     put(s3, "_scratch/job-9", owner_body("job-9", "publisher", "caller"))
     put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
 
@@ -105,26 +105,7 @@ def test_stage4_underscore_keys_are_not_read_as_owner_records(s3: Any, capsys: p
     assert count(capsys.readouterr().out, "read") == 1
 
 
-def test_stage4_dry_run_writes_nothing_and_prints_counts(s3: Any, capsys: pytest.CaptureFixture[str]) -> None:
-    put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
-    put(s3, "publisher/job-2", owner_body("job-2", "publisher", "caller"))
-    put(s3, "publisher/job-3", owner_body("job-3", "publisher", "publisher"))
-    put(s3, "publisher/job-4", owner_body("job-4", "publisher", "caller"))
-    put(s3, "_by-caller/caller/8235000000001/publisher/job-4", owner_body("job-4", "publisher", "caller"))
-    before = keys(s3)
-
-    run_backfill()
-
-    assert keys(s3) == before
-    out = capsys.readouterr().out
-    assert expected_index_key(s3, "publisher/job-1", "caller") in out
-    assert count(out, "same") == 1
-    assert count(out, "already") == 1
-    assert count(out, "writ") == 2
-    assert count(out, "fail") == 0
-
-
-def test_stage4_failure_on_one_record_is_counted_and_others_are_written(
+def test_backfill_counts_failure_and_writes_others(
     s3: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
@@ -154,16 +135,35 @@ def test_stage4_failure_on_one_record_is_counted_and_others_are_written(
     assert count(out, "writ") == 2
 
 
-def test_stage4_second_run_after_apply_writes_nothing(s3: Any, capsys: pytest.CaptureFixture[str]) -> None:
+def test_backfill_dry_run_then_apply_twice(s3: Any, capsys: pytest.CaptureFixture[str]) -> None:
     put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
     put(s3, "other/job-2", owner_body("job-2", "other", "caller"))
+    put(s3, "publisher/job-3", owner_body("job-3", "publisher", "publisher"))
+    put(s3, "publisher/job-4", owner_body("job-4", "publisher", "caller"))
+    put(s3, "_by-caller/caller/8235000000001/publisher/job-4", owner_body("job-4", "publisher", "caller"))
+    before = keys(s3)
+
+    # Dry run: prints the counts and writes nothing.
+    run_backfill()
+
+    assert keys(s3) == before
+    out = capsys.readouterr().out
+    assert expected_index_key(s3, "publisher/job-1", "caller") in out
+    assert count(out, "same") == 1
+    assert count(out, "already") == 1
+    assert count(out, "writ") == 2
+    assert count(out, "fail") == 0
+
+    # First --apply writes the two missing index records.
     run_backfill("--apply")
     first_index_keys = keys(s3, "_by-caller/")
+    assert len(first_index_keys) == 3
     capsys.readouterr()
 
+    # Second --apply finds every job already indexed and writes nothing.
     run_backfill("--apply")
 
     assert keys(s3, "_by-caller/") == first_index_keys
     out = capsys.readouterr().out
     assert count(out, "writ") == 0
-    assert count(out, "already") == 2
+    assert count(out, "already") == 3

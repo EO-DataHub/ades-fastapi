@@ -12,7 +12,6 @@ import botocore.exceptions
 import pytest
 from fastapi import HTTPException, Request
 
-from ades_fastapi import api as ades_api
 from ades_fastapi.ades_client import ADESClient
 from ades_fastapi.utils import WorkflowType
 
@@ -1741,7 +1740,7 @@ def called_request() -> MagicMock:
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_returns_jobs_in_key_order_with_own_workspace_links(
+def test_get_called_jobs_returns_jobs_in_key_order(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1781,7 +1780,7 @@ def test_stage2_called_jobs_returns_jobs_in_key_order_with_own_workspace_links(
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_fetches_concurrently_up_to_max_workers(
+def test_get_called_jobs_limits_concurrent_fetches(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1816,7 +1815,7 @@ def test_stage2_called_jobs_fetches_concurrently_up_to_max_workers(
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_leaves_out_job_zoo_no_longer_has(
+def test_get_called_jobs_leaves_out_missing_job(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1833,7 +1832,7 @@ def test_stage2_called_jobs_leaves_out_job_zoo_no_longer_has(
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_fails_with_502_on_other_zoo_error(
+def test_get_called_jobs_fails_with_502_on_zoo_error(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1849,7 +1848,7 @@ def test_stage2_called_jobs_fails_with_502_on_other_zoo_error(
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_next_link_continues_after_last_key(
+def test_get_called_jobs_next_link_continues_after_last_key(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1875,7 +1874,7 @@ def test_stage2_called_jobs_next_link_continues_after_last_key(
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 @patch("ades_fastapi.ades_client.boto3.client")
-def test_stage2_called_jobs_with_no_index_records_is_empty(
+def test_get_called_jobs_with_empty_index(
     mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
@@ -1889,8 +1888,3 @@ def test_stage2_called_jobs_with_no_index_records_is_empty(
     assert body["numberTotal"] == 0
     assert "next" not in {link["rel"] for link in body.get("links", [])}
     mock_send_request.assert_not_called()
-
-
-def test_stage3_get_all_jobs_is_removed() -> None:
-    assert not hasattr(ADESClient, "get_all_jobs")
-    assert not hasattr(ades_api, "get_all_jobs")
