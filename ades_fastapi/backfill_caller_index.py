@@ -47,12 +47,14 @@ def _indexed_owner_keys(s3_client: Any) -> set[str]:
 
 def backfill(s3_client: Any, apply: bool) -> Counts:
     counts = Counts()
+    # List the owner records before the index. A job that starts during the run writes its owner
+    # record and then, a moment later, its own index record. So any owner record in this listing
+    # already has its live index record by the time the index is read, and is not indexed twice.
+    owner_objects = [obj for obj in _list_objects(s3_client) if not obj["Key"].startswith("_")]
     indexed = _indexed_owner_keys(s3_client)
 
-    for obj in _list_objects(s3_client):
+    for obj in owner_objects:
         owner_key: str = obj["Key"]
-        if owner_key.startswith("_"):
-            continue
         if owner_key in indexed:
             counts.already_indexed += 1
             continue

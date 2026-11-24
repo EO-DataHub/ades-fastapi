@@ -167,3 +167,22 @@ def test_backfill_dry_run_then_apply_twice(s3: Any, capsys: pytest.CaptureFixtur
     out = capsys.readouterr().out
     assert count(out, "writ") == 0
     assert count(out, "already") == 3
+
+
+def test_backfill_does_not_reindex_job_started_during_run(s3: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    put(s3, "publisher/job-1", owner_body("job-1", "publisher", "caller"))
+    live_index = "_by-caller/caller/8235000000001/publisher/job-1"
+    module = importlib.import_module("ades_fastapi.backfill_caller_index")
+    list_objects = module._list_objects
+
+    def list_then_start_job(s3_client: Any, prefix: str = "") -> Iterator[dict[str, Any]]:
+        yield from list_objects(s3_client, prefix)
+        if prefix == "":
+            # The live code indexes job-1 while the backfill is running
+            put(s3, live_index, owner_body("job-1", "publisher", "caller"))
+
+    monkeypatch.setattr(module, "_list_objects", list_then_start_job)
+
+    run_backfill("--apply")
+
+    assert keys(s3, "_by-caller/") == [live_index]
