@@ -5,6 +5,7 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from urllib.parse import urlencode
 
 import boto3
 import botocore.exceptions
@@ -14,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from .aws_client import generate_aws_credentials
-from .job_saver import JobSaver
+from .job_saver import CALLER_INDEX_PREFIX, WORKFLOWS_BUCKET, JobSaver
 from .utils import (
     WorkflowType,
     get_user_details,
@@ -631,6 +632,84 @@ class ADESClient:
         content = json.dumps(response_json)
 
         return response, content
+
+    def _fetch_called_job(self, headers: dict[str, Any], deploy_workspace: str, job_id: str) -> dict[str, Any] | None:
+        """Fetch one job from ZOO; None if ZOO no longer has it."""
+        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", dict(headers))
+        if response.status_code == 404:
+            logger.info("Job %s in workspace %s no longer exists, leaving it out", job_id, deploy_workspace)
+            return None
+        if response.status_code != 200:
+            logger.error(
+                "Fetching job %s in workspace %s failed with status %s",
+                job_id,
+                deploy_workspace,
+                response.status_code,
+            )
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES")
+        try:
+            job = response.json()
+        except json.JSONDecodeError as err:
+            logger.error("Job %s in workspace %s is not valid JSON", job_id, deploy_workspace)
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES") from err
+        job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
+        job["links"] = self._format_log_links(job.get("links", []), deploy_workspace, job_id)
+        return job
+
+    def get_called_jobs(self, request: Request, workspace: str, limit: int, after: str | None) -> dict[str, Any]:
+        """List one page of the jobs that a workspace started in other workspaces, newest first."""
+        headers = dict(request.headers)
+        headers.pop("authorization", None)
+
+        prefix = f"{CALLER_INDEX_PREFIX}{workspace}/"
+        list_kwargs: dict[str, Any] = {"Bucket": WORKFLOWS_BUCKET, "Prefix": prefix, "MaxKeys": limit}
+        if after:
+            list_kwargs["StartAfter"] = f"{prefix}{after}"
+
+        s3_start = time.perf_counter()
+        try:
+            listing = boto3.client("s3").list_objects_v2(**list_kwargs)
+        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as err:
+            logger.exception("Listing the caller index for workspace %s failed", workspace)
+            raise HTTPException(status_code=502, detail="Failed to list jobs") from err
+        s3_seconds = time.perf_counter() - s3_start
+
+        keys = [obj["Key"] for obj in listing.get("Contents", [])]
+        targets: list[tuple[str, str]] = []
+        for key in keys:
+            parts = key[len(prefix) :].split("/")
+            if len(parts) != 3 or not all(parts):
+                logger.warning("Skipping malformed caller index key %s", key)
+                continue
+            _reverse_ms, deploy_workspace, job_id = parts
+            targets.append((deploy_workspace, job_id))
+
+        with ThreadPoolExecutor(max_workers=JOB_DETAILS_MAX_WORKERS) as executor:
+            fetched = list(executor.map(lambda target: self._fetch_called_job(headers, *target), targets))
+        zoo_seconds = time.perf_counter() - s3_start - s3_seconds
+
+        jobs = [job for job in fetched if job is not None]
+
+        logger.info(
+            "Listed %d called jobs for workspace %s: S3 list took %.2fs, ADES fetches took %.2fs",
+            len(jobs),
+            workspace,
+            s3_seconds,
+            zoo_seconds,
+        )
+
+        jobs_url = f"{self.base_url}/catalogs/{self.catalog_root}/catalogs/{workspace}/jobs"
+        self_query: dict[str, Any] = {"scope": "called", "limit": limit}
+        if after:
+            self_query["after"] = after
+        links = [{"rel": "self", "type": "application/json", "href": f"{jobs_url}?{urlencode(self_query, safe='/')}"}]
+        if listing.get("IsTruncated") and keys:
+            next_query = {"scope": "called", "limit": limit, "after": keys[-1][len(prefix) :]}
+            links.append(
+                {"rel": "next", "type": "application/json", "href": f"{jobs_url}?{urlencode(next_query, safe='/')}"}
+            )
+
+        return {"jobs": jobs, "links": links, "numberTotal": len(jobs)}
 
     def get_all_jobs(self, request: Request, workspace_jobs: dict[str, Any]) -> str:
         _username, workspace, _workspaces, _ = get_user_details(request)

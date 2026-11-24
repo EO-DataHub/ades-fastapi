@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 import requests
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from .utils import WorkflowType
 
@@ -82,7 +82,7 @@ class JobSaver:
                     Body=body,
                     ContentType="application/json",
                 )
-            except ClientError:
+            except (BotoCoreError, ClientError):
                 logger.warning("Failed to write caller index record %s for job %s", index_key, job_id, exc_info=True)
 
     def get_job_details(self, workspace: str, job_id: str) -> dict[str, Any]:
