@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from ades_fastapi import api as ades_api
 from ades_fastapi.api import app
 from ades_fastapi.job_saver import JobSaver
 from ades_fastapi.utils import WorkflowType
@@ -375,22 +376,6 @@ def test_get_deployed_workspaced_jobs_treats_empty_datetime_as_no_filter(
 
 
 @patch("ades_fastapi.dependency_client.DependencyClient.check_access")
-@patch("ades_fastapi.ades_client.ADESClient.get_all_jobs")
-def ignore_test_get_all_jobs(mock_get_all_jobs: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
-    # Override dependency
-    mock_check_access.return_value = True, WorkflowType.WORKFLOW
-    # Configure mocks
-    mock_get_all_jobs.return_value = '{"jobs": [{"jobID": "job_1234"}]}'
-    response = client.get("jobs")
-    calls = mock_get_all_jobs.call_args
-    assert isinstance(calls[0][0], dict)
-    assert isinstance(calls[0][1], dict)
-    assert response.status_code == 200
-    assert response.headers["Content-Type"] == "application/json"
-    assert response.json() == {"jobs": [{"jobID": "job_1234"}]}
-
-
-@patch("ades_fastapi.dependency_client.DependencyClient.check_access")
 @patch("ades_fastapi.ades_client.ADESClient.get_log")
 def test_get_log(mock_get_log: mock.MagicMock, mock_check_access: mock.MagicMock) -> None:
     # Override dependency
@@ -436,3 +421,41 @@ def test_delete_job(mock_delete_job: mock.MagicMock, mock_check_access: mock.Mag
     assert calls[0][2] == job_id
     assert response.status_code == 200
     assert response.json() == {"Result": "deleted"}
+
+
+@pytest.mark.parametrize("scope_params", [{}, {"scope": "deployed"}])
+@patch("ades_fastapi.dependency_client.DependencyClient.check_access")
+@patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs")
+def test_stage2_jobs_list_without_called_scope_uses_deployed_list_as_before(
+    mock_get_deployed_workspaced_jobs: mock.MagicMock,
+    mock_check_access: mock.MagicMock,
+    scope_params: dict[str, str],
+) -> None:
+    mock_check_access.return_value = True, WorkflowType.WORKFLOW
+    mock_get_deployed_workspaced_jobs.return_value = (
+        MagicMock(status_code=200, headers={"Content-Type": "application/json"}),
+        '{"jobs": []}',
+    )
+
+    response = client.get(
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/test_workspace/jobs",
+        params={"limit": 500, "skip": 2, "status": ["running"], **scope_params},
+    )
+
+    assert response.status_code == 200
+    args, kwargs = mock_get_deployed_workspaced_jobs.call_args
+    assert isinstance(args[0], Request)
+    assert args[1:] == ("test_workspace", ades_api.job_saver)
+    assert kwargs == {"limit": 500, "skip": 2, "status": ["running"], "datetime": None}
+
+
+def test_stage3_jobs_route_openapi_documents_scope_and_after() -> None:
+    operation = app.openapi()["paths"][
+        f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/catalogs/{{deploy_workspace}}/jobs"
+    ]["get"]
+    params = {param["name"]: param for param in operation["parameters"]}
+
+    assert params["scope"].get("description")
+    assert params["after"].get("description")
+    called_docs = (operation.get("description", "") + params["scope"]["description"]).lower()
+    assert all(name in called_docs for name in ["status", "datetime", "skip"])

@@ -1,12 +1,18 @@
 import json
 import os
+import re
+import threading
+import time
+from typing import Any
 from unittest import mock
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import botocore.exceptions
 import pytest
 from fastapi import HTTPException, Request
 
+from ades_fastapi import api as ades_api
 from ades_fastapi.ades_client import ADESClient
 from ades_fastapi.utils import WorkflowType
 
@@ -1311,46 +1317,6 @@ async def test_get_deployed_workspaced_jobs_not_user_service_deployed_workspace(
 
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch(
-    "ades_fastapi.ades_client.get_user_details",
-    return_value=("username", "test-workspace", ["test-workspace", "another-workspace"], []),
-)
-async def test_get_all_jobs(
-    mock_get_user_details: mock.MagicMock,
-    mock_send_request: mock.MagicMock,
-    ades_client: ADESClient,
-) -> None:
-    mock_send_request.return_value = MagicMock(status_code=200, json=lambda: {"jobID": "job-id-details"})
-    request = MagicMock()
-    request.headers = {"authorization": "Bearer token", "Content-Type": "application/json"}
-    workspace_jobs = {
-        "test-workspace": [
-            {"deploy_workspace": "test_workspace-1", "jobID": "job-id-1"},
-            {"deploy_workspace": "test_workspace-2", "jobID": "job-id-2"},
-        ]
-    }
-    content = ades_client.get_all_jobs(request, workspace_jobs)
-    assert json.loads(content) == {
-        "workspace": "test-workspace",
-        "jobs": [{"jobID": "job-id-details"}, {"jobID": "job-id-details"}],
-    }
-
-    calls = mock_send_request.call_args_list
-
-    assert calls[0][0] == (
-        "GET",
-        "test_workspace-1/ogc-api/jobs/job-id-1",
-        {"Content-Type": "application/json"},
-    )
-    assert calls[1][0] == (
-        "GET",
-        "test_workspace-2/ogc-api/jobs/job-id-2",
-        {"Content-Type": "application/json"},
-    )
-
-
-@pytest.mark.asyncio
-@patch("ades_fastapi.ades_client.ADESClient._send_request")
 async def test_get_log(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
     mock_send_request.return_value = MagicMock(status_code=200, content="log content")
     headers = {"authorization": "Bearer token"}
@@ -1715,3 +1681,216 @@ def test_get_deployed_workspaced_jobs_keeps_next_page_link(
 
     links = {link["rel"]: link["href"] for link in json.loads(content)["links"]}
     assert links["next"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=2&skip=2"
+
+
+def _called_jobs_body(result: Any) -> dict[str, Any]:
+    """Read the JSON body from whatever get_called_jobs returns."""
+    if isinstance(result, tuple):
+        result = result[-1]
+    if hasattr(result, "body"):
+        result = result.body
+    if isinstance(result, str | bytes):
+        return json.loads(result)
+    return result
+
+
+def _index_listing(keys: list[str], truncated: bool = False) -> dict[str, Any]:
+    listing: dict[str, Any] = {"KeyCount": len(keys), "IsTruncated": truncated}
+    if keys:
+        listing["Contents"] = [{"Key": key} for key in keys]
+    return listing
+
+
+def _zoo_job(deploy_workspace: str, job_id: str) -> dict[str, Any]:
+    zoo = f"http://localhost:8080/{deploy_workspace}"
+    return {
+        "jobID": job_id,
+        "status": "successful",
+        "links": [
+            {"rel": "self", "href": f"{zoo}/ogc-api/jobs/{job_id}"},
+            {"rel": "related", "href": f"{zoo}/temp/wf-{job_id}/job.log"},
+        ],
+    }
+
+
+def _zoo_responder(status_by_job: dict[str, int] | None = None) -> Any:
+    status_by_job = status_by_job or {}
+
+    def send_request(verb: str, url_path: str = "", *args: Any, **kwargs: Any) -> MagicMock:
+        deploy_workspace, _, _, job_id = url_path.split("/")
+        status_code = status_by_job.get(job_id, 200)
+        body = _zoo_job(deploy_workspace, job_id) if status_code == 200 else {"title": "error"}
+        return MagicMock(status_code=status_code, json=lambda: body, headers={"Content-Type": "application/json"})
+
+    return send_request
+
+
+CALLED_KEYS = [
+    "_by-caller/caller/8235000000003/publisher-a/job-1",
+    "_by-caller/caller/8235000000002/publisher-b/job-2",
+    "_by-caller/caller/8235000000001/publisher-a/job-3",
+]
+
+
+@pytest.fixture
+def called_request() -> MagicMock:
+    request = MagicMock()
+    request.headers = {}
+    return request
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_returns_jobs_in_key_order_with_own_workspace_links(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    s3 = mock_boto_client.return_value
+    s3.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    mock_send_request.side_effect = _zoo_responder()
+
+    with caplog.at_level("INFO"):
+        body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+
+    list_kwargs = s3.list_objects_v2.call_args.kwargs
+    assert list_kwargs["Bucket"] == "workflows-bucket"
+    assert list_kwargs["Prefix"] == "_by-caller/caller/"
+    assert list_kwargs["MaxKeys"] == 20
+    fetched = sorted(c.args[1] for c in mock_send_request.call_args_list)
+    assert fetched == [
+        "publisher-a/ogc-api/jobs/job-1",
+        "publisher-a/ogc-api/jobs/job-3",
+        "publisher-b/ogc-api/jobs/job-2",
+    ]
+
+    assert [job["jobID"] for job in body["jobs"]] == ["job-1", "job-2", "job-3"]
+    assert body["numberTotal"] == 3
+    job_2_links = {link["rel"]: link["href"] for link in body["jobs"][1]["links"]}
+    assert job_2_links == {
+        "self": "http://test-base-url/catalogs/user/catalogs/publisher-b/jobs/job-2",
+        "related": "http://test-base-url/catalogs/user/catalogs/publisher-b/jobs/job-2/job.log",
+    }
+    assert "next" not in {link["rel"] for link in body.get("links", [])}
+
+    timing_logs = [r.getMessage() for r in caplog.records if re.search(r"s3", r.getMessage(), re.IGNORECASE)]
+    assert any(re.search(r"\d+\.\d+\s*s", message) for message in timing_logs), timing_logs
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_fetches_concurrently_up_to_max_workers(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("ades_fastapi.ades_client.JOB_DETAILS_MAX_WORKERS", 2)
+    keys = [f"_by-caller/caller/823500000000{i}/publisher/job-{i}" for i in range(6)]
+    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(keys)
+    respond = _zoo_responder()
+    lock = threading.Lock()
+    active = 0
+    most_active = 0
+
+    def slow_send_request(*args: Any, **kwargs: Any) -> MagicMock:
+        nonlocal active, most_active
+        with lock:
+            active += 1
+            most_active = max(most_active, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return respond(*args, **kwargs)
+
+    mock_send_request.side_effect = slow_send_request
+
+    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+
+    assert len(body["jobs"]) == 6
+    assert most_active == 2
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_leaves_out_job_zoo_no_longer_has(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+) -> None:
+    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    mock_send_request.side_effect = _zoo_responder({"job-2": 404})
+
+    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+
+    assert [job["jobID"] for job in body["jobs"]] == ["job-1", "job-3"]
+    assert body["numberTotal"] == 2
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_fails_with_502_on_other_zoo_error(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+) -> None:
+    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    mock_send_request.side_effect = _zoo_responder({"job-2": 500})
+
+    with pytest.raises(HTTPException) as excinfo:
+        ades_client.get_called_jobs(called_request, "caller", 20, None)
+    assert excinfo.value.status_code == 502
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_next_link_continues_after_last_key(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+) -> None:
+    s3 = mock_boto_client.return_value
+    s3.list_objects_v2.return_value = _index_listing(CALLED_KEYS, truncated=True)
+    mock_send_request.side_effect = _zoo_responder()
+    after = "8235000000004/publisher-a/job-0"
+
+    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 3, after))
+
+    assert s3.list_objects_v2.call_args.kwargs["StartAfter"] == f"_by-caller/caller/{after}"
+    [next_href] = [link["href"] for link in body["links"] if link["rel"] == "next"]
+    next_url = urlparse(next_href)
+    assert next_url.path.endswith("/catalogs/user/catalogs/caller/jobs")
+    assert parse_qs(next_url.query) == {
+        "scope": ["called"],
+        "limit": ["3"],
+        "after": ["8235000000001/publisher-a/job-3"],
+    }
+
+
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+@patch("ades_fastapi.ades_client.boto3.client")
+def test_stage2_called_jobs_with_no_index_records_is_empty(
+    mock_boto_client: MagicMock,
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+) -> None:
+    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing([])
+
+    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+
+    assert body["jobs"] == []
+    assert body["numberTotal"] == 0
+    assert "next" not in {link["rel"] for link in body.get("links", [])}
+    mock_send_request.assert_not_called()
+
+
+def test_stage3_get_all_jobs_is_removed() -> None:
+    assert not hasattr(ADESClient, "get_all_jobs")
+    assert not hasattr(ades_api, "get_all_jobs")
