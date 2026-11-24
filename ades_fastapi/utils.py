@@ -266,3 +266,12 @@ def list_jobs_dict(deploy_workspace: str, request: Request, ades_service_endpoin
     response = requests.get(f"{ades_service_endpoint}/{deploy_workspace}/ogc-api/jobs", headers=headers)
 
     return response.json()
+
+
+def job_folder_name(workflow_id: str, job_id: str) -> str:
+    """Return the folder ADES keeps the job's logs in, named the way zoo-calrissian-runner names it"""
+    name = f"{workflow_id.replace('_', '-')}-{job_id}"
+    # the runner cuts the name to 63 characters and never leaves a trailing hyphen after a cut
+    while len(name) > 63:
+        name = name[:-1].rstrip("-")
+    return name
