@@ -399,7 +399,10 @@ async def execute_process(
     if response.status_code == 201:
         # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
         _username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
-        job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
+        # Blocking S3 writes: run them off the event loop too.
+        await run_in_threadpool(
+            job_saver.record_owner, response, workflow_id, deploy_workspace, workspace, workflow_type
+        )
 
     return Response(
         content=content,
