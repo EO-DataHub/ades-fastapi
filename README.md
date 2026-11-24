@@ -15,6 +15,22 @@ With `scope=called`:
 * To get the next page, follow the `next` link in the response. It has an `after` value; treat it as opaque. When there is no `next` link, there are no more jobs.
 * `status`, `datetime` and `skip` are not supported and return a 400 error.
 
+## Backfilling the caller index
+
+`scope=called` reads an index that is written when a job starts. To index jobs that started before that, run the backfill with the API's AWS credentials and `WORKFLOWS_BUCKET` set, for example from the API pod.
+
+Do a dry run first. It writes nothing, and prints the index records it would write and the counts:
+
+```commandline
+python -m ades_fastapi.backfill_caller_index
+```
+
+Then write the records with `--apply`. It is safe to run again; jobs that already have an index record are skipped.
+
+```commandline
+python -m ades_fastapi.backfill_caller_index --apply
+```
+
 # Development of this component
 
 ## Run the server locally
