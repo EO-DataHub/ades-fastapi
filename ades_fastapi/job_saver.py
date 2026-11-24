@@ -1,9 +1,11 @@
 import json
 import logging
 import os
+import time
 from typing import Any
 
 import requests
+from botocore.exceptions import ClientError
 
 from .utils import WorkflowType
 
@@ -15,6 +17,18 @@ class WorkflowExecutionException(Exception):
 
 
 WORKFLOWS_BUCKET = os.getenv("WORKFLOWS_BUCKET", "workflows-bucket")
+
+CALLER_INDEX_PREFIX = "_by-caller/"
+_REVERSE_MS_BASE = 9999999999999
+
+
+def reverse_ms(epoch_ms: int) -> str:
+    """Return a 13-digit key component that sorts newer times first."""
+    return f"{_REVERSE_MS_BASE - epoch_ms:013d}"
+
+
+def caller_index_key(calling_workspace: str, epoch_ms: int, deploy_workspace: str, job_id: str) -> str:
+    return f"{CALLER_INDEX_PREFIX}{calling_workspace}/{reverse_ms(epoch_ms)}/{deploy_workspace}/{job_id}"
 
 
 class JobSaver:
@@ -51,12 +65,25 @@ class JobSaver:
         job_details["deploy_workspace"] = deploy_workspace
         job_details["calling_workspace"] = calling_workspace
 
+        body = json.dumps(job_details)
         self.s3_client.put_object(
             Bucket=WORKFLOWS_BUCKET,
             Key=f"{deploy_workspace}/{job_id}",
-            Body=json.dumps(job_details),
+            Body=body,
             ContentType="application/json",
         )
+
+        if deploy_workspace != calling_workspace:
+            index_key = caller_index_key(calling_workspace, time.time_ns() // 1_000_000, deploy_workspace, job_id)
+            try:
+                self.s3_client.put_object(
+                    Bucket=WORKFLOWS_BUCKET,
+                    Key=index_key,
+                    Body=body,
+                    ContentType="application/json",
+                )
+            except ClientError:
+                logger.warning("Failed to write caller index record %s for job %s", index_key, job_id, exc_info=True)
 
     def get_job_details(self, workspace: str, job_id: str) -> dict[str, Any]:
         """Get job owner from S3 job details"""
