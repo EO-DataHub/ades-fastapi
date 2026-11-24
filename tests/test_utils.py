@@ -20,6 +20,7 @@ from ades_fastapi.utils import (
     get_workflow_id_from_file,
     get_workflow_id_from_url,
     is_valid_datetime_param,
+    job_folder_name,
     list_jobs_dict,
     opa_request,
     replace_href_links,
@@ -554,3 +555,21 @@ def test_is_valid_datetime_param_accepts_iso_instants_and_intervals(value: str) 
 )
 def test_is_valid_datetime_param_rejects_anything_else(value: str) -> None:
     assert not is_valid_datetime_param(value)
+
+
+@pytest.mark.parametrize(
+    ("workflow_id", "job_id", "expected"),
+    [
+        ("convert-url", "04d02a16-e7f1-11f1-9d56-6669d1694701", "convert-url-04d02a16-e7f1-11f1-9d56-6669d1694701"),
+        ("convert_url", "04d02a16-e7f1-11f1-9d56-6669d1694701", "convert-url-04d02a16-e7f1-11f1-9d56-6669d1694701"),
+        (
+            "test-failing-step--10-22-42",
+            "04d02a16-e7f1-11f1-9d56-6669d1694701",
+            "test-failing-step--10-22-42-04d02a16-e7f1-11f1-9d56-6669d169470",
+        ),
+        # the cut lands on a hyphen, which is dropped too
+        ("w" * 53, "04d02a16-e7f1-11f1-9d56-6669d1694701", "w" * 53 + "-04d02a16"),
+    ],
+)
+def test_job_folder_name(workflow_id: str, job_id: str, expected: str) -> None:
+    assert job_folder_name(workflow_id, job_id) == expected

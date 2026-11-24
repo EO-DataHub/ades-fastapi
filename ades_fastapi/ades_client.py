@@ -21,6 +21,7 @@ from .utils import (
     get_user_token,
     get_workflow_id_from_file,
     get_workflow_id_from_url,
+    job_folder_name,
     replace_href_link,
     replace_href_links,
 )
@@ -673,7 +674,7 @@ class ADESClient:
 
         logger.info("Accessing logs: %s for job: %s and workflow: %s", file_name, job_id, workflow_id)
 
-        workflow_job_id = f"{workflow_id}-{job_id}"
+        workflow_job_id = job_folder_name(workflow_id, job_id)
 
         headers.pop("authorization", None)
 

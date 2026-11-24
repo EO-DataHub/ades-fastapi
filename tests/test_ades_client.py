@@ -1359,6 +1359,20 @@ async def test_get_log(mock_send_request: mock.MagicMock, ades_client: ADESClien
     assert content == "log content"
 
 
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+def test_get_log_uses_shortened_job_folder(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
+    job_id = "04d02a16-e7f1-11f1-9d56-6669d1694701"
+    mock_send_request.return_value = MagicMock(
+        status_code=200, content="log content", json=lambda: {"processID": "test_failing-step--10-22-42"}
+    )
+    ades_client.get_log(job_id, "step.log", "test_workspace", {})
+    mock_send_request.assert_called_with(
+        "GET",
+        "test_workspace/temp/test-failing-step--10-22-42-04d02a16-e7f1-11f1-9d56-6669d169470/step.log",
+        {},
+    )
+
+
 @pytest.mark.asyncio
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
 async def test_delete_job(mock_send_request: mock.MagicMock, ades_client: ADESClient) -> None:
