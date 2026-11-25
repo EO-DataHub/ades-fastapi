@@ -9,9 +9,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.concurrency import run_in_threadpool
 
-from .ades_client import CALLED_AFTER_PATTERN, ADESClient
+from .ades_client import ADESClient
 from .dependency_client import DependencyClient
-from .job_saver import JobSaver
+from .job_saver import JobSaver, is_valid_called_after
 from .models import (
     DeleteJobResponse,
     DeployProcessResponse,
@@ -604,13 +604,13 @@ def _list_called_jobs(
             detail=f"limit must be between 1 and {CALLED_JOBS_MAX_LIMIT} with scope=called",
         )
 
-    if after is not None and not CALLED_AFTER_PATTERN.fullmatch(after):
+    if after is not None and not is_valid_called_after(after):
         raise HTTPException(
             status_code=400,
             detail="Invalid after: use the value from the next link of a scope=called page",
         )
 
-    content = ades_client.get_called_jobs(request, workspace, limit, after)
+    content = ades_client.get_called_jobs(request, workspace, job_saver, limit, after)
     return JSONResponse(content=content)
 
 

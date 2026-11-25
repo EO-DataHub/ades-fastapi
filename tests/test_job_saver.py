@@ -10,7 +10,12 @@ import pytest
 from botocore.exceptions import ClientError
 from requests.models import Response
 
-from ades_fastapi.job_saver import JobSaver, WorkflowExecutionException
+from ades_fastapi.job_saver import (
+    JobSaver,
+    WorkflowExecutionException,
+    caller_index_key,
+    owner_key_from_caller_index_key,
+)
 from ades_fastapi.utils import WorkflowType
 
 
@@ -203,3 +208,49 @@ def test_record_owner_caller_index_sorts_newest_first(job_saver: JobSaver) -> No
 
     keys = sorted(kw["Key"] for kw in _index_puts(job_saver))
     assert [key.rsplit("/", 1)[1] for key in keys] == ["newer", "older"]
+
+
+def test_owner_key_from_caller_index_key_round_trips() -> None:
+    key = caller_index_key("caller", 1_700_000_000_000, "publisher", "job-1")
+
+    assert owner_key_from_caller_index_key(key) == "publisher/job-1"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "_by-caller/caller/8235000000001/publisher",
+        "_by-caller/caller/not-a-time/publisher/job-1",
+        "_by-caller/caller/8235000000001/publisher/job-1/extra",
+        "publisher/job-1",
+    ],
+)
+def test_owner_key_from_caller_index_key_rejects_malformed_key(key: str) -> None:
+    assert owner_key_from_caller_index_key(key) is None
+
+
+def test_list_called_skips_malformed_keys_and_continues_after_last_good_key() -> None:
+    job_saver = JobSaver(mock.MagicMock())
+    job_saver.s3_client.list_objects_v2.return_value = {
+        "IsTruncated": True,
+        "Contents": [
+            {"Key": "_by-caller/caller/8235000000002/publisher/job-1"},
+            {"Key": "_by-caller/caller/8235000000001/publisher/job-2"},
+            {"Key": "_by-caller/caller/garbage"},
+        ],
+    }
+
+    targets, next_after = job_saver.list_called("caller", 3, None)
+
+    assert targets == [("publisher", "job-1"), ("publisher", "job-2")]
+    assert next_after == "8235000000001/publisher/job-2"
+
+
+def test_list_called_truncated_page_without_good_key_has_no_next() -> None:
+    job_saver = JobSaver(mock.MagicMock())
+    job_saver.s3_client.list_objects_v2.return_value = {
+        "IsTruncated": True,
+        "Contents": [{"Key": "_by-caller/caller/garbage"}],
+    }
+
+    assert job_saver.list_called("caller", 1, None) == ([], None)

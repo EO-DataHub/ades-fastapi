@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import re
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from .aws_client import generate_aws_credentials
-from .job_saver import CALLER_INDEX_PREFIX, WORKFLOWS_BUCKET, JobSaver
+from .job_saver import JobSaver
 from .utils import (
     WorkflowType,
     get_user_details,
@@ -32,9 +31,6 @@ logger = logging.getLogger(__name__)  # Add this line to define the logger
 JOBS_TIMEOUT = int(os.getenv("JOBS_TIMEOUT", "60"))
 # Clamped to 1..10: botocore's default connection pool holds 10 connections
 JOB_DETAILS_MAX_WORKERS = max(1, min(int(os.getenv("JOB_DETAILS_MAX_WORKERS", "10")), 10))
-# A caller index key without its prefix: reverse milliseconds, deploy workspace, job ID.
-# Also the shape of the `after` cursor for scope=called.
-CALLED_AFTER_PATTERN = re.compile(r"\d{13}/[^/]+/[^/]+")
 
 
 class ADESClient:
@@ -639,7 +635,12 @@ class ADESClient:
 
     def _fetch_called_job(self, headers: dict[str, Any], deploy_workspace: str, job_id: str) -> dict[str, Any] | None:
         """Fetch one job from ZOO; None if ZOO no longer has it."""
-        response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", dict(headers))
+        try:
+            response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", dict(headers))
+        except requests.RequestException as err:
+            # _send_request only handles ConnectionError; a timeout would otherwise surface as a 500
+            logger.error("Fetching job %s in workspace %s failed: %s", job_id, deploy_workspace, err)
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES") from err
         if response.status_code == 404:
             logger.info("Job %s in workspace %s no longer exists, leaving it out", job_id, deploy_workspace)
             return None
@@ -660,35 +661,20 @@ class ADESClient:
         job["links"] = self._format_log_links(job.get("links", []), deploy_workspace, job_id)
         return job
 
-    def get_called_jobs(self, request: Request, workspace: str, limit: int, after: str | None) -> dict[str, Any]:
+    def get_called_jobs(
+        self, request: Request, workspace: str, job_saver: JobSaver, limit: int, after: str | None
+    ) -> dict[str, Any]:
         """List one page of the jobs that a workspace started in other workspaces, newest first."""
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        prefix = f"{CALLER_INDEX_PREFIX}{workspace}/"
-        list_kwargs: dict[str, Any] = {"Bucket": WORKFLOWS_BUCKET, "Prefix": prefix, "MaxKeys": limit}
-        if after:
-            list_kwargs["StartAfter"] = f"{prefix}{after}"
-
         s3_start = time.perf_counter()
         try:
-            listing = boto3.client("s3").list_objects_v2(**list_kwargs)
+            targets, next_after = job_saver.list_called(workspace, limit, after)
         except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as err:
             logger.exception("Listing the caller index for workspace %s failed", workspace)
             raise HTTPException(status_code=502, detail="Failed to list jobs") from err
         s3_seconds = time.perf_counter() - s3_start
-
-        keys = [obj["Key"] for obj in listing.get("Contents", [])]
-        targets: list[tuple[str, str]] = []
-        last_cursor: str | None = None
-        for key in keys:
-            suffix = key[len(prefix) :]
-            if not CALLED_AFTER_PATTERN.fullmatch(suffix):
-                logger.warning("Skipping malformed caller index key %s", key)
-                continue
-            _reverse_ms, deploy_workspace, job_id = suffix.split("/")
-            targets.append((deploy_workspace, job_id))
-            last_cursor = suffix
 
         with ThreadPoolExecutor(max_workers=JOB_DETAILS_MAX_WORKERS) as executor:
             fetched = list(executor.map(lambda target: self._fetch_called_job(headers, *target), targets))
@@ -709,21 +695,15 @@ class ADESClient:
         if after:
             self_query["after"] = after
         links = [{"rel": "self", "type": "application/json", "href": f"{jobs_url}?{urlencode(self_query, safe='/')}"}]
-        if listing.get("IsTruncated"):
-            if last_cursor is None:
-                logger.warning(
-                    "No well-formed caller index key on a truncated page for workspace %s, omitting next link",
-                    workspace,
-                )
-            else:
-                next_query = {"scope": "called", "limit": limit, "after": last_cursor}
-                links.append(
-                    {
-                        "rel": "next",
-                        "type": "application/json",
-                        "href": f"{jobs_url}?{urlencode(next_query, safe='/')}",
-                    }
-                )
+        if next_after is not None:
+            next_query = {"scope": "called", "limit": limit, "after": next_after}
+            links.append(
+                {
+                    "rel": "next",
+                    "type": "application/json",
+                    "href": f"{jobs_url}?{urlencode(next_query, safe='/')}",
+                }
+            )
 
         return {"jobs": jobs, "links": links, "numberTotal": len(jobs)}
 

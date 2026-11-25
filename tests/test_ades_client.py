@@ -10,9 +10,11 @@ from urllib.parse import parse_qs, urlparse
 
 import botocore.exceptions
 import pytest
+import requests
 from fastapi import HTTPException, Request
 
 from ades_fastapi.ades_client import ADESClient
+from ades_fastapi.job_saver import JobSaver
 from ades_fastapi.utils import WorkflowType
 
 ADES_FASTAPI_ROOT_PATH = os.getenv("ADES_FASTAPI_ROOT_PATH", "/api/catalogue/stac")
@@ -1682,17 +1684,6 @@ def test_get_deployed_workspaced_jobs_keeps_next_page_link(
     assert links["next"] == "http://test-base-url/catalogs/user/catalogs/test_workspace/jobs?limit=2&skip=2"
 
 
-def _called_jobs_body(result: Any) -> dict[str, Any]:
-    """Read the JSON body from whatever get_called_jobs returns."""
-    if isinstance(result, tuple):
-        result = result[-1]
-    if hasattr(result, "body"):
-        result = result.body
-    if isinstance(result, str | bytes):
-        return json.loads(result)
-    return result
-
-
 def _index_listing(keys: list[str], truncated: bool = False) -> dict[str, Any]:
     listing: dict[str, Any] = {"KeyCount": len(keys), "IsTruncated": truncated}
     if keys:
@@ -1738,21 +1729,25 @@ def called_request() -> MagicMock:
     return request
 
 
+@pytest.fixture
+def called_job_saver() -> JobSaver:
+    return JobSaver(MagicMock())
+
+
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_returns_jobs_in_key_order(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    s3 = mock_boto_client.return_value
+    s3 = called_job_saver.s3_client
     s3.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
     mock_send_request.side_effect = _zoo_responder()
 
     with caplog.at_level("INFO"):
-        body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+        body = ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
 
     list_kwargs = s3.list_objects_v2.call_args.kwargs
     assert list_kwargs["Bucket"] == "workflows-bucket"
@@ -1779,17 +1774,16 @@ def test_get_called_jobs_returns_jobs_in_key_order(
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_limits_concurrent_fetches(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("ades_fastapi.ades_client.JOB_DETAILS_MAX_WORKERS", 2)
     keys = [f"_by-caller/caller/823500000000{i}/publisher/job-{i}" for i in range(6)]
-    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(keys)
+    called_job_saver.s3_client.list_objects_v2.return_value = _index_listing(keys)
     respond = _zoo_responder()
     lock = threading.Lock()
     active = 0
@@ -1807,59 +1801,56 @@ def test_get_called_jobs_limits_concurrent_fetches(
 
     mock_send_request.side_effect = slow_send_request
 
-    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+    body = ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
 
     assert len(body["jobs"]) == 6
     assert most_active == 2
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_leaves_out_missing_job(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
 ) -> None:
-    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    called_job_saver.s3_client.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
     mock_send_request.side_effect = _zoo_responder({"job-2": 404})
 
-    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+    body = ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
 
     assert [job["jobID"] for job in body["jobs"]] == ["job-1", "job-3"]
     assert body["numberTotal"] == 2
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_fails_with_502_on_zoo_error(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
 ) -> None:
-    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    called_job_saver.s3_client.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
     mock_send_request.side_effect = _zoo_responder({"job-2": 500})
 
     with pytest.raises(HTTPException) as excinfo:
-        ades_client.get_called_jobs(called_request, "caller", 20, None)
+        ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
     assert excinfo.value.status_code == 502
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_next_link_continues_after_last_key(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
 ) -> None:
-    s3 = mock_boto_client.return_value
+    s3 = called_job_saver.s3_client
     s3.list_objects_v2.return_value = _index_listing(CALLED_KEYS, truncated=True)
     mock_send_request.side_effect = _zoo_responder()
     after = "8235000000004/publisher-a/job-0"
 
-    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 3, after))
+    body = ades_client.get_called_jobs(called_request, "caller", called_job_saver, 3, after)
 
     assert s3.list_objects_v2.call_args.kwargs["StartAfter"] == f"_by-caller/caller/{after}"
     [next_href] = [link["href"] for link in body["links"] if link["rel"] == "next"]
@@ -1873,18 +1864,59 @@ def test_get_called_jobs_next_link_continues_after_last_key(
 
 
 @patch("ades_fastapi.ades_client.ADESClient._send_request")
-@patch("ades_fastapi.ades_client.boto3.client")
 def test_get_called_jobs_with_empty_index(
-    mock_boto_client: MagicMock,
     mock_send_request: MagicMock,
     ades_client: ADESClient,
     called_request: MagicMock,
+    called_job_saver: JobSaver,
 ) -> None:
-    mock_boto_client.return_value.list_objects_v2.return_value = _index_listing([])
+    called_job_saver.s3_client.list_objects_v2.return_value = _index_listing([])
 
-    body = _called_jobs_body(ades_client.get_called_jobs(called_request, "caller", 20, None))
+    body = ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
 
     assert body["jobs"] == []
     assert body["numberTotal"] == 0
     assert "next" not in {link["rel"] for link in body.get("links", [])}
     mock_send_request.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [requests.exceptions.Timeout("timed out"), requests.exceptions.ChunkedEncodingError("cut off")],
+    ids=["timeout", "other-request-error"],
+)
+@patch("ades_fastapi.ades_client.ADESClient._send_request")
+def test_get_called_jobs_fails_with_502_on_zoo_request_error(
+    mock_send_request: MagicMock,
+    ades_client: ADESClient,
+    called_request: MagicMock,
+    called_job_saver: JobSaver,
+    error: Exception,
+) -> None:
+    called_job_saver.s3_client.list_objects_v2.return_value = _index_listing(CALLED_KEYS)
+    respond = _zoo_responder()
+
+    def send_request(verb: str, url_path: str = "", *args: Any, **kwargs: Any) -> MagicMock:
+        if url_path.endswith("/job-2"):
+            raise error
+        return respond(verb, url_path, *args, **kwargs)
+
+    mock_send_request.side_effect = send_request
+
+    with pytest.raises(HTTPException) as excinfo:
+        ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
+    assert excinfo.value.status_code == 502
+
+
+def test_get_called_jobs_fails_with_502_on_s3_error(
+    ades_client: ADESClient,
+    called_request: MagicMock,
+    called_job_saver: JobSaver,
+) -> None:
+    called_job_saver.s3_client.list_objects_v2.side_effect = botocore.exceptions.ClientError(
+        {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "ListObjectsV2"
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        ades_client.get_called_jobs(called_request, "caller", called_job_saver, 20, None)
+    assert excinfo.value.status_code == 502

@@ -14,7 +14,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-from .job_saver import CALLER_INDEX_PREFIX, WORKFLOWS_BUCKET, caller_index_key
+from .job_saver import CALLER_INDEX_PREFIX, WORKFLOWS_BUCKET, caller_index_key, owner_key_from_caller_index_key
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +38,19 @@ def _indexed_owner_keys(s3_client: Any) -> set[str]:
     """Owner keys (``deploy_workspace/job_id``) that already have an index record."""
     indexed = set()
     for obj in _list_objects(s3_client, CALLER_INDEX_PREFIX):
-        # _by-caller/{calling_workspace}/{reverse_ms}/{deploy_workspace}/{job_id}
-        parts = obj["Key"][len(CALLER_INDEX_PREFIX) :].split("/", 2)
-        if len(parts) == 3:
-            indexed.add(parts[2])
+        owner_key = owner_key_from_caller_index_key(obj["Key"])
+        if owner_key is not None:
+            indexed.add(owner_key)
     return indexed
 
 
 def backfill(s3_client: Any, apply: bool) -> Counts:
     counts = Counts()
     # List the owner records before the index. A job that starts during the run writes its owner
-    # record and then, a moment later, its own index record. So any owner record in this listing
-    # already has its live index record by the time the index is read, and is not indexed twice.
+    # record and then, one S3 round trip later, its own index record. So an owner record in this
+    # listing almost always has its live index record by the time the index is read. The exception
+    # is an owner record on the last page of the listing whose index record lands after the index
+    # is read: that job then gets two index records a few ms apart and is listed twice.
     owner_objects = [obj for obj in _list_objects(s3_client) if not obj["Key"].startswith("_")]
     indexed = _indexed_owner_keys(s3_client)
 

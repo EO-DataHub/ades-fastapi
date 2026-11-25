@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -27,8 +28,29 @@ def reverse_ms(epoch_ms: int) -> str:
     return f"{_REVERSE_MS_BASE - epoch_ms:013d}"
 
 
+# The caller index key layout is defined here and nowhere else:
+#   _by-caller/{calling_workspace}/{reverse_ms}/{deploy_workspace}/{job_id}
+# The part after the calling workspace is also the `after` cursor for scope=called.
+_CALLED_AFTER_PATTERN = re.compile(r"\d{13}/([^/]+)/([^/]+)")
+_CALLER_INDEX_KEY_PATTERN = re.compile(rf"{re.escape(CALLER_INDEX_PREFIX)}([^/]+)/({_CALLED_AFTER_PATTERN.pattern})")
+
+
 def caller_index_key(calling_workspace: str, epoch_ms: int, deploy_workspace: str, job_id: str) -> str:
     return f"{CALLER_INDEX_PREFIX}{calling_workspace}/{reverse_ms(epoch_ms)}/{deploy_workspace}/{job_id}"
+
+
+def is_valid_called_after(after: str) -> bool:
+    """Whether `after` has the shape of a scope=called cursor."""
+    return _CALLED_AFTER_PATTERN.fullmatch(after) is not None
+
+
+def owner_key_from_caller_index_key(key: str) -> str | None:
+    """The owner record key (``deploy_workspace/job_id``) an index key points at; None if malformed."""
+    match = _CALLER_INDEX_KEY_PATTERN.fullmatch(key)
+    if match is None:
+        return None
+    _calling_workspace, _cursor, deploy_workspace, job_id = match.groups()
+    return f"{deploy_workspace}/{job_id}"
 
 
 class JobSaver:
@@ -84,6 +106,43 @@ class JobSaver:
                 )
             except (BotoCoreError, ClientError):
                 logger.warning("Failed to write caller index record %s for job %s", index_key, job_id, exc_info=True)
+
+    def list_called(
+        self, calling_workspace: str, limit: int, after: str | None
+    ) -> tuple[list[tuple[str, str]], str | None]:
+        """One page of the caller index for a workspace, newest first.
+
+        Returns the ``(deploy_workspace, job_id)`` pairs on the page, and the cursor for the next
+        page, or None on the last page. Raises botocore errors if the listing fails.
+        """
+        prefix = f"{CALLER_INDEX_PREFIX}{calling_workspace}/"
+        list_kwargs: dict[str, Any] = {"Bucket": WORKFLOWS_BUCKET, "Prefix": prefix, "MaxKeys": limit}
+        if after:
+            # StartAfter is a full key, so it needs the prefix too
+            list_kwargs["StartAfter"] = f"{prefix}{after}"
+        listing = self.s3_client.list_objects_v2(**list_kwargs)
+
+        targets: list[tuple[str, str]] = []
+        last_cursor: str | None = None
+        for obj in listing.get("Contents", []):
+            key = obj["Key"]
+            cursor = key[len(prefix) :]
+            match = _CALLED_AFTER_PATTERN.fullmatch(cursor)
+            if match is None:
+                logger.warning("Skipping malformed caller index key %s", key)
+                continue
+            deploy_workspace, job_id = match.groups()
+            targets.append((deploy_workspace, job_id))
+            last_cursor = cursor
+
+        if not listing.get("IsTruncated"):
+            return targets, None
+        if last_cursor is None:
+            logger.warning(
+                "No well-formed caller index key on a truncated page for workspace %s, omitting next link",
+                calling_workspace,
+            )
+        return targets, last_cursor
 
     def get_job_details(self, workspace: str, job_id: str) -> dict[str, Any]:
         """Get job owner from S3 job details"""

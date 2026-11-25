@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from ades_fastapi.api import app
+from ades_fastapi.api import app, job_saver
 
 client = TestClient(app)
 
@@ -127,11 +127,10 @@ def called_scope_backends() -> Iterator[dict[str, MagicMock]]:
         return MagicMock(status_code=200, json=lambda: body, headers={"Content-Type": "application/json"})
 
     with (
-        patch("ades_fastapi.ades_client.boto3.client") as boto_client,
+        patch.object(job_saver, "s3_client") as s3,
         patch("ades_fastapi.ades_client.ADESClient._send_request", side_effect=zoo_job) as send_request,
         patch("ades_fastapi.ades_client.ADESClient.get_deployed_workspaced_jobs") as deployed,
     ):
-        s3 = boto_client.return_value
         s3.list_objects_v2.return_value = {
             "KeyCount": 1,
             "IsTruncated": False,
