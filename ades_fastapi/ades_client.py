@@ -5,6 +5,7 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from urllib.parse import urlencode
 
 import boto3
 import botocore.exceptions
@@ -633,27 +634,79 @@ class ADESClient:
 
         return response, content
 
-    def get_all_jobs(self, request: Request, workspace_jobs: dict[str, Any]) -> str:
-        _username, workspace, _workspaces, _ = get_user_details(request)
+    def _fetch_called_job(self, headers: dict[str, Any], deploy_workspace: str, job_id: str) -> dict[str, Any] | None:
+        """Fetch one job from ZOO; None if ZOO no longer has it."""
+        try:
+            response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", dict(headers))
+        except requests.RequestException as err:
+            # _send_request only handles ConnectionError; a timeout would otherwise surface as a 500
+            logger.error("Fetching job %s in workspace %s failed: %s", job_id, deploy_workspace, err)
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES") from err
+        if response.status_code == 404:
+            logger.info("Job %s in workspace %s no longer exists, leaving it out", job_id, deploy_workspace)
+            return None
+        if response.status_code != 200:
+            logger.error(
+                "Fetching job %s in workspace %s failed with status %s",
+                job_id,
+                deploy_workspace,
+                response.status_code,
+            )
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES")
+        try:
+            job = response.json()
+        except json.JSONDecodeError as err:
+            logger.error("Job %s in workspace %s is not valid JSON", job_id, deploy_workspace)
+            raise HTTPException(status_code=502, detail="Failed to fetch job details from ADES") from err
+        job = replace_href_links(job, self.base_url, self.catalog_root, deploy_workspace)
+        job["links"] = self._format_log_links(job.get("links", []), deploy_workspace, job_id)
+        return job
 
+    def get_called_jobs(
+        self, request: Request, workspace: str, job_saver: JobSaver, limit: int, after: str | None
+    ) -> dict[str, Any]:
+        """List one page of the jobs that a workspace started in other workspaces, newest first."""
         headers = dict(request.headers)
         headers.pop("authorization", None)
 
-        job_details_list = []
+        s3_start = time.perf_counter()
+        try:
+            targets, next_after = job_saver.list_called(workspace, limit, after)
+        except (botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError) as err:
+            logger.exception("Listing the caller index for workspace %s failed", workspace)
+            raise HTTPException(status_code=502, detail="Failed to list jobs") from err
+        s3_seconds = time.perf_counter() - s3_start
 
-        for job in workspace_jobs.get(workspace, []):
-            deploy_workspace = job["deploy_workspace"]
-            job_id = job["jobID"]
-            response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)
-            job_details = response.json()
-            job_details = replace_href_links(job_details, self.base_url, self.catalog_root, deploy_workspace)
-            job_details_list.append(job_details)
+        with ThreadPoolExecutor(max_workers=JOB_DETAILS_MAX_WORKERS) as executor:
+            fetched = list(executor.map(lambda target: self._fetch_called_job(headers, *target), targets))
+        zoo_seconds = time.perf_counter() - s3_start - s3_seconds
 
-        response_json = {"workspace": workspace, "jobs": job_details_list}
+        jobs = [job for job in fetched if job is not None]
 
-        content = json.dumps(response_json)
+        logger.info(
+            "Listed %d called jobs for workspace %s: S3 list took %.2fs, ADES fetches took %.2fs",
+            len(jobs),
+            workspace,
+            s3_seconds,
+            zoo_seconds,
+        )
 
-        return content
+        jobs_url = f"{self.base_url}/catalogs/{self.catalog_root}/catalogs/{workspace}/jobs"
+        self_query: dict[str, Any] = {"scope": "called", "limit": limit}
+        if after:
+            self_query["after"] = after
+        links = [{"rel": "self", "type": "application/json", "href": f"{jobs_url}?{urlencode(self_query, safe='/')}"}]
+        if next_after is not None:
+            next_query = {"scope": "called", "limit": limit, "after": next_after}
+            links.append(
+                {
+                    "rel": "next",
+                    "type": "application/json",
+                    "href": f"{jobs_url}?{urlencode(next_query, safe='/')}",
+                }
+            )
+
+        return {"jobs": jobs, "links": links, "numberTotal": len(jobs)}
 
     def _get_workflow_id_from_job_id(self, deploy_workspace: str, job_id: str, headers: dict[str, Any]) -> str:
         response = self._send_request("GET", f"{deploy_workspace}/ogc-api/jobs/{job_id}", headers)

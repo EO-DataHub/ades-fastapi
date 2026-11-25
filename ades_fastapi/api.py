@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
 import boto3
@@ -10,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .ades_client import ADESClient
 from .dependency_client import DependencyClient
-from .job_saver import JobSaver
+from .job_saver import JobSaver, is_valid_called_after
 from .models import (
     DeleteJobResponse,
     DeployProcessResponse,
@@ -398,7 +399,10 @@ async def execute_process(
     if response.status_code == 201:
         # Run off the event loop: on a JWKS cache miss this makes a blocking HTTP call to Keycloak.
         _username, workspace, _workspaces, _ = await run_in_threadpool(get_user_details, request)
-        job_saver.record_owner(response, workflow_id, deploy_workspace, workspace, workflow_type)
+        # Blocking S3 writes: run them off the event loop too.
+        await run_in_threadpool(
+            job_saver.record_owner, response, workflow_id, deploy_workspace, workspace, workflow_type
+        )
 
     return Response(
         content=content,
@@ -485,6 +489,13 @@ def process_results(
     dependencies=[Depends(opa_dependency)],
     response_model=GetAllJobStatusResponse,
     summary="Get details for all available jobs in a workspace",
+    description=(
+        "Use `scope` to choose which jobs to list. `deployed`, the default, lists jobs run in this workspace. "
+        "`called` lists jobs this workspace started in other workspaces, newest first.\n\n"
+        "With `scope=called`, results come one page at a time. To get the next page, follow the `next` link, "
+        "which carries an opaque `after` cursor. `after` is only used with `scope=called`. "
+        "`scope=called` does not support the `status`, `datetime` or `skip` filters."
+    ),
     responses={
         204: {"description": "Job details returned successfully"},
     },
@@ -499,7 +510,7 @@ def get_deployed_workspaced_jobs(
         int | None,
         Query(description="Maximum number of jobs to return, leaving this blank returns all"),
     ] = None,
-    skip: Annotated[int | None, Query(description="Number of jobs to skip")] = 0,
+    skip: Annotated[int | None, Query(description="Number of jobs to skip")] = None,
     status: Annotated[
         list[Literal["accepted", "running", "successful", "failed", "dismissed"]] | None,
         Query(
@@ -514,9 +525,25 @@ def get_deployed_workspaced_jobs(
             examples=["2023-01-01T00:00:00Z/2023-01-02T00:00:00Z"],
         ),
     ] = None,
+    scope: Annotated[
+        Literal["deployed", "called"],
+        Query(
+            description=(
+                "`deployed` lists jobs run in this workspace. `called` lists jobs this workspace started "
+                "in other workspaces, newest first; it does not support `status`, `datetime` or `skip`."
+            ),
+        ),
+    ] = "deployed",
+    after: Annotated[
+        str | None,
+        Query(description="With `scope=called`, the position to continue from, taken from the `next` link"),
+    ] = None,
 ) -> Response:
     """An endpoint to list all jobs in a specified workspace"""
     logger.debug("Listing jobs in workspace %s", deploy_workspace)
+
+    if scope == "called":
+        return _list_called_jobs(request, deploy_workspace, limit, after, skip, status, datetime)
 
     # An empty value means no filter, as it did before this check
     if datetime and not is_valid_datetime_param(datetime):
@@ -530,7 +557,7 @@ def get_deployed_workspaced_jobs(
         deploy_workspace,
         job_saver,
         limit=limit,
-        skip=skip,
+        skip=0 if skip is None else skip,
         status=status,
         datetime=datetime,
     )
@@ -542,21 +569,49 @@ def get_deployed_workspaced_jobs(
     )
 
 
-##############
-## NOT USED ##
-##############
-# @app.get(f"{ADES_FASTAPI_ROOT_PATH}/catalogs/{USER_CATALOG_ROOT}/jobs",
-# dependencies=[Depends(opa_dependency)])
-def get_all_jobs(request: Request) -> Response:
-    """Endpoint to list all jobs called by the specified user"""
+CALLED_JOBS_DEFAULT_LIMIT = 20
+CALLED_JOBS_MAX_LIMIT = 100
 
-    content = ades_client.get_all_jobs(request, {})
 
-    return Response(
-        content=content,
-        media_type="application/json",
-        status_code=200,
-    )
+def _list_called_jobs(
+    request: Request,
+    workspace: str,
+    limit: int | None,
+    after: str | None,
+    skip: int | None,
+    status: Sequence[str] | None,
+    datetime: str | None,
+) -> Response:
+    """List the jobs a workspace started in other workspaces, one page at a time"""
+    _username, _workspace, workspaces, _ = get_user_details(request)
+    if workspace not in workspaces:
+        raise HTTPException(status_code=403, detail="Not Authorized")
+
+    unsupported = [
+        name for name, value in (("status", status), ("datetime", datetime), ("skip", skip)) if value is not None
+    ]
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Filters not supported with scope=called: {', '.join(unsupported)}",
+        )
+
+    if limit is None:
+        limit = CALLED_JOBS_DEFAULT_LIMIT
+    if not 1 <= limit <= CALLED_JOBS_MAX_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail=f"limit must be between 1 and {CALLED_JOBS_MAX_LIMIT} with scope=called",
+        )
+
+    if after is not None and not is_valid_called_after(after):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid after: use the value from the next link of a scope=called page",
+        )
+
+    content = ades_client.get_called_jobs(request, workspace, job_saver, limit, after)
+    return JSONResponse(content=content)
 
 
 @app.get(

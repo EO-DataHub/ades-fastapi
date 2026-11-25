@@ -2,6 +2,35 @@
 
 This component is the initial implementation of the User Account Service (UAS) that sits in front of the Workflow Runner service, based on the ADES, and allows more refined interaction with the workflow runner within the EO Data Hub. This repository provides a FastApi application that makes calls to the ADES component, also containing middleware which authenticates the incoming requests using an OPA client. Access to workflows and jobs is determined based on OPA responses and Workflow access policies, defined in S3.
 
+# Listing jobs
+
+`GET /api/catalogue/stac/catalogs/user/catalogs/{workspace}/jobs` lists jobs for a workspace. Use the `scope` parameter to choose which jobs:
+
+* `scope=deployed` (the default) lists jobs run in this workspace. You can filter with `status`, `datetime`, `limit` and `skip`.
+* `scope=called` lists jobs this workspace started in other workspaces, newest first.
+
+With `scope=called`:
+
+* Results come one page at a time. `limit` sets the page size: 20 by default, 100 at most.
+* To get the next page, follow the `next` link in the response. It has an `after` value; treat it as opaque. When there is no `next` link, there are no more jobs.
+* `status`, `datetime` and `skip` are not supported and return a 400 error.
+
+## Backfilling the caller index
+
+`scope=called` reads an index that is written when a job starts. To index jobs that started before that, run the backfill with the API's AWS credentials and `WORKFLOWS_BUCKET` set, for example from the API pod.
+
+Do a dry run first. It writes nothing, and prints the index records it would write and the counts:
+
+```commandline
+python -m ades_fastapi.backfill_caller_index
+```
+
+Then write the records with `--apply`. It is safe to run again; jobs that already have an index record are skipped.
+
+```commandline
+python -m ades_fastapi.backfill_caller_index --apply
+```
+
 # Development of this component
 
 ## Run the server locally
